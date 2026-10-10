@@ -10,11 +10,15 @@
 
 ## 화면
 
-| 데스크톱 | 모바일 (다크 모드) |
+| 첫 화면 | 답변 화면 |
 |---|---|
-| ![데스크톱 답변 화면](docs/mockup/desktop-answer.jpg) | ![모바일 답변 화면](docs/mockup/mobile-answer-dark.jpg) |
+| ![첫 화면](docs/screenshots/home-light.png) | ![답변 화면](docs/screenshots/answer-light.png) |
 
-> 데모 모드 화면입니다. Gemini 키가 없으면 웹 화면이 자동으로 데모 모드로 열려 예시 응답을 보여줍니다.
+| 모바일 | 다크 모드 |
+|---|---|
+| ![모바일 답변 화면](docs/screenshots/answer-mobile.jpg) | ![다크 모드 답변 화면](docs/screenshots/answer-dark.png) |
+
+> 데모 모드 화면입니다. Gemini 키가 없으면 자동으로 데모 모드로 열려 예시 응답을 보여줍니다. `?q=질문` 주소로 들어오면 바로 질문합니다.
 
 ## 구조
 

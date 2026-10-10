@@ -113,3 +113,14 @@ def test_web_page_is_served():
         resp = client.get("/")
     assert resp.status_code == 200
     assert "전역도우미" in resp.text
+
+
+def test_web_page_ids_are_unique():
+    # 아이콘 <symbol id="home">과 화면 영역 id="home"이 겹쳐 화면 전환이 깨진 적이 있다.
+    import re
+    from collections import Counter
+
+    from jeonyeok_helper.api.main import WEB_DIR
+
+    ids = re.findall(r'\bid="([^"]+)"', (WEB_DIR / "index.html").read_text(encoding="utf-8"))
+    assert [i for i, n in Counter(ids).items() if n > 1] == []
