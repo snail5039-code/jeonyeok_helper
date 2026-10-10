@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     raw_docs_dir: Path = DATA_DIR / "raw"
     retrieval_k: int = 6
 
+    # 대화 기록과 사용자 프로필을 저장하는 SQLite 파일 (서버를 재시작해도 유지)
+    state_db: Path = DATA_DIR / "state.sqlite"
+
     # 슈퍼바이저가 한 질문에서 워커를 호출할 수 있는 최대 횟수 (무한 루프 방지)
     max_worker_calls: int = 4
 

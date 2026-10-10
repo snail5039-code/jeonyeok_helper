@@ -227,9 +227,36 @@ def test_open_agent_wires_real_mcp_tools_to_workers():
     from jeonyeok_helper.agents.runtime import open_agent
 
     async def check():
-        async with open_agent(llm=FakeStructuredModel(messages=iter([]))) as agent:
+        async with open_agent(llm=FakeStructuredModel(messages=iter([])), state_db=None) as agent:
             return set(agent.get_graph().nodes)
 
     nodes = run(check())
 
     assert {"regulation", "benefit", "institution", "supervisor", "verify"} <= nodes
+
+
+def test_conversation_and_profile_survive_restart(tmp_path):
+    """SQLite에 저장한 대화와 프로필은 서버를 다시 띄워도 남는다."""
+    from jeonyeok_helper.agents.runtime import _memory
+
+    db = tmp_path / "state.sqlite"
+    config = {"configurable": {"thread_id": "t1", "user_id": "u1"}}
+
+    async def first_run():
+        async with _memory(db) as (checkpointer, store):
+            components, _ = make_components(
+                [Route(next="answer")], profile=Profile(service_type="merit", region="대전")
+            )
+            graph = build_graph(components, checkpointer=checkpointer, store=store)
+            await graph.ainvoke({"messages": [("user", "국가유공자예요")]}, config)
+
+    async def after_restart():
+        async with _memory(db) as (checkpointer, store):
+            components, _ = make_components([Route(next="answer")])
+            graph = build_graph(components, checkpointer=checkpointer, store=store)
+            state = (await graph.aget_state(config)).values
+            profile = await store.aget(("profiles",), "u1")
+            return len(state["messages"]), profile.value
+
+    run(first_run())
+    assert run(after_restart()) == (2, {"service_type": "merit", "region": "대전"})

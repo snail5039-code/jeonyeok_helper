@@ -121,6 +121,24 @@ start → profile(복무 정보 추출) → supervisor ─┬→ regulation / be
                                               └→ respond(답변 초안) → verify(근거 검증)
 ```
 
+평가 (5단계, Gemini 키 필요):
+
+```bash
+uv run jeonyeok-eval              # data/eval/questions.yaml의 30문항
+uv run jeonyeok-eval --ids c01 m05
+```
+
+유형별(병사·단기 간부·중장기·보훈대상자·일반) 질문마다 근거 출처, 답변 핵심어, 프로필 추출, 되묻기 여부를 채점하고 `data/eval/results/`에 보고서를 남깁니다.
+
+Docker:
+
+```bash
+docker compose up --build                    # http://localhost:8000
+docker compose run --rm app jeonyeok-rag laws  # 법령 수집
+```
+
+대화 기록과 사용자 프로필은 SQLite(`data/state.sqlite`, Docker에서는 `state` 볼륨)에 저장되어 서버를 다시 띄워도 남습니다.
+
 테스트와 린트:
 
 ```bash

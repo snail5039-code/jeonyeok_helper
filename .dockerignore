@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.claude
+.env
+**/__pycache__
+.pytest_cache
+.ruff_cache
+docs
+tests
+data/chroma
+data/raw
+data/state*
+data/eval/results

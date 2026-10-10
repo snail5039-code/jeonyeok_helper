@@ -1,0 +1,186 @@
+# 전역도우미 평가 질문 (30개)
+#
+# 정답 문장을 맞히는지가 아니라 '무엇을 근거로, 어떻게 행동했는지'를 본다.
+# 금액·기한 같은 구체적 사실은 법령 개정으로 바뀔 수 있어 기준에 넣지 않는다.
+#
+# 항목
+#   category     : conscript(병사) / short_term_officer(단기 간부) / long_term(중·장기) /
+#                  merit(보훈대상자) / general(일반)
+#   sources_any  : 출처 제목 중 하나라도 이 단어를 포함해야 함
+#   answer_any   : 답변에 이 단어 중 하나라도 있어야 함
+#   profile      : 대화에서 추출해야 하는 프로필 값
+#   should_ask   : true면 답하지 말고 되물어야 함 / false면 되묻지 말아야 함
+
+questions:
+  # ---------- 의무복무 병사 ----------
+  - id: c01
+    category: conscript
+    question: 군복무 크레딧이 뭐예요?
+    sources_any: [국민연금법, 국민연금공단]
+    answer_any: [국민연금, 가입기간]
+    should_ask: false
+  - id: c02
+    category: conscript
+    question: 작년에 병장으로 만기 전역했고 서울 살아요. 받을 수 있는 혜택 있어요?
+    answer_any: [국민연금, 취업, 청년]
+    profile: { service_type: conscript, region: 서울 }
+    should_ask: false
+  - id: c03
+    category: conscript
+    question: 병사로 전역했는데 예비군은 몇 년 차까지 해요?
+    sources_any: [예비군법, 병무청]
+    answer_any: [예비군]
+    profile: { service_type: conscript }
+  - id: c04
+    category: conscript
+    question: 병적증명서는 어디서 발급받아요?
+    sources_any: [병무청, 병역법]
+    answer_any: [병무청]
+  - id: c05
+    category: conscript
+    question: 육군 병장으로 전역하고 취업 준비 중인데 지원받을 수 있는 게 있나요?
+    sources_any: [고용24, 고용노동부, 취업]
+    answer_any: [취업]
+    profile: { service_type: conscript }
+  - id: c06
+    category: conscript
+    question: 의무복무 마치고 복학하는데 등록금 지원 받을 수 있나요?
+    sources_any: [한국장학재단, 장학]
+    answer_any: [장학, 학자금, 등록금]
+    profile: { service_type: conscript }
+  - id: c07
+    category: conscript
+    question: 경기도에 사는 병사 전역자인데 지역에서 주는 혜택 있어요?
+    answer_any: [경기]
+    profile: { service_type: conscript, region: 경기 }
+  - id: c08
+    category: conscript
+    question: 병사 복무 기간이 공무원 호봉에 반영되나요?
+    answer_any: [호봉, 경력]
+    profile: { service_type: conscript }
+  - id: c09
+    category: conscript
+    question: 사회복무요원도 군복무 크레딧을 받을 수 있나요?
+    sources_any: [국민연금법, 국민연금공단]
+    answer_any: [크레딧]
+
+  # ---------- 단기 간부 ----------
+  - id: s01
+    category: short_term_officer
+    question: 하사로 4년 복무하고 전역했는데 받을 수 있는 혜택이 뭐예요?
+    answer_any: [제대군인, 취업]
+    profile: { service_type: short_term_officer, service_years: 4 }
+    should_ask: false
+  - id: s02
+    category: short_term_officer
+    question: 단기복무 장교로 전역했는데 취업 지원 받을 수 있나요?
+    sources_any: [제대군인, 고용24, 고용노동부]
+    answer_any: [취업]
+    profile: { service_type: short_term_officer }
+  - id: s03
+    category: short_term_officer
+    question: 단기 간부도 제대군인에 해당하나요?
+    sources_any: [제대군인지원에 관한 법률]
+    answer_any: [제대군인]
+  - id: s04
+    category: short_term_officer
+    question: 군인연금은 몇 년 복무해야 받을 수 있어요?
+    sources_any: [군인연금법]
+    answer_any: [군인연금]
+  - id: s05
+    category: short_term_officer
+    question: 중사로 4년 복무하고 전역하면 퇴직급여가 나오나요?
+    sources_any: [군인연금법]
+    answer_any: [퇴직]
+    profile: { service_type: short_term_officer, service_years: 4 }
+  - id: s06
+    category: short_term_officer
+    question: 간부로 전역해도 예비군 훈련을 받아야 하나요?
+    sources_any: [예비군법, 병무청]
+    answer_any: [예비군]
+
+  # ---------- 중·장기 제대군인 ----------
+  - id: l01
+    category: long_term
+    question: 10년 복무하고 전역 예정인데 전직지원금 받을 수 있나요?
+    sources_any: [제대군인지원에 관한 법률, 제대군인지원센터]
+    answer_any: [전직]
+    profile: { service_type: long_term, service_years: 10 }
+    should_ask: false
+  - id: l02
+    category: long_term
+    question: 장기복무 제대군인 취업 지원 제도 알려주세요
+    sources_any: [제대군인지원에 관한 법률, 제대군인지원센터]
+    answer_any: [취업]
+    profile: { service_type: long_term }
+  - id: l03
+    category: long_term
+    question: 20년 넘게 복무하고 전역하면 군인연금은 어떻게 되나요?
+    sources_any: [군인연금법]
+    answer_any: [연금]
+    profile: { service_type: long_term }
+  - id: l04
+    category: long_term
+    question: 중기복무 제대군인은 몇 년 복무한 사람을 말하나요?
+    sources_any: [제대군인지원에 관한 법률]
+    answer_any: [중기복무]
+  - id: l05
+    category: long_term
+    question: 장기복무 제대군인이 대학 다니면 학비 지원이 있나요?
+    sources_any: [제대군인지원에 관한 법률]
+    answer_any: [교육, 학비, 학자금]
+    profile: { service_type: long_term }
+  - id: l06
+    category: long_term
+    question: 전역 예정인 장기복무 간부인데 전직 교육은 어디서 받아요?
+    sources_any: [제대군인지원센터, 제대군인지원에 관한 법률]
+    answer_any: [전직]
+    profile: { service_type: long_term }
+  - id: l07
+    category: long_term
+    question: 15년 복무하고 전역했어요. 부산 사는데 받을 수 있는 거 정리해 주세요
+    answer_any: [제대군인]
+    profile: { service_type: long_term, service_years: 15, region: 부산 }
+    should_ask: false
+
+  # ---------- 보훈대상자 ----------
+  - id: m01
+    category: merit
+    question: 국가유공자 등록은 어떻게 신청해요?
+    sources_any: [국가유공자 등 예우 및 지원에 관한 법률, 국가보훈부]
+    answer_any: [등록]
+  - id: m02
+    category: merit
+    question: 복무 중에 다쳐서 전역했는데 보훈 대상이 될 수 있나요?
+    sources_any: [국가유공자 등 예우 및 지원에 관한 법률, 보훈보상대상자 지원에 관한 법률, 국가보훈부]
+    answer_any: [보훈]
+  - id: m03
+    category: merit
+    question: 보훈보상대상자와 국가유공자는 뭐가 달라요?
+    sources_any: [보훈보상대상자 지원에 관한 법률, 국가유공자 등 예우 및 지원에 관한 법률]
+    answer_any: [보훈보상대상자]
+  - id: m04
+    category: merit
+    question: 국가유공자인데 취업 지원 받을 수 있나요?
+    sources_any: [국가유공자 등 예우 및 지원에 관한 법률, 국가보훈부]
+    answer_any: [취업]
+    profile: { service_type: merit }
+  - id: m05
+    category: merit
+    question: 보훈 관련 상담은 어디로 전화하면 돼요?
+    sources_any: [국가보훈부]
+    answer_any: [1577-0606]
+
+  # ---------- 일반 / 되묻기 ----------
+  - id: g01
+    category: general
+    question: 혜택 뭐 있어요?
+    should_ask: true
+  - id: g02
+    category: general
+    question: 전역했는데 이제 뭐부터 해야 돼요?
+    should_ask: true
+  - id: g03
+    category: general
+    question: 안녕하세요
+    should_ask: false

@@ -1,0 +1,22 @@
+# 실행:            docker compose up --build        → http://localhost:8000
+# 법령 수집:        docker compose run --rm app jeonyeok-rag laws
+# 보훈부 자료 수집:  data/raw/에 파일을 넣고 docker compose run --rm app jeonyeok-rag files
+# 평가:            docker compose run --rm app jeonyeok-eval
+
+services:
+  app:
+    build: .
+    image: jeonyeok_helper:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data/chroma:/app/data/chroma # 벡터 DB (수집한 법령·문서)
+      - ./data/raw:/app/data/raw:ro # 국가보훈부 자료 원본
+      - state:/app/data/state # 대화 기록, 사용자 프로필
+    restart: unless-stopped
+
+volumes:
+  state:
