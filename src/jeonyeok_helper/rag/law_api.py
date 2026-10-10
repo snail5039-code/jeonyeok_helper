@@ -72,11 +72,15 @@ class LawApiClient:
         resp.raise_for_status()
         return resp.json()
 
-    def load_law(self, law_name: str) -> list[Document]:
+    def load_law(self, law_name: str, articles: list[str] | None = None) -> list[Document]:
+        """현행 법령을 조문 단위로 가져온다. articles를 주면 그 조문만 남긴다 (예: ["제18조"])."""
         found = self.find_current(law_name)
         if found is None:
             raise LookupError(f"현행 법령을 찾지 못했습니다: {law_name}")
-        return law_json_to_documents(self.fetch(found["법령일련번호"]))
+        docs = law_json_to_documents(self.fetch(found["법령일련번호"]))
+        if articles:
+            docs = [d for d in docs if d.metadata["article"] in articles]
+        return docs
 
 
 def law_json_to_documents(data: dict) -> list[Document]:
@@ -110,6 +114,7 @@ def law_json_to_documents(data: dict) -> list[Document]:
                     "law_name": name,
                     "article": label,
                     "article_title": title,
+                    "citation": f"{name} {label}" + (f"({title})" if title else ""),
                     "chapter": chapter,
                     "enforced_at": enforced,
                     "url": f"https://www.law.go.kr/법령/{name.replace(' ', '')}/{label}",

@@ -95,6 +95,21 @@ def test_load_law_picks_current_exact_match():
     assert len(docs) == 3
 
 
+@respx.mock
+def test_load_law_filters_articles():
+    respx.get(f"{BASE_URL}/lawSearch.do").mock(
+        return_value=httpx.Response(
+            200, json={"LawSearch": {"law": {"법령명한글": "국민연금법", "법령일련번호": "9"}}}
+        )
+    )
+    respx.get(f"{BASE_URL}/lawService.do").mock(return_value=httpx.Response(200, json=SAMPLE_LAW))
+
+    docs = LawApiClient(oc="test").load_law("국민연금법", articles=["제2조의2"])
+
+    assert [d.metadata["article"] for d in docs] == ["제2조의2"]
+    assert docs[0].metadata["citation"].endswith("제2조의2(국가의 책무)")
+
+
 def test_client_requires_oc():
     with pytest.raises(RuntimeError):
         LawApiClient(oc="")

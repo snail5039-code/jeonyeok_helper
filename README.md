@@ -52,6 +52,17 @@ cp .env.example .env   # 키 입력
 uv run jeonyeok-serve  # http://127.0.0.1:8000/health
 ```
 
+규정 수집과 검색 (1단계):
+
+```bash
+uv run jeonyeok-rag laws                          # data/laws.yaml의 법령 수집 (LAW_API_OC 필요)
+uv run jeonyeok-rag files                         # data/raw/ 의 PDF·TXT·MD 수집
+uv run jeonyeok-rag search "군복무 크레딧이 뭐야?"   # HyDE + Re-ranking 검색
+uv run jeonyeok-rag stats                         # 저장된 문서 수
+```
+
+국가보훈부 자료 같은 파일은 `data/raw/`에 넣으면 됩니다. HWP는 PDF로 변환해서 넣어주세요.
+
 테스트와 린트:
 
 ```bash

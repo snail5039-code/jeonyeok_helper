@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 jeonyeok-serve = "jeonyeok_helper.api.main:run"
+jeonyeok-rag = "jeonyeok_helper.rag.ingest:main"
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
