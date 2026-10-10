@@ -12,10 +12,10 @@ def _require_key() -> str:
     return key
 
 
-def get_chat_model(temperature: float = 0.2) -> ChatGoogleGenerativeAI:
+def get_chat_model(temperature: float = 0.2, model: str | None = None) -> ChatGoogleGenerativeAI:
     s = get_settings()
     return ChatGoogleGenerativeAI(
-        model=s.gemini_model, google_api_key=_require_key(), temperature=temperature
+        model=model or s.gemini_model, google_api_key=_require_key(), temperature=temperature
     )
 
 

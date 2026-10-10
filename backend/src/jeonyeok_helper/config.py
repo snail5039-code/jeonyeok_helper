@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 
-# LangSmith 등 라이브러리가 os.environ에서 직접 읽는 값도 .env에서 불러온다.
+# 라이브러리가 os.environ에서 직접 읽는 값도 .env에서 불러온다.
 load_dotenv(PROJECT_ROOT / ".env")
 
 

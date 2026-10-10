@@ -3,9 +3,9 @@
     uv run jeonyeok-eval                 # 전체 30문항
     uv run jeonyeok-eval --ids c01 m05   # 일부만
     uv run jeonyeok-eval --limit 5
+    uv run jeonyeok-eval --model gemini-3.5-flash   # 다른 모델과 비교
 
 결과는 data/eval/results/에 JSON과 마크다운 보고서로 남는다.
-LangSmith 추적을 켜 두면(.env의 LANGSMITH_TRACING=true) 각 실행이 'eval' 태그로 함께 기록된다.
 """
 
 from __future__ import annotations
@@ -110,8 +110,6 @@ def grade(case: dict, answer: str, asked: bool, sources: list[dict], profile: di
 async def run_case(agent, case: dict) -> CaseResult:
     config = {
         "configurable": {"thread_id": f"eval-{uuid.uuid4()}", "user_id": f"eval-{uuid.uuid4()}"},
-        "tags": ["eval"],
-        "metadata": {"eval_case": case["id"], "category": case["category"]},
     }
     started = time.perf_counter()
     try:
@@ -170,7 +168,7 @@ def summarize(results: list[CaseResult]) -> dict:
 def to_markdown(results: list[CaseResult], summary: dict, started_at: str) -> str:
     o = summary["overall"]
     lines = [
-        f"# 평가 결과 ({started_at})",
+        f"# 평가 결과 ({started_at}, {summary.get('model', '모델 미상')})",
         "",
         f"- 문항 {o['cases']}개 중 전부 통과 **{o['perfect']}개**",
         f"- 체크 통과율 **{o['check_pass_rate']:.0%}**, 평균 응답 시간 {o['avg_seconds']}초, "
@@ -196,6 +194,8 @@ def to_markdown(results: list[CaseResult], summary: dict, started_at: str) -> st
 def save(results: list[CaseResult], summary: dict, out_dir: Path = RESULTS_DIR) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    if model := summary.get("model"):
+        stamp = f"{stamp}-{model}"
     payload = {"summary": summary, "results": [asdict(r) | {"score": r.score} for r in results]}
     (out_dir / f"{stamp}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -213,6 +213,7 @@ def _run(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(prog="jeonyeok-eval", description="에이전트 평가")
     parser.add_argument("--ids", nargs="*", help="평가할 문항 id")
     parser.add_argument("--limit", type=int, help="앞에서부터 N문항만")
+    parser.add_argument("--model", help="평가할 Gemini 모델 (기본: .env의 GEMINI_MODEL)")
     args = parser.parse_args(argv)
 
     cases = load_questions()
@@ -222,13 +223,19 @@ def _run(argv: list[str] | None) -> int:
         cases = cases[: args.limit]
 
     from jeonyeok_helper.agents.runtime import open_agent
+    from jeonyeok_helper.config import get_settings
+    from jeonyeok_helper.llm import get_chat_model
+
+    model = args.model or get_settings().gemini_model
+    print(f"모델: {model}, 문항: {len(cases)}개\n")
 
     def show(r: CaseResult) -> None:
         mark = "✓" if r.score == 1 else ("✗" if r.score == 0 else "△")
         print(f"{mark} {r.id} {r.score:.0%} {r.seconds:.1f}s  {r.question}")
 
-    results = asyncio.run(run_eval(lambda: open_agent(state_db=None), cases, show))
-    summary = summarize(results)
+    llm = get_chat_model(model=model)
+    results = asyncio.run(run_eval(lambda: open_agent(llm, state_db=None), cases, show))
+    summary = summarize(results) | {"model": model}
     report = save(results, summary)
     o = summary["overall"]
     print(f"\n전부 통과 {o['perfect']}/{o['cases']}, 체크 통과율 {o['check_pass_rate']:.0%}")

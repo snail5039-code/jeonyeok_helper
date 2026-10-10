@@ -34,7 +34,8 @@
 |---|---|
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
 | LLM | Gemini |
-| 에이전트 | LangChain, LangGraph, LangSmith |
+| 에이전트 | LangChain, LangGraph |
+| 평가 | 평가 데이터셋 30문항 (`jeonyeok-eval`) |
 | 도구 연동 | MCP |
 | RAG | Chroma, HyDE, Re-ranking |
 | 서버 | FastAPI (SSE), SQLite (대화 기록·프로필) |
@@ -151,7 +152,6 @@ cd frontend && npm test && npm run lint && npm run typecheck
 | `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) | Gemini |
 | `LAW_API_OC` | [국가법령정보센터 Open API](https://open.law.go.kr) | 법령, 조례 수집 |
 | `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) | 공공서비스(혜택) 정보 |
-| `LANGSMITH_API_KEY` (선택) | [LangSmith](https://smith.langchain.com) | 실행 추적 |
 
 ## 안내
 
