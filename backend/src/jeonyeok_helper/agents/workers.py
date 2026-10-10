@@ -69,6 +69,19 @@ def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: 
         return {
             "summary": produced[-1].text if produced else "",
             "sources": extract_sources(produced),
+            "evidence": extract_evidence(produced),
         }
 
     return RunnableLambda(run)
+
+
+def extract_evidence(messages: Sequence[AnyMessage], limit: int = 3000) -> list[str]:
+    """도구가 실제로 돌려준 원문. 근거 검증은 워커 요약이 아니라 이 원문을 기준으로 한다
+    (요약에는 LLM이 자기 지식을 섞을 수 있다)."""
+    evidence = []
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            data = _tool_payload(msg)
+            text = json.dumps(data, ensure_ascii=False) if data is not None else str(msg.content)
+            evidence.append(f"[{msg.name}] {text[:limit]}")
+    return evidence

@@ -33,6 +33,7 @@ class AgentState(TypedDict, total=False):
     # 아래는 질문(턴)마다 초기화
     findings: Annotated[list[dict], add_or_reset]  # 워커별 요약 {worker, summary}
     sources: Annotated[list[dict], add_or_reset]  # 출처 {type, title, url}
+    evidence: Annotated[list[str], add_or_reset]  # 도구가 돌려준 원문 (근거 검증 기준)
     worker_calls: int
     next: str
     instruction: str

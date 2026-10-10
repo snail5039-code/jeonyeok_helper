@@ -39,7 +39,10 @@ def make_components(routes, *, profile=None, worker_out=None, verifier=None, wor
             ]
         ),
         "responder": Recorder(["초안 답변 [1]"]),
-        "verifier": Recorder([verifier or Verification(supported=True, answer="최종 답변 [1]")]),
+        # 기본값은 '검증에서 고칠 점을 찾아 다시 쓴' 경우
+        "verifier": Recorder(
+            [verifier or Verification(supported=False, issues=["수정"], answer="최종 답변 [1]")]
+        ),
     }
     components = Components(
         profile_extractor=rec["profile"].runnable,

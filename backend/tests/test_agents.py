@@ -12,7 +12,13 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
 from jeonyeok_helper.agents.graph import build_graph
-from jeonyeok_helper.agents.state import Profile, Route, add_or_reset, merge_profile
+from jeonyeok_helper.agents.state import (
+    Profile,
+    Route,
+    Verification,
+    add_or_reset,
+    merge_profile,
+)
 from jeonyeok_helper.agents.workers import extract_sources, make_react_worker
 
 
@@ -260,3 +266,56 @@ def test_conversation_and_profile_survive_restart(tmp_path):
 
     run(first_run())
     assert run(after_restart()) == (2, {"service_type": "merit", "region": "대전"})
+
+
+def test_verified_draft_is_kept_as_is():
+    """검증에서 문제가 없으면 초안을 그대로 쓴다 (다시 쓰면 줄바꿈 같은 형식이 깨질 수 있다)."""
+    components, _ = make_components(
+        [Route(next="answer")],
+        verifier=Verification(supported=True, answer="줄바꿈이 사라진 답변"),
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    assert ask(graph, "질문")["messages"][-1].text == "초안 답변 [1]"
+
+
+def test_duplicate_sources_from_workers_are_merged():
+    same = {"type": "institution", "title": "정부24", "url": "https://www.gov.kr"}
+    components, _ = make_components(
+        [Route(next="benefit"), Route(next="institution"), Route(next="answer")],
+        worker_out={"summary": "정부24 안내", "sources": [same]},
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    assert ask(graph, "혜택 알려줘")["sources"] == [same]
+
+
+def test_verifier_checks_against_tool_evidence_not_summaries():
+    components, rec = make_components(
+        [Route(next="benefit"), Route(next="answer")],
+        worker_out={
+            "summary": "청년수당 월 50만 원 (워커가 지어낸 내용)",
+            "sources": [],
+            "evidence": ['[search_benefits] {"benefits": [], "error": "서비스키 없음"}'],
+        },
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    ask(graph, "혜택")
+
+    sent = rec["verifier"].calls[0]
+    assert "서비스키 없음" in sent["evidence"]
+    assert "findings" not in sent  # 워커 요약은 검증 근거로 넘기지 않는다
+    assert "서비스키 없음" in rec["responder"].calls[0]["evidence"]
+
+
+def test_extract_evidence_keeps_raw_tool_output():
+    from jeonyeok_helper.agents.workers import extract_evidence
+
+    messages = [
+        AIMessage("요약은 근거가 아니다"),
+        tool_msg("find_institutions", {"institutions": [{"name": "병무청"}]}),
+    ]
+    assert extract_evidence(messages) == [
+        '[find_institutions] {"institutions": [{"name": "병무청"}]}'
+    ]

@@ -41,15 +41,24 @@ ROUTER_PROMPT = ChatPromptTemplate.from_messages(
     ]
 )
 
+# 워커는 도구 결과만 옮긴다. 자기 지식을 섞으면 출처가 없는 내용이 답변에 들어간다.
+GROUNDING = (
+    "\n\n반드시 지킬 것: 도구가 돌려준 내용만 정리하세요. 도구 결과에 없는 혜택명, 금액, "
+    "기간, 연령, 연락처, 사이트 주소는 아무리 잘 알아도 쓰지 마세요. 도구가 오류나 빈 결과를 "
+    "돌려주면 '조회 결과 없음'이라고만 쓰고, fallback으로 받은 기관 목록이 있으면 그것만 "
+    "옮기세요."
+)
+
 WORKER_PROMPTS = {
     "regulation": COMMON
     + "\n\n당신은 규정 담당입니다. search_regulations 도구로 근거 조문을 찾고, "
-    "질문과 관련된 내용을 출처(조문명)와 함께 요약하세요. 찾지 못했으면 찾지 못했다고 하세요.",
+    "질문과 관련된 내용을 출처(조문명)와 함께 요약하세요. 찾지 못했으면 찾지 못했다고 하세요."
+    + GROUNDING,
     "benefit": COMMON + "\n\n당신은 혜택 담당입니다. search_benefits, get_benefit_detail 도구로 "
     "사용자 유형과 지역에 맞는 혜택을 찾고, 혜택명·지원 내용·대상·신청 방법을 요약하세요. "
-    "대상이 맞지 않는 혜택은 빼세요.",
+    "대상이 맞지 않는 혜택은 빼세요." + GROUNDING,
     "institution": COMMON + "\n\n당신은 기관 연계 담당입니다. find_institutions 도구로 "
-    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요.",
+    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요." + GROUNDING,
 }
 
 # 워커별로 쓸 수 있는 MCP 도구
@@ -63,7 +72,9 @@ RESPOND_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            COMMON + "\n\n워커들이 찾은 내용만 근거로 사용자의 마지막 질문에 답하세요.\n"
+            COMMON + "\n\n아래 '도구 원문'에 있는 내용만 근거로 사용자의 마지막 질문에 답하세요. "
+            "'찾은 내용'(워커 요약)은 참고만 하고, 원문에 없는 혜택명·금액·기간·연락처·주소는 "
+            "쓰지 마세요. 원문에 정보가 부족하면 부족하다고 말하고 확인할 기관을 안내하세요.\n"
             "화면이 아래 형식을 카드로 그리므로 형식을 지키세요.\n"
             "1. 첫 문단: 핵심 답을 2~3문장으로 요약\n"
             "2. 혜택이나 제도를 안내할 때는 하나마다 다음 블록으로 작성\n"
@@ -71,12 +82,16 @@ RESPOND_PROMPT = ChatPromptTemplate.from_messages(
             "   - 대상: 누가 받을 수 있는지\n"
             "   - 내용: 무엇을 받는지\n"
             "   - 신청: 어디서 어떻게 신청하는지\n"
-            "   - 근거: 법령명과 조문 (있을 때만)\n"
+            "   - 근거: 법령명과 조문 (법령을 찾았을 때만, 기관 이름은 쓰지 말 것)\n"
             "3. 마지막 문단: '정확한 자격과 기한은 소관 기관에 꼭 확인하세요.'\n"
-            "- 근거는 아래 출처 번호로 [1]처럼 표시\n"
+            "- 근거는 아래 출처 번호로 [1]처럼 표시하고, 한 문장에 같은 번호를 반복하지 말 것\n"
             "- 찾은 내용에 없는 금액, 기한, 자격 조건은 지어내지 말 것\n"
-            "- 혜택 안내가 아닌 단순 질문이면 블록 없이 문단으로만 답할 것\n\n"
-            "사용자 프로필: {profile}\n\n찾은 내용:\n{findings}\n\n출처:\n{sources}",
+            "- 혜택 안내가 아닌 단순 질문이면 블록 없이 문단으로만 답할 것\n"
+            "- 신청처·연락처 같은 기관 안내는 블록 대신 '- 기관명: 사이트, 전화' 목록으로 쓸 것\n"
+            "- 조회 실패나 시스템 오류 같은 내부 사정은 말하지 말고, "
+            "확인할 수 있는 기관을 안내할 것\n\n"
+            "사용자 프로필: {profile}\n\n도구 원문:\n{evidence}\n\n"
+            "찾은 내용(워커 요약):\n{findings}\n\n출처:\n{sources}",
         ),
         MessagesPlaceholder("messages"),
     ]
@@ -86,12 +101,18 @@ VERIFY_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "당신은 검수자입니다. 답변 초안의 각 주장이 '찾은 내용'과 '출처'로 뒷받침되는지 "
-            "확인하세요. 근거가 없는 금액·기한·자격 조건은 지우거나 '(확인 필요)'로 표시하고, "
-            "출처 번호가 틀렸으면 고치세요. '### 혜택명 | 소관기관' 블록 형식은 그대로 유지하세요. "
-            "문제가 없으면 초안을 그대로 answer로 돌려주세요.",
+            "당신은 검수자입니다. 답변 초안의 각 문장이 '도구 원문'에 실제로 있는 내용인지 "
+            "확인하세요. 워커 요약은 근거가 아닙니다.\n"
+            "- 원문에 없는 혜택, 금액, 기간, 연령, 연락처, 사이트 주소가 있으면 supported=false로 "
+            "하고 그 부분을 지운 답변을 answer로 쓰세요.\n"
+            "- 출처 번호가 그 내용을 담은 출처를 가리키지 않으면 고치세요.\n"
+            "- 줄바꿈, '### 혜택명 | 소관기관' 블록, '-' 목록 형식은 그대로 유지하세요.\n"
+            "- 문제가 없으면 supported=true로 하고 초안을 그대로 answer로 돌려주세요.",
         ),
-        ("human", "찾은 내용:\n{findings}\n\n출처:\n{sources}\n\n답변 초안:\n{draft}"),
+        (
+            "human",
+            "도구 원문:\n{evidence}\n\n출처:\n{sources}\n\n답변 초안:\n{draft}",
+        ),
     ]
 )
 
@@ -104,6 +125,10 @@ def format_findings(findings: list[dict] | None) -> str:
     if not findings:
         return "(없음)"
     return "\n\n".join(f"[{f['worker']}] {f['summary']}" for f in findings)
+
+
+def format_evidence(evidence: list[str] | None) -> str:
+    return "\n\n".join(evidence) if evidence else "(도구 결과 없음)"
 
 
 def format_sources(sources: list[dict] | None) -> str:

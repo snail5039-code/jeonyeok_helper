@@ -81,6 +81,8 @@ def create_server(services: Services | None = None) -> FastMCP:
     svc = services or Services()
     server = FastMCP(
         name="jeonyeok_helper",
+        # 기본(INFO)은 도구를 부를 때마다 로그를 남겨 대화 출력이 지저분해진다.
+        log_level="WARNING",
         instructions=(
             "군 전역자의 혜택, 근거 규정, 신청 기관을 찾는 도구 모음입니다. "
             "답변에는 반드시 도구가 돌려준 출처(citation, url)를 붙이세요."

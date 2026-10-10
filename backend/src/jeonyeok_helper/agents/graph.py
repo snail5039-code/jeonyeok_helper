@@ -20,7 +20,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 
-from jeonyeok_helper.agents.prompts import format_findings, format_profile, format_sources
+from jeonyeok_helper.agents.prompts import (
+    format_evidence,
+    format_findings,
+    format_profile,
+    format_sources,
+)
 from jeonyeok_helper.agents.state import (
     WORKERS,
     AgentState,
@@ -58,7 +63,13 @@ def build_graph(
     c = components
 
     async def start(state: AgentState, config: RunnableConfig, *, store: BaseStore | None = None):
-        update = {"findings": None, "sources": None, "worker_calls": 0, "draft": ""}
+        update = {
+            "findings": None,
+            "sources": None,
+            "evidence": None,
+            "worker_calls": 0,
+            "draft": "",
+        }
         # 새 대화라도 같은 사용자면 장기 메모리의 프로필을 불러온다.
         if store is not None and (uid := _user_id(config)) and not state.get("profile"):
             if item := await store.aget(PROFILE_NAMESPACE, uid):
@@ -114,9 +125,18 @@ def build_graph(
             except Exception as e:  # 폴백: 실패를 기록하고 다른 경로로 계속 진행
                 log.warning("%s 워커 실패", name, exc_info=True)
                 out = {"summary": f"(조회 실패: {e})", "sources": []}
+            # 여러 워커가 같은 기관을 찾는 경우가 많아서, 이미 있는 출처는 빼고 더한다.
+            seen = {(s["type"], s["title"], s.get("url", "")) for s in state.get("sources", [])}
+            new_sources = []
+            for s in out.get("sources", []):
+                key = (s.get("type"), s.get("title"), s.get("url", ""))
+                if key not in seen:
+                    seen.add(key)
+                    new_sources.append(s)
             return {
                 "findings": [{"worker": name, "summary": out.get("summary", "")}],
-                "sources": out.get("sources", []),
+                "sources": new_sources,
+                "evidence": out.get("evidence", []),
                 "worker_calls": state.get("worker_calls", 0) + 1,
             }
 
@@ -133,6 +153,7 @@ def build_graph(
                 "profile": format_profile(state.get("profile")),
                 "findings": format_findings(state.get("findings")),
                 "sources": format_sources(state.get("sources")),
+                "evidence": format_evidence(state.get("evidence")),
             }
         )
         return {"draft": str(getattr(draft, "text", draft))}
@@ -142,12 +163,14 @@ def build_graph(
         try:
             checked: Verification = await c.verifier.ainvoke(
                 {
+                    # 워커 요약은 넘기지 않는다: 요약에 섞인 지식을 근거로 믿으면 안 된다.
                     "draft": draft,
-                    "findings": format_findings(state.get("findings")),
                     "sources": format_sources(state.get("sources")),
+                    "evidence": format_evidence(state.get("evidence")),
                 }
             )
-            answer = checked.answer or draft
+            # 문제가 없으면 초안을 그대로 쓴다. 다시 쓰게 하면 줄바꿈 같은 형식이 깨질 수 있다.
+            answer = draft if checked.supported else (checked.answer or draft)
         except Exception:
             log.warning("근거 검증 실패, 초안을 그대로 씁니다.", exc_info=True)
             answer = draft
