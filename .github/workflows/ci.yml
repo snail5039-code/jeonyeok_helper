@@ -6,14 +6,18 @@ on:
   pull_request:
 
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v7
 
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
       - name: Install
         run: uv sync --locked
@@ -26,31 +30,58 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
-  docker:
+  frontend:
     runs-on: ubuntu-latest
-    needs: test
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
       - name: Build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          load: true
-          tags: jeonyeok_helper:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: npm run build
 
-      # 키 없이도 서버가 뜨고 상태 확인이 통과하는지 본다.
+  docker:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build
+        run: docker compose build
+
+      # 키 없이도 두 서비스가 뜨고, 웹을 거쳐 API까지 연결되는지 본다.
       - name: Smoke test
         run: |
-          docker run -d --name app -p 8000:8000 jeonyeok_helper:ci
-          for i in $(seq 1 30); do
-            curl -fs localhost:8000/health && exit 0
-            sleep 2
+          docker compose up -d
+          for i in $(seq 1 40); do
+            if curl -fs localhost:3000/api/health; then
+              curl -fs -o /dev/null localhost:3000/
+              exit 0
+            fi
+            sleep 3
           done
-          docker logs app
+          docker compose logs
           exit 1
+
+      - name: Stop
+        if: always()
+        run: docker compose down

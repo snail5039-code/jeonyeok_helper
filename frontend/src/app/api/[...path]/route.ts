@@ -1,0 +1,42 @@
+// 브라우저 → Next.js /api/* → FastAPI 프록시.
+// 실행할 때 API_URL을 읽으므로 이미지 하나로 어느 환경에든 배포할 수 있고,
+// /chat 의 SSE 스트림도 버퍼링 없이 그대로 넘긴다.
+import type { NextRequest } from "next/server";
+
+const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
+
+// 열어 둘 FastAPI 경로만 허용한다 (임의 주소로 넘기는 열린 프록시가 되지 않게).
+const ALLOWED = [/^health$/, /^chat$/, /^profile\/[\w-]{1,64}$/];
+
+async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
+  const path = (await ctx.params).path.join("/");
+  if (!ALLOWED.some((re) => re.test(path))) {
+    return Response.json({ detail: "없는 주소예요." }, { status: 404 });
+  }
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${API_URL}/${path}`, {
+      method: req.method,
+      headers: { "Content-Type": req.headers.get("content-type") ?? "application/json" },
+      body: req.method === "GET" ? undefined : await req.text(),
+      cache: "no-store",
+    });
+  } catch {
+    return Response.json(
+      { detail: "상담 서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요." },
+      { status: 502 },
+    );
+  }
+
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: {
+      "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+export { proxy as GET, proxy as POST };

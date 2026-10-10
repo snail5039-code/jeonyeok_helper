@@ -1,9 +1,8 @@
-"""FastAPI 서버.
+"""FastAPI 서버 (API 전용, 화면은 frontend/의 Next.js가 담당).
 
 - GET  /health            : 상태와 키 설정 여부
 - POST /chat              : 질문 → SSE 스트리밍 (진행 단계, 최종 답변)
 - GET  /profile/{user_id} : 저장된 사용자 프로필
-- GET  /                  : 웹 채팅 화면 (web/)
 
 SSE 이벤트
     event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
@@ -22,17 +21,14 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from jeonyeok_helper import __version__
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
-from jeonyeok_helper.config import PROJECT_ROOT, get_settings
+from jeonyeok_helper.config import get_settings
 
 log = logging.getLogger(__name__)
-
-WEB_DIR = PROJECT_ROOT / "web"
 
 STEP_LABELS = {
     "profile": "복무 정보를 정리하고 있어요",
@@ -137,9 +133,6 @@ def create_app(agent_factory: AgentFactory = _default_factory) -> FastAPI:
             return {"profile": {}}
         item = await agent.store.aget(PROFILE_NAMESPACE, user_id)
         return {"profile": item.value if item else {}}
-
-    if WEB_DIR.exists():
-        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
 
     return app
 

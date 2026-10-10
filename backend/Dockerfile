@@ -15,7 +15,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
 COPY src ./src
-COPY web ./web
 COPY data/laws.yaml data/institutions.yaml ./data/
 COPY data/eval ./data/eval
 RUN --mount=type=cache,target=/root/.cache/uv \
