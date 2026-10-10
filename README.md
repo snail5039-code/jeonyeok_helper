@@ -63,6 +63,34 @@ uv run jeonyeok-rag stats                         # 저장된 문서 수
 
 국가보훈부 자료 같은 파일은 `data/raw/`에 넣으면 됩니다. HWP는 PDF로 변환해서 넣어주세요.
 
+MCP 서버 (2단계):
+
+```bash
+uv run jeonyeok-mcp   # stdio로 실행
+```
+
+| 도구 | 하는 일 |
+|---|---|
+| `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색 |
+| `search_benefits` | 정부24 공공서비스(혜택)에서 전역자 혜택 조회, 지역 필터 |
+| `get_benefit_detail` | 혜택의 선정기준, 구비서류, 신청방법 |
+| `find_institutions` | 주제별 기관 사이트·연락처 ([data/institutions.yaml](data/institutions.yaml)) |
+
+API 키가 없거나 호출이 실패하면 오류 대신 정부24, 온통청년 등 직접 찾아볼 수 있는 기관 링크를 돌려줍니다.
+
+Claude Desktop 같은 MCP 클라이언트에 연결하려면 설정에 아래처럼 추가합니다.
+
+```json
+{
+  "mcpServers": {
+    "jeonyeok_helper": {
+      "command": "uv",
+      "args": ["--directory", "<이 레포 경로>", "run", "jeonyeok-mcp"]
+    }
+  }
+}
+```
+
 테스트와 린트:
 
 ```bash

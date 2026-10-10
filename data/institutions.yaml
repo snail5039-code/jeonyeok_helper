@@ -1,0 +1,85 @@
+# 전역자 지원 관련 기관 링크. URL은 2026-10-10에 접속 확인함.
+# phone은 대표 상담번호를 확실히 아는 경우에만 적는다. 바뀔 수 있으니 주기적으로 확인할 것.
+#
+# aliases: 공공서비스 API의 '소관기관명'과 맞춰보는 이름
+# topics : 질문 주제로 기관을 찾을 때 쓰는 키워드
+# targets: veteran_conscript(의무복무 전역자), short_term_officer(단기 간부),
+#          long_term(중·장기 제대군인), merit(보훈대상자)
+
+institutions:
+  - id: mpva
+    name: 국가보훈부
+    url: https://www.mpva.go.kr
+    phone: "1577-0606"
+    description: 국가유공자·보훈보상대상자 등록, 보훈 급여, 제대군인 정책 총괄
+    aliases: [국가보훈부, 보훈부, 국가보훈처, 보훈처, 지방보훈청, 보훈지청]
+    topics: [보훈, 국가유공자, 보훈보상대상자, 등록, 보상금, 의료, 제대군인]
+    targets: [merit, long_term, short_term_officer]
+
+  - id: vnet
+    name: 제대군인지원센터 (국가보훈부)
+    url: https://www.vnet.go.kr
+    description: 중·장기 제대군인 전직 지원, 취업 알선, 교육, 상담
+    aliases: [제대군인지원센터]
+    topics: [제대군인, 전직, 취업, 일자리, 교육, 상담, 전직지원금]
+    targets: [long_term, short_term_officer]
+
+  - id: mma
+    name: 병무청
+    url: https://www.mma.go.kr
+    phone: "1588-9090"
+    description: 병역 사항, 전역 후 예비군 편성, 병적증명서 등 병무 민원
+    aliases: [병무청, 지방병무청]
+    topics: [병역, 병적증명서, 예비군, 전역증, 병무]
+    targets: [veteran_conscript, short_term_officer, long_term]
+
+  - id: nps
+    name: 국민연금공단
+    url: https://www.nps.or.kr
+    phone: "1355"
+    description: 군복무 크레딧(군 복무기간 국민연금 가입기간 추가 인정)
+    aliases: [국민연금공단, 국민연금]
+    topics: [연금, 국민연금, 군복무크레딧, 크레딧]
+    targets: [veteran_conscript]
+
+  - id: work24
+    name: 고용24
+    url: https://www.work24.go.kr
+    phone: "1350"
+    description: 구직 등록, 국민취업지원제도, 국민내일배움카드, 직업훈련
+    aliases: [고용노동부, 고용센터, 한국고용정보원]
+    topics: [취업, 구직, 일자리, 직업훈련, 내일배움카드, 국민취업지원제도, 실업]
+    targets: [veteran_conscript, short_term_officer, long_term, merit]
+
+  - id: youth
+    name: 온통청년
+    url: https://www.youthcenter.go.kr
+    description: 중앙부처·지자체 청년 정책 통합 검색 (전역 청년 지원 포함)
+    aliases: [온통청년, 온라인청년센터]
+    topics: [청년, 청년정책, 지자체, 주거, 금융, 자산형성]
+    targets: [veteran_conscript]
+
+  - id: gov24
+    name: 정부24 (보조금24)
+    url: https://www.gov.kr
+    phone: "110"
+    description: 나에게 맞는 정부·지자체 혜택 조회와 온라인 신청
+    aliases: [정부24, 보조금24, 행정안전부]
+    topics: [혜택, 보조금, 지원금, 신청, 민원, 지자체]
+    targets: [veteran_conscript, short_term_officer, long_term, merit]
+
+  - id: kosaf
+    name: 한국장학재단
+    url: https://www.kosaf.go.kr
+    description: 학자금 대출, 국가장학금 (복학생 학비 지원)
+    aliases: [한국장학재단]
+    topics: [장학금, 학자금, 대출, 복학, 등록금]
+    targets: [veteran_conscript]
+
+  - id: law
+    name: 국가법령정보센터
+    url: https://www.law.go.kr
+    description: 법령, 시행령, 지자체 조례 원문 확인
+    aliases: [법제처]
+    topics: [법령, 조례, 원문, 규정]
+    targets: [veteran_conscript, short_term_officer, long_term, merit]
