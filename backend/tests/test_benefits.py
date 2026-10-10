@@ -208,3 +208,11 @@ def test_search_regulations_returns_citations():
 def test_unknown_benefit_detail():
     out = call(make_server(), "get_benefit_detail", {"service_id": "x"})
     assert "찾지 못했습니다" in out["error"]
+
+
+def test_fallback_puts_topic_institutions_first():
+    out = call(make_server(fail=True), "search_benefits", {"keywords": ["취업", "구직"]})
+    names = [i["name"] for i in out["fallback"]]
+    assert names[0] == "고용24"
+    assert "정부24 (보조금24)" in names  # 공통 안내도 함께
+    assert len(names) == len(set(names)) <= 4

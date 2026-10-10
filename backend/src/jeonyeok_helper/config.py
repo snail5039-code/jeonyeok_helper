@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     google_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
     gemini_embedding_model: str = "models/gemini-embedding-001"
+    # 프로필 추출·라우팅·근거 검증용 빠른 모델 (생각 예산 0 = 생각 단계 끔)
+    gemini_fast_model: str = "gemini-2.5-flash"
+    gemini_fast_thinking_budget: int | None = 0
 
     # 국가법령정보센터 Open API (https://open.law.go.kr) 신청 시 받는 OC 값
     law_api_oc: str = ""

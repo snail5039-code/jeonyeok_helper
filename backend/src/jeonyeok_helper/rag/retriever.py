@@ -110,6 +110,9 @@ class RegulationRetriever:
         return [docs[i] for i in order[:k]]
 
     def retrieve(self, question: str, k: int = 6) -> list[Document]:
+        # 아직 아무것도 수집하지 않았으면 LLM(HyDE) 호출 없이 바로 끝낸다.
+        if hasattr(self.store, "count") and self.store.count() == 0:
+            return []
         queries = [question]
         if hypothetical := self._hyde(question):
             queries.append(hypothetical)

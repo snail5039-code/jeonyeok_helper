@@ -169,3 +169,18 @@ def test_ingest_laws_continues_after_failure():
 
     assert total == 2
     assert len(errors) == 1 and errors[0].startswith("없는 법")
+
+
+def test_empty_store_skips_llm_calls():
+    class EmptyStore(FakeStore):
+        def count(self):
+            return 0
+
+    def boom(_):
+        raise AssertionError("빈 저장소에서는 HyDE를 부르지 않아야 한다")
+
+    store = EmptyStore({})
+    retriever = RegulationRetriever(store, hyde_chain=RunnableLambda(boom))
+
+    assert retriever.retrieve("군인연금") == []
+    assert store.queries == []

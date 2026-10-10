@@ -38,6 +38,7 @@ from jeonyeok_helper.agents.state import (
 log = logging.getLogger(__name__)
 
 PROFILE_NAMESPACE = ("profiles",)
+MAX_CALLS_PER_WORKER = 2
 
 
 @dataclass
@@ -109,6 +110,10 @@ def build_graph(
         if route.next == "ask_user":
             return {"next": "ask_user", "instruction": route.question}
         if route.next in WORKERS and route.next not in c.workers:
+            return {"next": "answer"}
+        # 같은 워커를 계속 부르며 시간만 쓰는 경우가 있어, 한 질문에서 워커당 2번까지만 허용한다.
+        used = sum(f["worker"] == route.next for f in state.get("findings", []))
+        if route.next in WORKERS and used >= MAX_CALLS_PER_WORKER:
             return {"next": "answer"}
         return {"next": route.next, "instruction": route.instruction}
 

@@ -37,7 +37,11 @@ from jeonyeok_helper.agents.state import Profile, Route, Verification
 from jeonyeok_helper.agents.workers import make_react_worker
 
 
-def build_components(llm: BaseChatModel, tools: list[BaseTool]) -> Components:
+def build_components(
+    llm: BaseChatModel, tools: list[BaseTool], fast_llm: BaseChatModel | None = None
+) -> Components:
+    """llm은 도구를 쓰는 워커와 답변 작성에, fast_llm은 짧은 판단 단계에 쓴다."""
+    fast = fast_llm or llm
     by_name = {t.name: t for t in tools}
     workers = {}
     for worker, names in WORKER_TOOLS.items():
@@ -45,11 +49,11 @@ def build_components(llm: BaseChatModel, tools: list[BaseTool]) -> Components:
         if worker_tools:
             workers[worker] = make_react_worker(llm, worker_tools, WORKER_PROMPTS[worker])
     return Components(
-        profile_extractor=PROFILE_PROMPT | llm.with_structured_output(Profile),
-        router=ROUTER_PROMPT | llm.with_structured_output(Route),
+        profile_extractor=PROFILE_PROMPT | fast.with_structured_output(Profile),
+        router=ROUTER_PROMPT | fast.with_structured_output(Route),
         workers=workers,
         responder=RESPOND_PROMPT | llm | StrOutputParser(),
-        verifier=VERIFY_PROMPT | llm.with_structured_output(Verification),
+        verifier=VERIFY_PROMPT | fast.with_structured_output(Verification),
     )
 
 
@@ -73,7 +77,10 @@ _DEFAULT = object()
 
 @asynccontextmanager
 async def open_agent(
-    llm: BaseChatModel | None = None, *, state_db: Path | None | object = _DEFAULT
+    llm: BaseChatModel | None = None,
+    *,
+    fast_llm: BaseChatModel | None = None,
+    state_db: Path | None | object = _DEFAULT,
 ) -> AsyncIterator[CompiledStateGraph]:
     """state_db를 생략하면 설정의 SQLite 파일, None을 주면 메모리(평가·테스트용)."""
     from jeonyeok_helper.benefits.mcp_server import create_server
@@ -81,9 +88,10 @@ async def open_agent(
 
     settings = get_settings()
     if llm is None:
-        from jeonyeok_helper.llm import get_chat_model
+        from jeonyeok_helper.llm import get_chat_model, get_fast_chat_model
 
         llm = get_chat_model(temperature=0.2)
+        fast_llm = fast_llm or get_fast_chat_model()
     db = settings.state_db if state_db is _DEFAULT else state_db
 
     server = create_server()
@@ -93,7 +101,7 @@ async def open_agent(
     ):
         tools = await load_mcp_tools(session)
         yield build_graph(
-            build_components(llm, tools),
+            build_components(llm, tools, fast_llm),
             checkpointer=checkpointer,
             store=store,
             max_worker_calls=settings.max_worker_calls,

@@ -64,12 +64,23 @@ def test_ask_user_returns_question_without_answering():
 
 
 def test_worker_calls_are_capped():
-    components, rec = make_components([Route(next="benefit", instruction="또 찾아")])
+    rotation = [Route(next=w) for w in ("regulation", "benefit", "institution") * 3]
+    components, rec = make_components(rotation)
     graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=3)
 
     state = ask(graph, "혜택 다 찾아줘")
 
     assert len(rec["worker"].calls) == 3
+    assert state["messages"][-1].text == "최종 답변 [1]"
+
+
+def test_same_worker_is_called_at_most_twice():
+    components, rec = make_components([Route(next="regulation", instruction="또 찾아")])
+    graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=10)
+
+    state = ask(graph, "법령 찾아줘")
+
+    assert len(rec["worker"].calls) == 2
     assert state["messages"][-1].text == "최종 답변 [1]"
 
 

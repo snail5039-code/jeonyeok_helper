@@ -89,9 +89,13 @@ def create_server(services: Services | None = None) -> FastMCP:
         ),
     )
 
-    def fallback() -> list[dict]:
+    def fallback(topic: str = "", limit: int = 4) -> list[dict]:
+        """직접 찾아볼 수 있는 기관. 질문 주제에 맞는 기관(취업 → 고용24)을 앞에 둔다."""
         by_id = {i.id: i for i in svc.directory.institutions}
-        return [_institution_dict(by_id[i]) for i in FALLBACK_INSTITUTION_IDS if i in by_id]
+        picked = svc.directory.find(topic, limit=2) if topic else []
+        picked += [by_id[i] for i in FALLBACK_INSTITUTION_IDS if i in by_id]
+        unique = list({i.id: i for i in picked}.values())
+        return [_institution_dict(i) for i in unique[:limit]]
 
     @server.tool()
     def search_regulations(question: str, k: int = 5) -> dict:
@@ -124,7 +128,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         try:
             benefits = svc.gov24.search(keywords=keywords, region=region, limit=limit)
         except BenefitApiError as e:
-            return {"benefits": [], "error": str(e), "fallback": fallback()}
+            return {"benefits": [], "error": str(e), "fallback": fallback(" ".join(keywords or []))}
 
         results = []
         for b in benefits:
