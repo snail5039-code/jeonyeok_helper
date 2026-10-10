@@ -146,8 +146,8 @@ def test_for_agency_matches_department_names():
 
 
 def call(server, tool: str, args: dict) -> dict:
-    result = asyncio.run(server.call_tool(tool, args))
-    return json.loads(result.content[0].text)
+    content = asyncio.run(server.call_tool(tool, args))
+    return json.loads(content[0].text)
 
 
 class FakeGov24:

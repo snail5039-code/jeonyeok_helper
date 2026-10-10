@@ -1,0 +1,74 @@
+"""워커 에이전트 (ReAct) 와 도구 결과에서 출처 추출.
+
+워커 계약: 입력 {messages, instruction, profile} → 출력 {summary, sources}
+그래프는 이 계약만 알기 때문에, 테스트에서는 아무 Runnable로 바꿔 끼울 수 있다.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+
+from langchain.agents import create_agent
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import Runnable, RunnableLambda
+from langchain_core.tools import BaseTool
+
+from jeonyeok_helper.agents.prompts import format_profile
+
+
+def _tool_payload(msg: ToolMessage) -> dict | None:
+    """MCP 도구 결과는 JSON 문자열(또는 그걸 담은 text 블록 목록)로 온다."""
+    content = msg.content
+    if isinstance(content, list):
+        content = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    try:
+        data = json.loads(content)
+    except (TypeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
+    """도구 결과에서 답변에 인용할 출처 목록을 만든다. 같은 출처는 한 번만."""
+    sources: list[dict] = []
+    seen: set[tuple] = set()
+
+    def add(kind: str, title: str, url: str = "") -> None:
+        key = (kind, title, url)
+        if title and key not in seen:
+            seen.add(key)
+            sources.append({"type": kind, "title": title, "url": url})
+
+    for msg in messages:
+        if not isinstance(msg, ToolMessage) or (data := _tool_payload(msg)) is None:
+            continue
+        for r in data.get("results", []):
+            add("regulation", r.get("citation", ""), r.get("url", ""))
+        for b in data.get("benefits", []):
+            add("benefit", b.get("name", ""), b.get("url", ""))
+        if msg.name == "get_benefit_detail" and data.get("name"):
+            add("benefit", data["name"], data.get("url", ""))
+        for inst in [*data.get("institutions", []), *data.get("fallback", [])]:
+            add("institution", inst.get("name", ""), inst.get("url", ""))
+    return sources
+
+
+def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: str) -> Runnable:
+    agent = create_agent(llm, tools, system_prompt=system_prompt)
+
+    async def run(inp: dict) -> dict:
+        task = HumanMessage(
+            f"[슈퍼바이저 지시] {inp.get('instruction') or '마지막 질문을 처리하세요.'}\n"
+            f"[사용자 프로필] {format_profile(inp.get('profile'))}"
+        )
+        history = [*inp["messages"], task]
+        result = await agent.ainvoke({"messages": history})
+        produced = result["messages"][len(history) :]
+        return {
+            "summary": produced[-1].text if produced else "",
+            "sources": extract_sources(produced),
+        }
+
+    return RunnableLambda(run)

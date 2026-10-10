@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 
 from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
@@ -77,9 +77,9 @@ def _institution_dict(inst: Institution) -> dict:
     return inst.model_dump(include={"name", "url", "phone", "description"}, exclude_none=True)
 
 
-def create_server(services: Services | None = None) -> MCPServer:
+def create_server(services: Services | None = None) -> FastMCP:
     svc = services or Services()
-    server = MCPServer(
+    server = FastMCP(
         name="jeonyeok_helper",
         instructions=(
             "군 전역자의 혜택, 근거 규정, 신청 기관을 찾는 도구 모음입니다. "
@@ -170,7 +170,7 @@ def create_server(services: Services | None = None) -> MCPServer:
 
 
 def main() -> None:
-    create_server().run("stdio")
+    create_server().run(transport="stdio")
 
 
 if __name__ == "__main__":

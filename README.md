@@ -91,6 +91,18 @@ Claude Desktop 같은 MCP 클라이언트에 연결하려면 설정에 아래처
 }
 ```
 
+에이전트와 대화하기 (3단계, Gemini 키 필요):
+
+```bash
+uv run jeonyeok-chat
+```
+
+```
+start → profile(복무 정보 추출) → supervisor ─┬→ regulation / benefit / institution → supervisor
+                                              ├→ ask_user (정보가 부족하면 되묻기)
+                                              └→ respond(답변 초안) → verify(근거 검증)
+```
+
 테스트와 린트:
 
 ```bash
