@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import sys
 import time
 import uuid
 from collections import defaultdict
@@ -23,9 +22,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-import yaml
-
-from jeonyeok_helper.config import DATA_DIR
+from jeonyeok_helper.cli import run_cli
+from jeonyeok_helper.config import DATA_DIR, load_yaml
 
 QUESTIONS_FILE = DATA_DIR / "eval" / "questions.yaml"
 RESULTS_DIR = DATA_DIR / "eval" / "results"
@@ -65,7 +63,7 @@ class CaseResult:
 
 
 def load_questions(path: Path = QUESTIONS_FILE) -> list[dict]:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))["questions"]
+    return load_yaml(path, "questions")
 
 
 def _profile_matches(expected, actual) -> bool:
@@ -208,8 +206,10 @@ def save(results: list[CaseResult], summary: dict, out_dir: Path = RESULTS_DIR) 
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    return run_cli(lambda: _run(argv))
+
+
+def _run(argv: list[str] | None) -> int:
     parser = argparse.ArgumentParser(prog="jeonyeok-eval", description="에이전트 평가")
     parser.add_argument("--ids", nargs="*", help="평가할 문항 id")
     parser.add_argument("--limit", type=int, help="앞에서부터 N문항만")
@@ -227,11 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         mark = "✓" if r.score == 1 else ("✗" if r.score == 0 else "△")
         print(f"{mark} {r.id} {r.score:.0%} {r.seconds:.1f}s  {r.question}")
 
-    try:
-        results = asyncio.run(run_eval(lambda: open_agent(state_db=None), cases, show))
-    except RuntimeError as e:  # API 키 누락 등
-        print(f"오류: {e}")
-        return 2
+    results = asyncio.run(run_eval(lambda: open_agent(state_db=None), cases, show))
     summary = summarize(results)
     report = save(results, summary)
     o = summary["overall"]

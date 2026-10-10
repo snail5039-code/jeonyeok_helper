@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+import yaml
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -40,6 +41,11 @@ class Settings(BaseSettings):
 
     # 슈퍼바이저가 한 질문에서 워커를 호출할 수 있는 최대 횟수 (무한 루프 방지)
     max_worker_calls: int = 4
+
+
+def load_yaml(path: Path, key: str) -> list[dict]:
+    """data/의 YAML 목록 파일(laws, institutions, questions)에서 key 아래 목록을 읽는다."""
+    return yaml.safe_load(path.read_text(encoding="utf-8"))[key]
 
 
 @lru_cache

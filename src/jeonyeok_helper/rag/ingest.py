@@ -9,18 +9,16 @@ uv run jeonyeok-rag stats           # 저장된 문서 수
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-import yaml
-
-from jeonyeok_helper.config import DATA_DIR, get_settings
+from jeonyeok_helper.cli import run_cli
+from jeonyeok_helper.config import DATA_DIR, get_settings, load_yaml
 
 LAWS_FILE = DATA_DIR / "laws.yaml"
 
 
 def load_law_list(path: Path = LAWS_FILE) -> list[dict]:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))["laws"]
+    return load_yaml(path, "laws")
 
 
 def ingest_laws(client, store, laws: list[dict]) -> tuple[int, list[str]]:
@@ -48,14 +46,7 @@ def ingest_files(store, directory: Path) -> tuple[int, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Windows 콘솔(cp949)에서도 한글이 깨지지 않게 한다.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    try:
-        return _run(argv)
-    except RuntimeError as e:  # API 키 누락 등 설정 문제
-        print(f"오류: {e}")
-        return 2
+    return run_cli(lambda: _run(argv))
 
 
 def _run(argv: list[str] | None) -> int:

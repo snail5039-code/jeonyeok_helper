@@ -6,10 +6,10 @@ uv run jeonyeok-chat
 from __future__ import annotations
 
 import asyncio
-import sys
 import uuid
 
 from jeonyeok_helper.agents.runtime import open_agent
+from jeonyeok_helper.cli import run_cli
 
 
 async def _chat() -> None:
@@ -17,7 +17,10 @@ async def _chat() -> None:
     async with open_agent() as agent:
         print("전역도우미입니다. 무엇이 궁금하세요? (종료: exit)")
         while True:
-            question = await asyncio.to_thread(input, "\n나> ")
+            try:
+                question = await asyncio.to_thread(input, "\n나> ")
+            except EOFError:  # 입력이 끝나면(Ctrl+Z, 파이프 종료) 대화를 마친다.
+                return
             if question.strip().lower() in {"exit", "quit", "종료"}:
                 return
             if not question.strip():
@@ -34,16 +37,7 @@ async def _chat() -> None:
 
 
 def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    try:
-        asyncio.run(_chat())
-    except RuntimeError as e:  # API 키 누락 등
-        print(f"오류: {e}")
-        return 2
-    except (KeyboardInterrupt, EOFError):
-        pass
-    return 0
+    return run_cli(lambda: asyncio.run(_chat()))
 
 
 if __name__ == "__main__":

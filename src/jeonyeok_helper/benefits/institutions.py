@@ -6,10 +6,9 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-import yaml
 from pydantic import BaseModel
 
-from jeonyeok_helper.config import DATA_DIR
+from jeonyeok_helper.config import DATA_DIR, load_yaml
 
 INSTITUTIONS_FILE = DATA_DIR / "institutions.yaml"
 
@@ -35,8 +34,7 @@ class InstitutionDirectory:
 
     @classmethod
     def from_yaml(cls, path: Path = INSTITUTIONS_FILE) -> InstitutionDirectory:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))["institutions"]
-        return cls([Institution(**item) for item in raw])
+        return cls([Institution(**item) for item in load_yaml(path, "institutions")])
 
     def find(self, query: str, target: str | None = None, limit: int = 3) -> list[Institution]:
         """질문 주제로 관련 기관을 찾는다. 이름·별칭이 맞으면 주제보다 높게 친다."""
