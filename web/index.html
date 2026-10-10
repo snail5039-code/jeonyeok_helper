@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>전역도우미</title>
+  <meta name="description" content="전역 후 받을 수 있는 혜택, 근거 규정, 신청처를 한 번에 알려드려요.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f5d4e'/><path d='M16 6l2.6 5.6 6.1.7-4.5 4.2 1.2 6L16 19.6 10.6 22.5l1.2-6-4.5-4.2 6.1-.7z' fill='%23f2c14e'/></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M16 6l2.6 5.6 6.1.7-4.5 4.2 1.2 6L16 19.6 10.6 22.5l1.2-6-4.5-4.2 6.1-.7z"/></svg>
+      </span>
+      <div>
+        <h1>전역도우미</h1>
+        <p class="tagline">전역 후 받을 수 있는 혜택, 근거, 신청처를 한 번에</p>
+      </div>
+    </div>
+    <span id="mode" class="mode" hidden>데모 모드</span>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <section class="card profile">
+        <div class="card-head">
+          <h2>내 정보</h2>
+          <span class="hint">대화하면 자동으로 채워져요</span>
+        </div>
+        <dl id="profile">
+          <div><dt>복무 형태</dt><dd data-key="service_type">-</dd></div>
+          <div><dt>복무 기간</dt><dd data-key="service_years">-</dd></div>
+          <div><dt>전역일</dt><dd data-key="discharge_date">-</dd></div>
+          <div><dt>나이</dt><dd data-key="age">-</dd></div>
+          <div><dt>지역</dt><dd data-key="region">-</dd></div>
+          <div><dt>보훈 대상</dt><dd data-key="merit_status">-</dd></div>
+        </dl>
+      </section>
+
+      <section class="card links">
+        <h2>자주 찾는 기관</h2>
+        <ul>
+          <li><a href="https://www.gov.kr" target="_blank" rel="noopener">정부24 <span>혜택 조회·신청</span></a></li>
+          <li><a href="https://www.vnet.go.kr" target="_blank" rel="noopener">제대군인지원센터 <span>전직·취업 지원</span></a></li>
+          <li><a href="https://www.mma.go.kr" target="_blank" rel="noopener">병무청 <span>병적·예비군</span></a></li>
+          <li><a href="https://www.work24.go.kr" target="_blank" rel="noopener">고용24 <span>구직·직업훈련</span></a></li>
+          <li><a href="https://www.youthcenter.go.kr" target="_blank" rel="noopener">온통청년 <span>지역 청년 정책</span></a></li>
+        </ul>
+      </section>
+    </aside>
+
+    <main class="chat">
+      <div id="messages" class="messages" aria-live="polite">
+        <section id="welcome" class="welcome">
+          <h2>무엇이 궁금하세요?</h2>
+          <p>복무 형태와 지역을 함께 알려주시면 받을 수 있는 혜택을 더 정확히 찾아드려요.</p>
+          <div class="suggestions">
+            <button type="button">작년에 병장으로 만기 전역했고 서울 살아요. 받을 수 있는 혜택 있어요?</button>
+            <button type="button">군복무 크레딧이 뭐예요?</button>
+            <button type="button">10년 복무하고 전역 예정인데 전직 지원 받을 수 있나요?</button>
+            <button type="button">전역 후 예비군은 언제까지 해요?</button>
+          </div>
+        </section>
+      </div>
+
+      <form id="composer" class="composer">
+        <textarea id="input" rows="1" placeholder="예) 하사 4년 복무, 경기도 거주" aria-label="질문 입력"></textarea>
+        <button id="send" type="submit" aria-label="보내기">
+          <svg viewBox="0 0 24 24"><path d="M3.4 20.4l17.5-7.5c.8-.4.8-1.5 0-1.8L3.4 3.6c-.7-.3-1.4.3-1.2 1l1.9 6.4 9 1-9 1-1.9 6.4c-.2.7.5 1.3 1.2 1z"/></svg>
+        </button>
+      </form>
+      <p class="disclaimer">답변은 참고용이에요. 정확한 자격과 신청 방법은 소관 기관에 꼭 확인하세요.</p>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,27 +1,150 @@
-"""FastAPI 앱. 지금은 상태 확인만 있고, /chat 등은 4단계에서 추가한다."""
+"""FastAPI 서버.
+
+- GET  /health            : 상태와 키 설정 여부
+- POST /chat              : 질문 → SSE 스트리밍 (진행 단계, 최종 답변)
+- GET  /profile/{user_id} : 저장된 사용자 프로필
+- GET  /                  : 웹 채팅 화면 (web/)
+
+SSE 이벤트
+    event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
+    event: answer    data: {"text": "...", "sources": [...], "profile": {...}}
+    event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
+    event: error     data: {"message": "..."}
+    event: done      data: {}
+"""
+
+import json
+import logging
+import uuid
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel, Field
 
 from jeonyeok_helper import __version__
-from jeonyeok_helper.config import get_settings
+from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
+from jeonyeok_helper.config import PROJECT_ROOT, get_settings
 
-app = FastAPI(title="전역도우미", version=__version__)
+log = logging.getLogger(__name__)
+
+WEB_DIR = PROJECT_ROOT / "web"
+
+STEP_LABELS = {
+    "profile": "복무 정보를 정리하고 있어요",
+    "regulation": "관련 법령을 찾고 있어요",
+    "benefit": "받을 수 있는 혜택을 조회하고 있어요",
+    "institution": "신청 기관을 찾고 있어요",
+    "respond": "답변을 정리하고 있어요",
+    "verify": "근거를 확인하고 있어요",
+}
+
+AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
 
 
-@app.get("/health")
-def health() -> dict:
-    s = get_settings()
-    return {
-        "status": "ok",
-        "version": __version__,
-        # 키 값은 노출하지 않고 설정 여부만 알려준다.
-        "keys": {
-            "gemini": bool(s.google_api_key),
-            "law_api": bool(s.law_api_oc),
-            "data_go_kr": bool(s.data_go_kr_service_key),
-        },
-    }
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    thread_id: str | None = None
+    user_id: str | None = None
+
+
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def _default_factory() -> AbstractAsyncContextManager[CompiledStateGraph]:
+    from jeonyeok_helper.agents.runtime import open_agent
+
+    return open_agent()
+
+
+def create_app(agent_factory: AgentFactory = _default_factory) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with AsyncExitStack() as stack:
+            try:
+                app.state.agent = await stack.enter_async_context(agent_factory())
+                app.state.agent_error = None
+            except RuntimeError as e:  # API 키 누락 등: 서버는 띄우고 /chat에서 안내
+                log.warning("에이전트를 시작하지 못했습니다: %s", e)
+                app.state.agent, app.state.agent_error = None, str(e)
+            yield
+
+    app = FastAPI(title="전역도우미", version=__version__, lifespan=lifespan)
+
+    @app.get("/health")
+    def health(request: Request) -> dict:
+        s = get_settings()
+        return {
+            "status": "ok",
+            "version": __version__,
+            "agent_ready": getattr(request.app.state, "agent", None) is not None,
+            # 키 값은 노출하지 않고 설정 여부만 알려준다.
+            "keys": {
+                "gemini": bool(s.google_api_key),
+                "law_api": bool(s.law_api_oc),
+                "data_go_kr": bool(s.data_go_kr_service_key),
+            },
+        }
+
+    @app.post("/chat")
+    async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
+        agent: CompiledStateGraph | None = request.app.state.agent
+        if agent is None:
+            raise HTTPException(503, request.app.state.agent_error or "에이전트 준비 중")
+
+        thread_id = req.thread_id or str(uuid.uuid4())
+        config = {"configurable": {"thread_id": thread_id}}
+        if req.user_id:
+            config["configurable"]["user_id"] = req.user_id
+
+        async def events() -> AsyncIterator[str]:
+            yield _sse("thread", {"thread_id": thread_id})
+            try:
+                async for update in agent.astream(
+                    {"messages": [("user", req.message)]}, config, stream_mode="updates"
+                ):
+                    for node in update:
+                        if label := STEP_LABELS.get(node):
+                            yield _sse("step", {"node": node, "label": label})
+                state = (await agent.aget_state(config)).values
+                last = state["messages"][-1]
+                payload = {"text": last.text, "profile": state.get("profile", {})}
+                if state.get("draft"):
+                    yield _sse("answer", {**payload, "sources": state.get("sources", [])})
+                else:  # respond를 거치지 않았다면 되묻기
+                    yield _sse("question", payload)
+            except Exception:
+                log.exception("대화 처리 실패")
+                message = "답변 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요."
+                yield _sse("error", {"message": message})
+            yield _sse("done", {})
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/profile/{user_id}")
+    async def profile(user_id: str, request: Request) -> dict:
+        agent: CompiledStateGraph | None = request.app.state.agent
+        if agent is None or agent.store is None:
+            return {"profile": {}}
+        item = await agent.store.aget(PROFILE_NAMESPACE, user_id)
+        return {"profile": item.value if item else {}}
+
+    if WEB_DIR.exists():
+        app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+
+    return app
+
+
+app = create_app()
 
 
 def run() -> None:

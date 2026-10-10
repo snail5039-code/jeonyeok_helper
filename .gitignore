@@ -21,3 +21,6 @@ data/raw/*
 .idea/
 .DS_Store
 Thumbs.db
+
+# 로컬 도구 설정
+.claude/

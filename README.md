@@ -8,6 +8,14 @@
 
 자세한 내용은 [기획서](docs/기획서.md)와 [개발 순서](docs/개발순서.md)를 참고하세요.
 
+## 화면
+
+| 데스크톱 | 모바일 (다크 모드) |
+|---|---|
+| ![데스크톱 답변 화면](docs/mockup/desktop-answer.jpg) | ![모바일 답변 화면](docs/mockup/mobile-answer-dark.jpg) |
+
+> 데모 모드 화면입니다. Gemini 키가 없으면 웹 화면이 자동으로 데모 모드로 열려 예시 응답을 보여줍니다.
+
 ## 구조
 
 ```
@@ -49,8 +57,14 @@ docs/
 ```bash
 uv sync
 cp .env.example .env   # 키 입력
-uv run jeonyeok-serve  # http://127.0.0.1:8000/health
+uv run jeonyeok-serve  # http://127.0.0.1:8000 웹 화면
 ```
+
+| API | 설명 |
+|---|---|
+| `POST /chat` | `{message, thread_id?, user_id?}` → SSE 스트리밍 (`thread`, `step`, `answer` / `question`, `error`, `done`) |
+| `GET /profile/{user_id}` | 저장된 사용자 프로필 |
+| `GET /health` | 상태, 에이전트 준비 여부, 키 설정 여부 |
 
 규정 수집과 검색 (1단계):
 
