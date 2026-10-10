@@ -193,15 +193,14 @@ def to_markdown(results: list[CaseResult], summary: dict, started_at: str) -> st
 
 def save(results: list[CaseResult], summary: dict, out_dir: Path = RESULTS_DIR) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    if model := summary.get("model"):
-        stamp = f"{stamp}-{model}"
+    started_at = datetime.now().strftime("%Y%m%d-%H%M%S")
+    name = f"{started_at}-{summary['model']}" if summary.get("model") else started_at
     payload = {"summary": summary, "results": [asdict(r) | {"score": r.score} for r in results]}
-    (out_dir / f"{stamp}.json").write_text(
+    (out_dir / f"{name}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    report = out_dir / f"{stamp}.md"
-    report.write_text(to_markdown(results, summary, stamp), encoding="utf-8")
+    report = out_dir / f"{name}.md"
+    report.write_text(to_markdown(results, summary, started_at), encoding="utf-8")
     return report
 
 
