@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# 비밀 값
+.env
+
+# 생성되는 데이터 (벡터 DB, 원본 문서)
+data/chroma/
+data/raw/*
+!data/raw/.gitkeep
+
+# 에디터, OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
