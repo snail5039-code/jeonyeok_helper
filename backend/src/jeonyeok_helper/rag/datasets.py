@@ -122,6 +122,27 @@ def scholarship_to_document(row: dict[str, str]) -> Document | None:
     )
 
 
+# ---------- 국가보훈부 보훈행정용어집 ----------
+# '상이처', '전공사상'처럼 안내문에 나오는 보훈 행정 용어 165개의 뜻.
+
+
+def glossary_to_document(row: dict[str, str]) -> Document | None:
+    term, meaning = row.get("표제어", ""), row.get("의미", "")
+    if not term or not meaning:
+        return None
+    body = _lines(row, [("분야", "구분"), ("참조", "참조")])
+    return Document(
+        page_content="\n".join([f"[보훈행정용어] {term}", meaning, *body]),
+        metadata={
+            "source_type": "dataset",
+            "law_name": f"보훈행정용어 {term}",
+            "citation": f"국가보훈부 보훈행정용어집: {term}",
+            "url": f"{PORTAL}/data/15043334/fileData.do",
+            "doc_id": f"glossary:{row.get('번호', term)}",
+        },
+    )
+
+
 @dataclass(frozen=True)
 class Dataset:
     name: str
@@ -140,6 +161,7 @@ DATASETS = [
     Dataset(
         "scholarship", "15028252", "한국장학재단 학자금지원정보(대학생)", scholarship_to_document
     ),
+    Dataset("mpva_glossary", "15043334", "국가보훈부 보훈행정용어집", glossary_to_document),
 ]
 
 

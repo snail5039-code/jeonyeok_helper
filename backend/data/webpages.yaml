@@ -1,0 +1,102 @@
+# 수집할 공식 안내 페이지. `uv run jeonyeok-rag web`
+#
+# name: 출처로 보일 이름 (기관명 + 내용)
+# url: 로그인 없이 열리는 공개 페이지만
+# selector: 본문 영역 CSS (없으면 #contents, main 등에서 글이 가장 많은 곳)
+# start: 이 글이 처음 나오는 곳부터 저장 (앞쪽 메뉴·공유 버튼 제거)
+#
+# 국가보훈부 '지원안내'(key 141~146)는 하위 메뉴만 있는 목차 페이지라 넣지 않는다.
+# 보훈대상자 유형별 금액·지원은 2026 보훈가족 지원제도 해설 PDF(data/raw)에 있다.
+
+pages:
+  # ---------- 국가보훈부 예우보상: 제대군인 ----------
+  - name: 국가보훈부 안내 - 제대군인 취·창업지원
+    url: https://www.mpva.go.kr/mpva/contents.do?key=137
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 제대군인 교육훈련지원
+    url: https://www.mpva.go.kr/mpva/contents.do?key=138
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 제대군인 생활안정지원(전직지원금·교육·대부·의료)
+    url: https://www.mpva.go.kr/mpva/contents.do?key=139
+    selector: "#contents"
+    start: 인쇄
+
+  # ---------- 국가보훈부 예우보상: 국가유공자 ----------
+  - name: 국가보훈부 안내 - 국가유공자 대상요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=105
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 국가유공자 등록신청
+    url: https://www.mpva.go.kr/mpva/contents.do?key=106
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 국가유공자 유가족 및 가족요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=107
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 국가유공자 지원내용(2012년 7월 이후)
+    url: https://www.mpva.go.kr/mpva/contents.do?key=109
+    selector: "#contents"
+    start: 인쇄
+
+  # ---------- 보훈보상대상자 ----------
+  - name: 국가보훈부 안내 - 보훈보상대상자 대상요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=115
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 보훈보상대상자 등록신청
+    url: https://www.mpva.go.kr/mpva/contents.do?key=116
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 보훈보상대상자 유가족 및 가족요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=117
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 보훈보상대상자 지원내용
+    url: https://www.mpva.go.kr/mpva/contents.do?key=118
+    selector: "#contents"
+    start: 인쇄
+
+  # ---------- 참전유공자, 고엽제 ----------
+  - name: 국가보훈부 안내 - 참전유공자 대상요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=120
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 참전유공자 등록신청
+    url: https://www.mpva.go.kr/mpva/contents.do?key=121
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 참전유공자 지원내용
+    url: https://www.mpva.go.kr/mpva/contents.do?key=122
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 고엽제후유(의)증 대상요건
+    url: https://www.mpva.go.kr/mpva/contents.do?key=128
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 고엽제 질병
+    url: https://www.mpva.go.kr/mpva/contents.do?key=129
+    selector: "#contents"
+    start: 인쇄
+  - name: 국가보훈부 안내 - 고엽제후유(의)증 지원내용
+    url: https://www.mpva.go.kr/mpva/contents.do?key=130
+    selector: "#contents"
+    start: 인쇄
+
+  # ---------- 의무복무 병사 ----------
+  - name: 국방부 안내 - 장병내일준비적금
+    url: https://www.mnd.go.kr/mnd/288/subview.do
+    selector: .contents
+    start: 개요
+  - name: 국민연금공단 안내 - 크레딧 제도(군복무 크레딧)
+    url: https://www.nps.or.kr/pnsinfo/ntpsklg/getOHAF0048M0.do?menuId=MN24001117&tab=tab8
+    selector: "#contents"
+    start: 크레딧 제도
+
+  # ---------- 구직 ----------
+  - name: 고용24 안내 - 국민취업지원제도
+    url: https://m.work24.go.kr/cm/c/f/1100/selecSystInfo.do?systId=SI00000316&systClId=SC00000206
+    selector: "#contents"
+    start: 프린트하기

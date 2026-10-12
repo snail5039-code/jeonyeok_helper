@@ -36,7 +36,7 @@
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
 | LLM | Gemini |
 | 에이전트 | LangChain, LangGraph |
-| 평가 | 평가 데이터셋 40문항 (`jeonyeok-eval`) |
+| 평가 | 답변 평가 40문항 + 규정 검색 골든셋 64문항 (`jeonyeok-eval`, `--retrieval`) |
 | 도구 연동 | MCP |
 | RAG | Chroma, HyDE, Re-ranking |
 | 서버 | FastAPI (SSE), SQLite (대화 기록·프로필), SQLAlchemy 2.0 + Alembic (피드백) |
@@ -99,10 +99,12 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `uv run jeonyeok-rag interpretations` | `data/interpretations.yaml` 기준 국가보훈부·국방부·병무청·법제처 법령해석례 수집 |
 | `uv run jeonyeok-rag datasets` | 공공데이터 CSV(보훈 민원·구비서류, 장학금) 수집, 파일이 없으면 data.go.kr에서 내려받음 |
 | `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (HWP는 PDF로 변환, 글자 없는 PDF는 Gemini로 옮겨 적음) |
+| `uv run jeonyeok-rag web` | `data/webpages.yaml`의 기관 안내 페이지(국가보훈부·국방부·국민연금·고용24) 수집 |
 | `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
 | `uv run jeonyeok-mcp` | MCP 서버 (stdio) |
 | `uv run jeonyeok-chat` | 터미널에서 에이전트와 대화 |
 | `uv run jeonyeok-eval` | 평가 40문항 채점, `data/eval/results/`에 보고서 |
+| `uv run jeonyeok-eval --retrieval [--ablation]` | 규정 검색 골든셋(Hit@k·Recall@k·MRR), 검색 설정 비교 |
 
 ### API
 

@@ -1,6 +1,6 @@
 ---
 name: add-data
-description: 전역도우미에 검색 자료를 추가한다 — 사용자가 준 PDF·문서(글자 없는 스캔본 포함), 새 법령·행정규칙, 공공데이터. "이 파일 넣어줘", "자료 추가", "이 법도 넣어", "검색이 잘 안 돼" 같은 요청에 쓴다.
+description: 전역도우미에 검색 자료를 추가한다 — 사용자가 준 PDF·문서(글자 없는 스캔본 포함), 새 법령·행정규칙, 기관 안내 웹 페이지, 공공데이터. 넣은 뒤 검색 골든셋으로 확인한다. "이 파일 넣어줘", "자료 추가", "이 법도 넣어", "검색이 잘 안 돼" 같은 요청에 쓴다.
 ---
 
 # 검색 자료 추가
@@ -43,13 +43,34 @@ description: 전역도우미에 검색 자료를 추가한다 — 사용자가 �
 3. 새로 넣은 것만 수집: `ingest_laws(client, store, [새 항목들])` (전체는 `jeonyeok-rag laws`).
    조례는 `data/ordinances.yaml`, 해석례는 `data/interpretations.yaml` 후 각 명령.
 
+## 2-1. 기관 안내 웹 페이지
+
+금액·신청처·처리기간처럼 법령에 없고 기관 누리집에만 있는 내용은 `data/webpages.yaml`에 넣는다.
+1. 로그인 없이 열리는 공개 페이지인지 확인한다.
+2. 본문 영역(`selector`)과 시작 글(`start`)을 정해 미리 본다:
+   `extract_text(html, selector, start)`로 뽑힌 앞뒤 200자를 확인 (메뉴만 나오면 selector를 바꿈.
+   본문 전체를 `<form>`으로 감싼 누리집이 있다).
+3. `uv run jeonyeok-rag web` (같은 URL은 같은 ID로 덮어써서 다시 돌려도 중복이 없다).
+   목차만 있는 페이지(예: 보훈부 지원안내 key 141~146)는 넣지 않는다.
+
+## 2-2. 공개 PDF 찾기
+
+국가보훈부 정책자료실(`selectBbsNttList.do?bbsNo=34`, `bbsNo=47`)처럼 게시판에 올라오는 PDF는
+첨부 번호(`atchmnflNo`)로 받는다. 새 폴더에 받아 `%PDF-`로 시작하는지 확인한 뒤 data/raw로 옮긴다.
+전역자와 관계없는 유형(독립유공자, 5·18 등)은 검색 잡음이 되니 넣지 않는다.
+
 ## 3. 확인 (꼭)
 
 1. 그 자료로 답해야 할 질문으로 검색해 상위에 나오는지 본다:
    `uv run jeonyeok-rag search "질문" [--region 부산]`
-2. 자료를 크게 늘렸으면 **전체 평가를 다시 돌린다**: `uv run jeonyeok-eval`.
+2. 새 자료를 겨냥한 문항을 `data/eval/retrieval_golden.yaml`에 넣고(정답은 검색 결과를 베끼지 말고
+   조문·쪽 내용으로 정함, YAML에서 콜론이 든 표기는 따옴표) 검색 골든셋을 돌린다:
+   `uv run jeonyeok-eval --retrieval` (Hit·Recall·MRR, `--ablation`으로 설정 비교)
+3. 자료를 크게 늘렸으면 **전체 평가를 다시 돌린다**: `uv run jeonyeok-eval`.
    큰 문서가 법령 근거를 밀어내 24/30까지 떨어진 적이 있다 (검색은 같은 문서 2개까지로 제한 중).
-3. `uv run pytest -q`, `uv run ruff check src tests`.
+4. `uv run pytest -q`, `uv run ruff check src tests`.
+5. 사람들이 쓰는 말과 법령 용어가 달라 못 찾으면(실업급여 ↔ 구직급여) `rag/retriever.py`의
+   `LEGAL_TERMS`에 추가한다.
 
 ## 4. 기록
 

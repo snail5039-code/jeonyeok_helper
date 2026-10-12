@@ -262,3 +262,21 @@ def test_pdf_without_text_is_transcribed_once_and_loaded_by_page(tmp_path):
         "전직교육 안내서 (1쪽)",
         "전직교육 안내서 (2쪽)",
     ]
+
+
+def test_webpage_text_keeps_body_and_drops_menus():
+    from jeonyeok_helper.rag.webpages import extract_text, page_to_documents
+
+    html = """<html><body><header>국가보훈부 메뉴</header><nav>예우보상 보훈알림</nav>
+    <form><div id="contents"><p>공유</p><p>인쇄</p><h3>전직지원금</h3>
+    <p>매월 장기복무 81만원씩, 중기복무 58만원씩 최장 6개월간 지급</p></div></form>
+    <footer>저작권</footer><script>var x = 1;</script></body></html>"""
+    text = extract_text(html, "#contents", start="전직지원금")
+    assert text.startswith("전직지원금") and "81만원" in text  # <form> 안 본문도 읽는다
+    assert "메뉴" not in text and "저작권" not in text and "var x" not in text
+
+    page = {"name": "국가보훈부 안내 - 제대군인 생활안정지원", "url": "https://www.mpva.go.kr/x"}
+    docs = page_to_documents(page, text)
+    assert docs[0].metadata["source_type"] == "web"
+    assert docs[0].metadata["citation"] == page["name"]
+    assert docs[0].metadata["doc_id"] == page_to_documents(page, "다른 내용")[0].metadata["doc_id"]

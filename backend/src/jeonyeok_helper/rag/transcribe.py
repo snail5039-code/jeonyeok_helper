@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -89,17 +90,29 @@ def _gemini_transcriber():
     s = get_settings()
     if not s.google_api_key:
         raise RuntimeError("GOOGLE_API_KEY가 설정되지 않았습니다. .env 파일을 확인하세요.")
-    client = genai.Client(api_key=s.google_api_key)
+    # 응답이 오지 않는 요청을 무한정 기다리지 않도록 5분 제한 (그림이 많은 쪽은 2분 넘게 걸림)
+    client = genai.Client(api_key=s.google_api_key, http_options=types.HttpOptions(timeout=300_000))
     config = types.GenerateContentConfig(
         temperature=0, thinking_config=types.ThinkingConfig(thinking_budget=0)
     )
 
     def transcribe(page: bytes) -> str:
-        resp = client.models.generate_content(
-            model=s.gemini_model,
-            contents=[types.Part.from_bytes(data=page, mime_type="application/pdf"), PROMPT],
-            config=config,
-        )
-        return resp.text or ""
+        for attempt in range(3):
+            try:
+                resp = client.models.generate_content(
+                    model=s.gemini_model,
+                    contents=[
+                        types.Part.from_bytes(data=page, mime_type="application/pdf"),
+                        PROMPT,
+                    ],
+                    config=config,
+                )
+                return resp.text or ""
+            except Exception:
+                if attempt == 2:
+                    raise
+                log.warning("옮겨 적기 실패, 다시 시도합니다 (%d/3)", attempt + 1, exc_info=True)
+                time.sleep(5 * (attempt + 1))
+        return ""
 
     return transcribe

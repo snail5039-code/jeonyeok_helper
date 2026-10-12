@@ -21,6 +21,10 @@ _splitter = RecursiveCharacterTextSplitter(
 )
 
 
+def split_text(text: str) -> list[str]:
+    return [c for c in _splitter.split_text(text) if c.strip()]
+
+
 def _read_pages(path: Path) -> list[tuple[int | None, str]]:
     """(페이지 번호, 텍스트) 목록. 페이지 개념이 없는 파일은 번호가 None."""
     if path.suffix.lower() == ".pdf":
@@ -46,9 +50,7 @@ def load_file(path: Path) -> list[Document]:
     digest = hashlib.sha1(path.read_bytes()).hexdigest()[:12]
     docs: list[Document] = []
     for page, text in _read_pages(path):
-        for i, chunk in enumerate(_splitter.split_text(text)):
-            if not chunk.strip():
-                continue
+        for i, chunk in enumerate(split_text(text)):
             where = f"{page}쪽" if page else f"{i + 1}번째 단락"
             docs.append(
                 Document(

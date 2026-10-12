@@ -5,6 +5,7 @@ uv run jeonyeok-rag ordinances      # data/ordinances.yaml 기준 지자체 조�
 uv run jeonyeok-rag interpretations # data/interpretations.yaml 기준 법령해석례 수집
 uv run jeonyeok-rag datasets        # 공공데이터 CSV(보훈 민원·구비서류, 장학금) 수집
 uv run jeonyeok-rag files          # data/raw/ 의 파일 수집
+uv run jeonyeok-rag web            # data/webpages.yaml의 기관 안내 페이지 수집
 uv run jeonyeok-rag search "질문"    # 검색 결과 확인
 uv run jeonyeok-rag stats           # 저장된 문서 수
 """
@@ -118,6 +119,7 @@ def _run(argv: list[str] | None) -> int:
     sub.add_parser("interpretations", help="법령해석례 수집")
     sub.add_parser("datasets", help="공공데이터 CSV(보훈 민원, 장학금) 수집")
     sub.add_parser("files", help="data/raw 파일 수집")
+    sub.add_parser("web", help="data/webpages.yaml의 기관 안내 페이지 수집")
     sub.add_parser("stats", help="저장된 문서 수")
     p_search = sub.add_parser("search", help="검색 결과 확인")
     p_search.add_argument("question")
@@ -163,6 +165,15 @@ def _run(argv: list[str] | None) -> int:
         total, _ = ingest_files(store, s.raw_docs_dir)
         print(f"파일 청크 {total}개 저장")
         return 0
+
+    if args.cmd == "web":
+        from jeonyeok_helper.rag.webpages import load_webpage_list, load_webpages
+
+        docs, errors = load_webpages(load_webpage_list())
+        for e in errors:
+            print(f"  ✗ {e}")
+        print(f"안내 페이지 조각 {store.upsert(docs)}개 저장, 실패 {len(errors)}건")
+        return 1 if errors else 0
 
     if args.cmd == "stats":
         print(f"저장된 문서: {store.count()}개")

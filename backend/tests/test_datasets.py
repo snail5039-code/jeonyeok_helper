@@ -55,3 +55,19 @@ def test_scholarship_keeps_national_and_veteran_related_only():
     assert veteran is not None
 
     assert scholarship_to_document(scholarship("지자체(출자출연기관)")) is None
+
+
+def test_glossary_row_becomes_term_document():
+    from jeonyeok_helper.rag.datasets import glossary_to_document
+
+    doc = glossary_to_document(
+        {
+            "번호": "6",
+            "구분": "보훈대상자 등록 절차",
+            "표제어": "상이처",
+            "의미": "인정받은 부상 부위",
+        }
+    )
+    assert doc.metadata["citation"] == "국가보훈부 보훈행정용어집: 상이처"
+    assert "인정받은 부상 부위" in doc.page_content and "보훈대상자 등록 절차" in doc.page_content
+    assert glossary_to_document({"표제어": "", "의미": "x"}) is None
