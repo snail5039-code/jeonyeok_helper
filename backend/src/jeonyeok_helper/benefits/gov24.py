@@ -43,6 +43,9 @@ _FIELDS: dict[str, tuple[str, ...]] = {
     "contact": ("전화문의", "문의처"),
     "url": ("상세조회URL", "온라인신청사이트URL"),
     "category": ("서비스분야",),
+    # 상세 응답에만 있는 근거 법령·조례
+    "laws": ("법령",),
+    "ordinances": ("자치법규",),
 }
 
 
@@ -62,6 +65,8 @@ class Benefit(BaseModel):
     contact: str = ""
     url: str = ""
     category: str = ""
+    laws: str = ""
+    ordinances: str = ""
 
     @classmethod
     def from_api(cls, item: dict[str, Any]) -> Benefit:
@@ -77,7 +82,11 @@ class Benefit(BaseModel):
 
     @property
     def is_local(self) -> bool:
-        return "지방" in self.agency_type or "지자체" in self.agency_type
+        # 실제 값: 시군구, 광역시도, 지방공기업, 지방출자_출연기관 / 중앙행정기관, 공공기관
+        return self.agency_type in _LOCAL_AGENCY_TYPES or self.agency_type.startswith("지방")
+
+
+_LOCAL_AGENCY_TYPES = {"시군구", "광역시도"}
 
 
 _REGION_ALIASES = {

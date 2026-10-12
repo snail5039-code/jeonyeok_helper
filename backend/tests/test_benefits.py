@@ -42,6 +42,9 @@ def test_benefit_from_api_maps_fields_and_fills_url():
     assert b.contact == "1577-0606"  # 상세 응답의 필드 이름도 인식
     assert b.url.endswith("/123")  # 상세 URL이 없으면 정부24 주소로 채움
 
+    detail = Benefit.from_api({"서비스ID": "1", "서비스명": "a", "법령": "제대군인지원법"})
+    assert detail.laws == "제대군인지원법"  # 상세 응답의 근거 법령
+
 
 @respx.mock
 def test_search_sends_like_condition_and_dedupes():
@@ -76,12 +79,16 @@ def test_region_filter_keeps_central_and_matching_local():
     respx.get(f"{BASE_URL}/serviceList").mock(
         return_value=page(
             api_item("c", "전역 중앙"),
-            api_item("s", "전역 서울", "서울특별시 청년정책과", "지방자치단체"),
-            api_item("b", "전역 부산", "부산광역시", "지방자치단체"),
+            # 소관기관유형은 실제 API 값
+            api_item("s", "전역 서울", "서울특별시 노원구", "시군구"),
+            api_item("b", "전역 부산", "부산광역시", "광역시도"),
+            api_item("p", "전역 포천", "경기도 포천시", "시군구"),
+            api_item("u", "전역 공사", "부산교통공사", "지방공기업"),
+            api_item("k", "전역 공단", "국민연금공단", "공공기관"),
         )
     )
     results = Gov24Client("KEY").search(keywords=["전역"], region="서울시")
-    assert {b.service_id for b in results} == {"c", "s"}
+    assert {b.service_id for b in results} == {"c", "s", "k"}
 
 
 @pytest.mark.parametrize(
