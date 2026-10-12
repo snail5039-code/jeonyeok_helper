@@ -5,6 +5,8 @@ import respx
 from jeonyeok_helper.rag.law_api import (
     BASE_URL,
     LawApiClient,
+    admin_rule_json_to_documents,
+    interpretation_json_to_document,
     law_json_to_documents,
     ordinance_json_to_documents,
     region_keys,
@@ -210,3 +212,44 @@ def test_find_ordinances_filters_by_name_and_kind():
     )
     found = LawApiClient("OC").find_ordinances(["보훈", "참전"], ["참전유공자", "보훈"], ["회관"])
     assert [i["자치법규일련번호"] for i in found] == ["1"]  # 키워드 두 개여도 중복 없이
+
+
+# ---------- 행정규칙, 법령해석례 ----------
+
+
+def test_admin_rule_json_to_documents_splits_articles():
+    data = {
+        "AdmRulService": {
+            "행정규칙기본정보": {
+                "행정규칙명": "제대군인 법률구조 지원 대상자 고시",
+                "행정규칙ID": "9",
+                "행정규칙종류": "고시",
+                "소관부처명": "국가보훈부",
+            },
+            "조문내용": ["제1조(목적) 목적", "제2조의2(대상) 대상", "부칙 무시"],
+        }
+    }
+    docs = admin_rule_json_to_documents(data)
+    assert [d.metadata["article"] for d in docs] == ["제1조", "제2조의2"]
+    assert docs[1].metadata["article_title"] == "대상"
+    assert docs[1].metadata["doc_id"] == "admrul:9:제2조의2"
+
+
+def test_interpretation_json_to_document():
+    data = {
+        "ExpcService": {
+            "안건명": "제대군인 대부시 연금 담보 여부",
+            "질의요지": "담보로 할 수 있는지",
+            "회답": "담보로 제공할 수 없습니다.",
+            "이유": "준용 규정이 없기 때문",
+            "해석기관명": "법제처",
+        }
+    }
+    doc = interpretation_json_to_document(data, "expc", "313097")
+    assert "회답: 담보로 제공할 수 없습니다." in doc.page_content
+    assert doc.metadata["url"].endswith("expcSeq=313097")
+    assert doc.metadata["doc_id"] == "interp:expc:313097"
+    # 부처 해석례는 공개 링크가 없다
+    assert interpretation_json_to_document(data, "mndCgmExpc", "1").metadata["url"] == ""
+    # 회답이 없으면 저장하지 않는다
+    assert interpretation_json_to_document({"X": {"안건명": "a"}}, "expc", "1") is None

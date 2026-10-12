@@ -1,7 +1,8 @@
 """수집·검색 명령.
 
-uv run jeonyeok-rag laws            # data/laws.yaml의 법령 수집
+uv run jeonyeok-rag laws            # data/laws.yaml의 법령·행정규칙 수집
 uv run jeonyeok-rag ordinances      # data/ordinances.yaml 기준 지자체 조례 수집
+uv run jeonyeok-rag interpretations # data/interpretations.yaml 기준 법령해석례 수집
 uv run jeonyeok-rag files          # data/raw/ 의 파일 수집
 uv run jeonyeok-rag search "질문"    # 검색 결과 확인
 uv run jeonyeok-rag stats           # 저장된 문서 수
@@ -17,6 +18,7 @@ from jeonyeok_helper.config import DATA_DIR, get_settings, load_yaml
 
 LAWS_FILE = DATA_DIR / "laws.yaml"
 ORDINANCES_FILE = DATA_DIR / "ordinances.yaml"
+INTERPRETATIONS_FILE = DATA_DIR / "interpretations.yaml"
 
 
 def load_law_list(path: Path = LAWS_FILE) -> list[dict]:
@@ -35,6 +37,41 @@ def ingest_laws(client, store, laws: list[dict]) -> tuple[int, list[str]]:
         except Exception as e:
             errors.append(f"{name}: {e}")
             print(f"  ✗ {name}: {e}")
+    return total, errors
+
+
+def ingest_admin_rules(client, store, path: Path = LAWS_FILE) -> tuple[int, list[str]]:
+    """laws.yaml의 admin_rules(훈령·고시)를 이름으로 수집한다."""
+    total, errors = 0, []
+    for rule in load_yaml(path, "admin_rules"):
+        name = rule["name"]
+        try:
+            docs = client.load_admin_rule(name)
+            total += store.upsert(docs)
+            print(f"  ✓ {name}: {len(docs)}개 조문")
+        except Exception as e:
+            errors.append(f"{name}: {e}")
+            print(f"  ✗ {name}: {e}")
+    return total, errors
+
+
+def ingest_interpretations(
+    client, store, path: Path = INTERPRETATIONS_FILE
+) -> tuple[int, list[str]]:
+    """interpretations.yaml 기준으로 법령해석례를 1건 = 문서 1개로 저장한다."""
+    total, errors = 0, []
+    for source in load_yaml(path, "sources"):
+        target = source["target"]
+        found = client.find_interpretations(target, source["keywords"])
+        docs = []
+        for item in found:
+            try:
+                if doc := client.load_interpretation(target, item):
+                    docs.append(doc)
+            except Exception as e:
+                errors.append(f"{target} {item.get('안건명', '')[:30]}: {e}")
+        total += store.upsert(docs)
+        print(f"  ✓ {target}: {len(found)}건 중 {len(docs)}건 저장")
     return total, errors
 
 
@@ -77,8 +114,9 @@ def _run(argv: list[str] | None) -> int:
 
     parser = argparse.ArgumentParser(prog="jeonyeok-rag", description="규정 수집과 검색")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("laws", help="법령 수집")
+    sub.add_parser("laws", help="법령·행정규칙 수집")
     sub.add_parser("ordinances", help="지자체 조례 수집")
+    sub.add_parser("interpretations", help="법령해석례 수집")
     sub.add_parser("files", help="data/raw 파일 수집")
     sub.add_parser("stats", help="저장된 문서 수")
     p_search = sub.add_parser("search", help="검색 결과 확인")
@@ -94,18 +132,22 @@ def _run(argv: list[str] | None) -> int:
     s = get_settings()
     store = RegulationStore()
 
-    if args.cmd == "laws":
+    if args.cmd in ("laws", "ordinances", "interpretations"):
         from jeonyeok_helper.rag.law_api import LawApiClient
 
-        total, errors = ingest_laws(LawApiClient(s.law_api_oc), store, load_law_list())
-        print(f"법령 {total}개 조문 저장, 실패 {len(errors)}건")
-        return 1 if errors else 0
-
-    if args.cmd == "ordinances":
-        from jeonyeok_helper.rag.law_api import LawApiClient
-
-        total, errors = ingest_ordinances(LawApiClient(s.law_api_oc), store)
-        print(f"조례 {total}개 조문 저장, 실패 {len(errors)}건")
+        client = LawApiClient(s.law_api_oc)
+        if args.cmd == "laws":
+            total, errors = ingest_laws(client, store, load_law_list())
+            rules, rule_errors = ingest_admin_rules(client, store)
+            total, errors = total + rules, errors + rule_errors
+            label = "법령·행정규칙 조문"
+        elif args.cmd == "ordinances":
+            total, errors = ingest_ordinances(client, store)
+            label = "조례 조문"
+        else:
+            total, errors = ingest_interpretations(client, store)
+            label = "법령해석례"
+        print(f"{label} {total}개 저장, 실패 {len(errors)}건")
         return 1 if errors else 0
 
     if args.cmd == "files":

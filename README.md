@@ -2,7 +2,7 @@
 
 전역자가 자기 상황을 말하면 **받을 수 있는 혜택, 근거 규정, 신청처**를 한 번에 알려주는 AI 에이전트입니다.
 
-- **규정 Q&A**: 법령, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
+- **규정 Q&A**: 법령, 행정규칙, 법령해석례, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
 - **맞춤 혜택 찾기**: 복무 형태, 기간, 나이, 지역에 맞는 공공서비스 혜택 조회
 - **기관 연계**: 소관 기관, 신청 방법, 링크, 연락처 안내
 
@@ -93,8 +93,9 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 
 | 명령 | 설명 |
 |---|---|
-| `uv run jeonyeok-rag laws` | `data/laws.yaml`의 법령 수집 (LAW_API_OC 필요) |
+| `uv run jeonyeok-rag laws` | `data/laws.yaml`의 법령·행정규칙(훈령·고시) 수집 (LAW_API_OC 필요) |
 | `uv run jeonyeok-rag ordinances` | `data/ordinances.yaml` 기준 지자체 조례 수집 (LAW_API_OC 필요) |
+| `uv run jeonyeok-rag interpretations` | `data/interpretations.yaml` 기준 국가보훈부·국방부·병무청·법제처 법령해석례 수집 |
 | `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (HWP는 PDF로 변환) |
 | `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
 | `uv run jeonyeok-mcp` | MCP 서버 (stdio) |

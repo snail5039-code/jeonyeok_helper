@@ -1,0 +1,13 @@
+# 수집할 법령해석례 (uv run jeonyeok-rag interpretations)
+# '이 경우에도 해당되나요?' 같은 실제 질의와 회답이라 사용자 질문과 잘 맞는다.
+# target: 국가법령정보센터 API의 target 값, keywords: 그 안에서 찾을 단어
+
+sources:
+  - target: mpvaCgmExpc   # 국가보훈부
+    keywords: [제대군인, 전역, 보훈, 국가유공자, 참전, 보상]
+  - target: mndCgmExpc    # 국방부
+    keywords: [제대군인, 전역, 예비군, 군인연금, 재해보상, 복무기간]
+  - target: mmaCgmExpc    # 병무청
+    keywords: [전역, 예비군, 사회복무, 복무기간, 복학]
+  - target: expc          # 법제처
+    keywords: [제대군인, 전역, 예비군, 국가유공자, 보훈보상, 참전유공자, 군인연금, 군인 재해보상]

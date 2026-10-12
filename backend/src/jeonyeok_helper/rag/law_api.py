@@ -118,6 +118,49 @@ class LawApiClient:
                 page += 1
         return list(found.values())
 
+    def _get(self, path: str, **params) -> dict:
+        resp = self.client.get(
+            f"{BASE_URL}/{path}", params={"OC": self.oc, "type": "JSON", **params}
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def load_admin_rule(self, name: str) -> list[Document]:
+        """행정규칙(훈령·고시·예규)을 이름으로 찾아 조문 단위로 가져온다."""
+        data = self._get("lawSearch.do", target="admrul", query=name, display=50)
+        root = next(iter(data.values()), {})
+        found = next((i for i in _as_list(root.get("admrul")) if i.get("행정규칙명") == name), None)
+        if found is None:
+            raise LookupError(f"행정규칙을 찾지 못했습니다: {name}")
+        body = self._get("lawService.do", target="admrul", ID=found["행정규칙일련번호"])
+        return admin_rule_json_to_documents(body)
+
+    def find_interpretations(self, target: str, keywords: list[str]) -> list[dict]:
+        """법령해석례 목록. target은 expc(법제처) 또는 부처별 mpvaCgmExpc 등."""
+        found: dict[str, dict] = {}
+        for keyword in keywords:
+            page = 1
+            while True:
+                data = self._get(
+                    "lawSearch.do", target=target, query=keyword, display=100, page=page
+                )
+                root = next(iter(data.values()), {})
+                items = _as_list(root.get("expc") or root.get("cgmExpc"))
+                for item in items:
+                    key = item.get("법령해석례일련번호") or item.get("법령해석일련번호")
+                    if key:
+                        found.setdefault(key, item)
+                if len(items) < 100:
+                    break
+                page += 1
+        return list(found.values())
+
+    def load_interpretation(self, target: str, item: dict) -> Document | None:
+        key = item.get("법령해석례일련번호") or item.get("법령해석일련번호")
+        return interpretation_json_to_document(
+            self._get("lawService.do", target=target, ID=key), target, key
+        )
+
     def load_law(self, law_name: str, articles: list[str] | None = None) -> list[Document]:
         """현행 법령을 조문 단위로 가져온다. articles를 주면 그 조문만 남긴다 (예: ["제18조"])."""
         found = self.find_current(law_name)
@@ -127,6 +170,80 @@ class LawApiClient:
         if articles:
             docs = [d for d in docs if d.metadata["article"] in articles]
         return docs
+
+
+_ARTICLE_HEAD = re.compile(r"^제(\d+)조(?:의(\d+))?\s*(?:\(([^)]*)\))?")
+
+
+def admin_rule_json_to_documents(data: dict) -> list[Document]:
+    """행정규칙 본문 JSON → 조문 단위 Document. 조문내용은 '제N조(제목) ...' 문자열 목록이다."""
+    rule = data.get("AdmRulService", data)
+    info = rule.get("행정규칙기본정보", {})
+    name = info.get("행정규칙명", "알 수 없는 행정규칙")
+    rule_id = info.get("행정규칙ID", "")
+    kind = info.get("행정규칙종류", "")
+    agency = info.get("소관부처명", "")
+
+    docs: dict[str, Document] = {}
+    for text in _as_list(rule.get("조문내용")):
+        text = str(text).strip()
+        m = _ARTICLE_HEAD.match(text)
+        if not m:
+            continue
+        label = f"제{m[1]}조" + (f"의{m[2]}" if m[2] else "")
+        title = m[3] or ""
+        if label in docs:
+            docs[label].page_content += f"\n{text}"
+            continue
+        docs[label] = Document(
+            page_content=f"[{name} {label}({title})] ({agency} {kind})\n{text}",
+            metadata={
+                "source_type": "admin_rule",
+                "law_name": name,
+                "article": label,
+                "article_title": title,
+                "citation": f"{name} {label}" + (f"({title})" if title else ""),
+                "agency": agency,
+                "enforced_at": info.get("시행일자", ""),
+                "url": f"https://www.law.go.kr/행정규칙/{name.replace(' ', '')}",
+                "doc_id": f"admrul:{rule_id}:{label}",
+            },
+        )
+    return list(docs.values())
+
+
+def interpretation_json_to_document(data: dict, target: str, key: str) -> Document | None:
+    """법령해석례 1건 → Document 1개 (질의요지·회답·이유). 질문 형태라 사용자 질문과 잘 맞는다."""
+    body = next(iter(data.values()), {}) if data else {}
+    title = (body.get("안건명") or "").strip()
+    answer = (body.get("회답") or "").strip()
+    if not title or not answer:
+        return None
+    agency = body.get("해석기관명", "")
+    parts = [
+        f"[법령해석] {title} ({agency}, {body.get('해석일자', '')})",
+        f"질의요지: {(body.get('질의요지') or '').strip()}",
+        f"회답: {answer}",
+    ]
+    if reason := (body.get("이유") or "").strip():
+        parts.append(f"이유: {reason[:2000]}")
+    if related := (body.get("관련법령") or "").strip():
+        parts.append(f"관련법령: {related}")
+    return Document(
+        page_content="\n".join(parts),
+        metadata={
+            "source_type": "interpretation",
+            "law_name": title,
+            "citation": f"{agency} 법령해석: {title[:60]}",
+            "agency": agency,
+            "enforced_at": body.get("해석일자", ""),
+            # 법제처 해석례만 공개 상세 페이지가 있다 (부처 해석례 링크는 OC가 필요해 비워 둔다).
+            "url": f"https://www.law.go.kr/LSW/expcInfoP.do?expcSeq={key}"
+            if target == "expc"
+            else "",
+            "doc_id": f"interp:{target}:{key}",
+        },
+    )
 
 
 def region_keys(region: str) -> list[str]:
