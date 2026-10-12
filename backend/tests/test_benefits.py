@@ -97,6 +97,18 @@ def test_region_filter_keeps_central_and_matching_local():
     assert {b.service_id for b in results} == {"c", "s", "k"}
 
 
+@respx.mock
+def test_without_region_nationwide_benefits_come_first():
+    respx.get(f"{BASE_URL}/serviceList").mock(
+        return_value=page(
+            api_item("s", "학자금 학자금 지원", "경기도 성남시", "시군구"),
+            api_item("c", "학자금 대출", "교육부"),
+        )
+    )
+    results = Gov24Client("KEY").search(keywords=["학자금"])
+    assert [b.service_id for b in results] == ["c", "s"]
+
+
 @pytest.mark.parametrize(
     "agency, region, expected",
     [

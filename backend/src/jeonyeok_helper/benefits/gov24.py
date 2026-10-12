@@ -175,5 +175,7 @@ class Gov24Client:
         def relevance(b: Benefit) -> int:
             return sum(3 * (k in b.name) + (k in b.target) + (k in b.content) for k in keywords)
 
-        results.sort(key=lambda b: -relevance(b))
+        # 지역을 모르면 어느 지역 사람에게도 맞는 전국 혜택을 먼저 둔다
+        # (주제어로 찾으면 '성남시 등록금 지원' 같은 지자체 혜택이 수십 건 섞인다)
+        results.sort(key=lambda b: (not keys and b.is_local, -relevance(b)))
         return results[:limit]

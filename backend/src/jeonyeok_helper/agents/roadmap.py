@@ -62,6 +62,9 @@ TOPICS_BY_TYPE = {
 }
 
 
+STUDY_KEYWORDS = ["국가장학금", "학자금"]
+
+
 class RoadmapProfile(BaseModel):
     service_type: Literal["conscript", "short_term_officer", "long_term", "merit"]
     service_years: float | None = Field(default=None, ge=0, le=50)
@@ -159,6 +162,18 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
             for t in topics
         ]
         benefits = pool.submit(safely, services.gov24.search, region=profile.region, limit=60)
+        # 기본 검색어(전역·보훈 등)로는 장학금·학자금이 안 잡혀서 학업 단계용으로 따로 찾는다
+        study = (
+            pool.submit(
+                safely,
+                services.gov24.search,
+                keywords=STUDY_KEYWORDS,
+                region=profile.region,
+                limit=20,
+            )  # fmt: skip
+            if profile.service_type != "long_term"
+            else None
+        )
         youth = (
             pool.submit(
                 safely, services.youth.search, region=profile.region, age=profile.age, limit=8
@@ -175,6 +190,9 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
     fitting = [b for b in benefits.result() if fits_service_type(b, profile.service_type)]
     # 관련도 순으로만 자르면 지자체 혜택이 모두 밀려나서, 사용자 지역 혜택 자리를 따로 둔다
     picked = [b for b in fitting if not b.is_local][:8] + [b for b in fitting if b.is_local][:4]
+    if study:
+        loans = study.result()
+        picked += [b for b in loans if not b.is_local][:2] + [b for b in loans if b.is_local][:1]
     for b in picked:
         text = f"{b.summary} 대상: {b.target} 내용: {b.content} 신청: {b.how_to_apply}"
         add("benefit", b.name, b.url, f"{text} 소관: {b.agency}")
