@@ -61,7 +61,12 @@ class AgentState(TypedDict, total=False):
 
 
 class Profile(BaseModel):
-    """대화에서 알아낸 전역자 정보. 언급되지 않은 값은 비워 둔다."""
+    """대화에서 알아낸 전역자 정보. 언급되지 않은 값은 비워 둔다.
+
+    군·계급·목표·자격증 같은 자세한 항목은 '내 정보' 화면에서만 받는다. 추출 항목에 넣었더니
+    '병장'을 계급에만 넣고 복무 형태를 비우거나, 말하지 않은 목표('취업')·부상('없음')을 지어내
+    평가가 41/41 → 37/41로 떨어졌다.
+    """
 
     service_type: ServiceType = Field(
         default="unknown",
@@ -77,18 +82,6 @@ class Profile(BaseModel):
     age: int | None = None
     region: str | None = Field(default=None, description="거주 시·도 (예: 서울, 경기)")
     merit_status: str | None = Field(default=None, description="보훈 대상 여부와 종류")
-    # 아래는 '내 정보' 화면에서 주로 채우고, 대화에서 분명히 말했을 때만 추출한다
-    branch: str | None = Field(default=None, description="군 (육군, 해군, 공군, 해병대)")
-    rank: str | None = Field(default=None, description="전역(예정) 계급 (예: 병장, 중사, 대위)")
-    specialty: str | None = Field(default=None, description="군 특기·병과 (예: 운전, 정보통신)")
-    education: str | None = Field(default=None, description="학력·학업 상태 (예: 대학 휴학 중)")
-    goals: list[str] | None = Field(
-        default=None, description="전역 후 계획 (취업, 공무원, 창업, 복학·진학, 귀농 등)"
-    )
-    desired_job: str | None = Field(default=None, description="희망 직무·분야")
-    certificates: str | None = Field(default=None, description="가진 자격증")
-    housing: str | None = Field(default=None, description="주거 상황 (예: 무주택 자취)")
-    injury: str | None = Field(default=None, description="복무 중 부상·질병 여부")
 
 
 # 프롬프트에 넣을 때 쓰는 이름. 화면(내 정보)의 메모(memo)도 함께 넘긴다.

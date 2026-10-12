@@ -359,3 +359,11 @@ def test_extract_evidence_keeps_raw_tool_output():
     assert extract_evidence(messages) == [
         '[find_institutions] {"institutions": [{"name": "병무청"}]}'
     ]
+
+
+def test_profile_extraction_schema_stays_small():
+    # 내 정보 화면의 자세한 항목(계급·목표·자격증 등)을 추출 항목에 넣으면 '병장'을 계급에만
+    # 넣고 복무 형태를 비우거나 말하지 않은 값을 지어낸다 (평가 41/41 → 37/41).
+    assert set(Profile.model_fields) == {
+        "service_type", "service_years", "discharge_date", "age", "region", "merit_status",
+    }  # fmt: skip
