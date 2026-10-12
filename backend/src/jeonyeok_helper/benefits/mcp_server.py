@@ -11,6 +11,7 @@
 - search_jobs        : 제대군인지원센터 채용공고
 - find_stores        : 병무청 나라사랑가게 (병역이행자 할인)
 - search_youth_policies : 온통청년 청년정책
+- find_veterans_office : 관할 지방보훈청·보훈지청
 - find_hospitals     : 지역별 보훈 위탁병원
 - find_institutions  : 관련 기관 링크·연락처
 
@@ -31,6 +32,7 @@ from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import VnetJobClient
+from jeonyeok_helper.benefits.offices import find_offices, load_offices
 from jeonyeok_helper.benefits.stores import StoreClient
 from jeonyeok_helper.benefits.youth import YouthPolicyClient
 
@@ -277,6 +279,18 @@ def create_server(services: Services | None = None) -> FastMCP:
         return {
             "stores": [s.model_dump() for s in stores],
             "info_url": STORE_INFO_URL,
+        }
+
+    @server.tool()
+    @threaded
+    def find_veterans_office(region: str) -> dict:
+        """사용자 지역을 관할하는 지방보훈청·보훈지청의 주소, 전화, 누리집.
+        보훈대상자 등록, 보훈급여, 제대군인 지원 상담은 관할 관서에서 한다.
+        region 예: '부산 해운대'."""
+        offices = find_offices(load_offices(), region)
+        return {
+            "offices": [o.model_dump(exclude={"regions"}) for o in offices],
+            "note": "대표 상담전화 1577-0606 (국가보훈부 보훈상담센터)",
         }
 
     @server.tool()

@@ -20,6 +20,7 @@ from jeonyeok_helper.benefits.institutions import InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import BASE_URL as JOBS_URL
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.mcp_server import Services, create_server
+from jeonyeok_helper.benefits.offices import VeteransOffice, find_offices, load_offices
 from jeonyeok_helper.benefits.stores import BASE_URL as STORES_URL
 from jeonyeok_helper.benefits.stores import StoreClient
 from jeonyeok_helper.benefits.youth import BASE_URL as YOUTH_URL
@@ -200,6 +201,7 @@ def test_server_exposes_four_tools():
         "search_regulations",
         "search_benefits",
         "get_benefit_detail",
+        "find_veterans_office",
         "find_hospitals",
         "search_jobs",
         "find_stores",
@@ -420,3 +422,38 @@ def test_youth_api_error_does_not_leak_key():
     with pytest.raises(BenefitApiError) as err:
         YouthPolicyClient("SECRET-KEY").all()
     assert "SECRET-KEY" not in str(err.value) and "403" in str(err.value)
+
+
+# ---------- 지방보훈관서 ----------
+
+
+def test_veterans_offices_file_is_complete():
+    offices = load_offices()
+    assert len(offices) == 27
+    assert all(o.address and o.phone and o.regions for o in offices)
+
+
+@pytest.mark.parametrize(
+    "region, expected",
+    [
+        ("부산 해운대구", ["부산청"]),  # 시도 전체 관할
+        ("경기 포천", ["경기북부"]),
+        ("포천시", ["경기북부"]),  # 시군구만 말해도
+        ("광주 광산구", ["광주청"]),  # '경기 광주시'에 걸리면 안 됨
+        ("경기 광주시", ["경기동부"]),
+        ("전남 순천", ["전남동부"]),  # 전남광주통합특별시 표기
+        ("경기", ["경기북부", "경기동부"]),  # 시도만 알면 그 시도 관서 모두
+        ("", []),
+    ],
+)
+def test_find_offices_by_region(region, expected):
+    offices = [
+        VeteransOffice(name="부산청", regions=["부산"]),
+        VeteransOffice(name="경기북부", regions=["경기 포천시", "경기 의정부시"]),
+        VeteransOffice(name="경기동부", regions=["경기 광주시", "경기 용인시"]),
+        VeteransOffice(
+            name="광주청", regions=["전남광주통합특별시 광산구", "전남광주통합특별시 북구"]
+        ),
+        VeteransOffice(name="전남동부", regions=["전남광주통합특별시 순천시"]),
+    ]
+    assert [o.name for o in find_offices(offices, region)] == expected

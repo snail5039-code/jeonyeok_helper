@@ -121,6 +121,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `search_youth_policies` | 온통청년 청년정책 3,000여 건, 지역·나이·키워드 필터, 군 복무 관련 정책 우선 |
 | `search_jobs` | 제대군인지원센터(브이넷) 마감 전 채용공고, 지역·키워드 필터 (키 불필요) |
 | `find_stores` | 병무청 나라사랑가게(예비군 훈련 이수자·현역병 할인) 지역별 목록 |
+| `find_veterans_office` | 관할 지방보훈청·보훈지청 27곳 주소·전화 ([veterans_offices.yaml](backend/data/veterans_offices.yaml)) |
 | `find_hospitals` | 지역별 보훈 위탁병원(국가유공자 진료비 감면) 주소·전화·지도 링크 |
 | `find_institutions` | 주제별 기관 사이트·연락처 ([institutions.yaml](backend/data/institutions.yaml)) |
 

@@ -1,0 +1,169 @@
+# 출처: 국가보훈부 누리집(https://www.mpva.go.kr) 각 관서 '찾아오시는길'·'조직도 및 관할구역' 페이지, 제주는 제주특별자치도 보훈청(http://www.jeju.go.kr/group/bohun.htm). 수집일 2026-10-12
+# regions는 '시도 시군구' 형식이며, 시도만 적힌 항목(예: 인천)은 그 시도 전역을 관할한다는 뜻이다.
+
+offices:
+  - name: 서울지방보훈청
+    address: 서울특별시 용산구 이태원로 6
+    phone: 02-3785-0815
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1056&deptCode=10
+    regions: [서울 중구, 서울 용산구, 서울 성동구, 서울 광진구, 서울 마포구, 서울 은평구, 서울 서대문구, 서울 강동구, 서울 송파구, 서울 강서구, 서울 양천구, 서울 영등포구]
+
+  - name: 서울남부보훈지청
+    address: 서울특별시 서초구 효령로 142
+    phone: 02-3019-2300
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1064&deptCode=12
+    regions: [서울 구로구, 서울 금천구, 서울 관악구, 서울 동작구, 서울 강남구, 서울 서초구]
+
+  - name: 서울북부보훈지청
+    address: 서울특별시 도봉구 도봉로150나길 6
+    phone: 02-944-9260
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1072&deptCode=11
+    regions: [서울 종로구, 서울 성북구, 서울 동대문구, 서울 중랑구, 서울 도봉구, 서울 강북구, 서울 노원구]
+
+  - name: 경기남부보훈지청
+    address: 경기도 수원시 장안구 조원로 8
+    phone: 031-259-1801
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1073&deptCode=13
+    regions: [경기 수원시, 경기 안양시, 경기 과천시, 경기 안산시, 경기 평택시, 경기 오산시, 경기 의왕시, 경기 군포시, 경기 시흥시, 경기 화성시]
+
+  - name: 경기동부보훈지청
+    address: 경기도 용인시 기흥구 구성로 124, 3층
+    phone: 031-289-2302
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1076&deptCode=56
+    regions: [경기 성남시, 경기 하남시, 경기 광주시, 경기 용인시, 경기 안성시, 경기 이천시, 경기 여주시]
+
+  - name: 인천보훈지청
+    address: 인천광역시 미추홀구 석정로 239 (정부인천지방합동청사 1층)
+    phone: 032-588-4100
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1074&deptCode=14
+    regions: [인천, 경기 부천시, 경기 광명시, 경기 김포시]
+
+  - name: 경기북부보훈지청
+    address: 경기도 의정부시 평화로 589
+    phone: 031-843-5748
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1075&deptCode=15
+    regions: [경기 의정부시, 경기 동두천시, 경기 구리시, 경기 고양시, 경기 남양주시, 경기 파주시, 경기 포천시, 경기 양주시, 경기 연천군, 경기 양평군, 경기 가평군]
+
+  - name: 강원서부보훈지청
+    address: 강원특별자치도 춘천시 후석로440번길 64
+    phone: 033-258-3637   # 대표번호 표기 없음, 보훈과 번호
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1077&deptCode=16
+    regions: [강원 춘천시, 강원 원주시, 강원 화천군, 강원 양구군, 강원 홍천군, 강원 인제군, 강원 철원군, 강원 횡성군]
+
+  - name: 강원동부보훈지청
+    address: 강원특별자치도 강릉시 동해대로 3310
+    phone: 033-610-0606   # 대표번호 표기 없음, 보훈과 번호
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1078&deptCode=17
+    regions: [강원 강릉시, 강원 속초시, 강원 동해시, 강원 태백시, 강원 삼척시, 강원 고성군, 강원 양양군, 강원 정선군, 강원 평창군, 강원 영월군]
+
+  - name: 부산지방보훈청
+    address: 부산광역시 중구 중앙대로148번길 13
+    phone: 051-469-8991
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1093&deptCode=40
+    regions: [부산]
+
+  - name: 울산보훈지청
+    address: 울산광역시 남구 대공원입구로 7
+    phone: 052-228-6500
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1096&deptCode=41
+    regions: [울산, 경남 양산시]
+
+  - name: 경남동부보훈지청
+    address: 경상남도 창원시 마산합포구 제2부두로 10 (정부경남지방합동청사 5층)
+    phone: 055-981-5600
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1094&deptCode=42
+    regions: [경남 창원시, 경남 김해시, 경남 밀양시, 경남 거제시, 경남 창녕군, 경남 의령군, 경남 함안군]
+
+  - name: 경남서부보훈지청
+    address: 경상남도 진주시 월아산로 2082-5
+    phone: 055-752-3881
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1095&deptCode=43
+    regions: [경남 진주시, 경남 사천시, 경남 통영시, 경남 남해군, 경남 하동군, 경남 고성군, 경남 함양군, 경남 거창군, 경남 합천군, 경남 산청군]
+
+  - name: 대전지방보훈청
+    address: 대전광역시 서구 한밭대로 713
+    phone: 042-280-1114
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1085&deptCode=20
+    regions: [대전, 충남 논산시, 충남 계룡시, 충남 금산군, 충남 부여군]
+
+  - name: 충남동부보훈지청
+    address: 충청남도 천안시 동남구 원성1길 19 (한국농어촌공사 천안지사 1층·3층)
+    phone: 041-589-4900
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1086&deptCode=57
+    regions: [세종, 충남 천안시, 충남 아산시, 충남 공주시]
+
+  - name: 충남서부보훈지청
+    address: 충청남도 홍성군 홍성읍 문화로 91
+    phone: 041-630-3700
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1087&deptCode=23
+    regions: [충남 보령시, 충남 서산시, 충남 당진시, 충남 태안군, 충남 홍성군, 충남 예산군, 충남 청양군, 충남 서천군]
+
+  - name: 충북북부보훈지청
+    address: 충청북도 충주시 중원대로 3230
+    phone: 043-841-8800
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1089&deptCode=24
+    regions: [충북 충주시, 충북 제천시, 충북 단양군, 충북 음성군, 충북 괴산군, 충북 증평군]
+
+  - name: 충북남부보훈지청
+    address: 충청북도 청주시 서원구 1순환로 1047 (청주지방합동청사)
+    phone: 043-285-3213
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1088&deptCode=25
+    regions: [충북 청주시, 충북 진천군, 충북 보은군, 충북 영동군, 충북 옥천군]
+
+  - name: 대구지방보훈청
+    address: 대구광역시 달서구 화암로 301
+    phone: 053-230-6010
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1090&deptCode=30
+    regions: [대구, 경북 상주시, 경북 김천시, 경북 구미시, 경북 경산시, 경북 성주군, 경북 칠곡군, 경북 고령군, 경북 청도군]
+
+  - name: 경북북부보훈지청
+    address: 경상북도 예천군 호명읍 행복1길 5 (정부경북지방합동청사 1층)
+    phone: 054-650-1400
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1091&deptCode=31
+    regions: [경북 안동시, 경북 영주시, 경북 문경시, 경북 봉화군, 경북 의성군, 경북 영양군, 경북 청송군, 경북 예천군]
+
+  - name: 경북남부보훈지청
+    address: 경상북도 경주시 금성로 355
+    phone: 054-778-2600
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1092&deptCode=33
+    regions: [경북 경주시, 경북 포항시, 경북 영천시, 경북 영덕군, 경북 울진군, 경북 울릉군]
+
+  # 아래 전남 지역 3곳은 누리집 표기를 따라 시도를 '전남광주통합특별시'로 적었다.
+  - name: 광주지방보훈청
+    address: 전남광주통합특별시 북구 첨단과기로208번길 43 (정부광주지방합동청사)
+    phone: 062-975-6500
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1097&deptCode=50
+    regions: [전남광주통합특별시 광주 동구, 전남광주통합특별시 광주 서구, 전남광주통합특별시 광주 남구, 전남광주통합특별시 광주 북구, 전남광주통합특별시 광주 광산구, 전남광주통합특별시 나주시, 전남광주통합특별시 담양군, 전남광주통합특별시 장성군, 전남광주통합특별시 화순군, 전남광주통합특별시 강진군, 전남광주통합특별시 장흥군, 전남광주통합특별시 해남군, 전남광주통합특별시 완도군]
+
+  - name: 전남동부보훈지청
+    address: 전남광주통합특별시 순천시 팔마2길 7
+    phone: 061-720-3200
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1098&deptCode=55
+    regions: [전남광주통합특별시 순천시, 전남광주통합특별시 여수시, 전남광주통합특별시 광양시, 전남광주통합특별시 곡성군, 전남광주통합특별시 구례군, 전남광주통합특별시 보성군, 전남광주통합특별시 고흥군]
+
+  - name: 전남서부보훈지청
+    address: 전남광주통합특별시 목포시 관해로 29
+    phone: 061-273-0093
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1099&deptCode=53
+    regions: [전남광주통합특별시 목포시, 전남광주통합특별시 무안군, 전남광주통합특별시 영광군, 전남광주통합특별시 진도군, 전남광주통합특별시 함평군, 전남광주통합특별시 신안군, 전남광주통합특별시 영암군]
+
+  - name: 전북동부보훈지청
+    address: 전북특별자치도 전주시 완산구 홍산남로 10
+    phone: 063-239-4500
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1100&deptCode=52
+    regions: [전북 전주시, 전북 남원시, 전북 완주군, 전북 진안군, 전북 장수군, 전북 임실군, 전북 순창군, 전북 무주군]
+
+  - name: 전북서부보훈지청
+    address: 전북특별자치도 익산시 선화로1길 58-5
+    phone: 063-850-3702
+    url: https://www.mpva.go.kr/mpva/bnfc.do?key=1101&deptCode=51
+    regions: [전북 익산시, 전북 군산시, 전북 정읍시, 전북 김제시, 전북 부안군, 전북 고창군]
+
+  - name: 제주특별자치도보훈청
+    address: 제주특별자치도 제주시 청사로 59, 3층 (정부제주지방합동청사)
+    phone: 064-710-8411
+    url: http://www.jeju.go.kr/group/bohun.htm
+    regions: [제주 제주시, 제주 서귀포시]
+
+# 미확인: 제주특별자치도보훈청 관할구역은 페이지에 명시되지 않아 제주 전역(제주시·서귀포시)으로 추정해 적음
+# 미확인: 강원서부·강원동부보훈지청은 '대표전화' 대신 과별 번호만 있어 보훈과 번호를 적음

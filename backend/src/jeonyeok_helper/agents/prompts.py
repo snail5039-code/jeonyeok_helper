@@ -74,7 +74,9 @@ WORKER_PROMPTS = {
     "나라사랑가게를 물으면 find_stores로 사용자 지역 가게를 찾으세요(지역을 모르면 쓰지 말 것)."
     + GROUNDING,
     "institution": COMMON + "\n\n당신은 기관 연계 담당입니다. find_institutions 도구로 "
-    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요. 보훈대상자의 병원·진료 "
+    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요. 사용자 지역을 알고 보훈 "
+    "등록·보훈급여·제대군인 지원처럼 보훈관서에 가야 하는 일이면 find_veterans_office로 "
+    "관할 보훈청·지청을 찾으세요. 보훈대상자의 병원·진료 "
     "질문이면 find_hospitals로 사용자 지역의 위탁병원을 찾으세요(지역을 모르면 쓰지 말 것)."
     + GROUNDING,
 }
@@ -89,7 +91,7 @@ WORKER_TOOLS = {
         "search_jobs",
         "find_stores",
     ],
-    "institution": ["find_institutions", "find_hospitals"],
+    "institution": ["find_institutions", "find_veterans_office", "find_hospitals"],
 }
 
 RESPOND_PROMPT = ChatPromptTemplate.from_messages(
