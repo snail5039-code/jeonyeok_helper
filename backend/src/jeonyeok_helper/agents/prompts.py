@@ -1,5 +1,7 @@
 """에이전트 프롬프트와 프롬프트에 넣을 상태 포맷터."""
 
+from datetime import date
+
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 COMMON = (
@@ -14,11 +16,12 @@ PROFILE_PROMPT = ChatPromptTemplate.from_messages(
             "system",
             COMMON + "\n\n대화에서 사용자의 복무 정보를 추출하세요. "
             "사용자가 직접 말한 것만 채우고, 추측하지 말고 모르는 값은 비워 두세요.\n"
+            "오늘은 {today}입니다. '작년', '지난달'처럼 말하면 오늘을 기준으로 날짜를 계산하세요.\n"
             "지금까지 알려진 프로필: {profile}",
         ),
         MessagesPlaceholder("messages"),
     ]
-)
+).partial(today=lambda: date.today().isoformat())  # 호출할 때마다 오늘 날짜
 
 ROUTER_PROMPT = ChatPromptTemplate.from_messages(
     [

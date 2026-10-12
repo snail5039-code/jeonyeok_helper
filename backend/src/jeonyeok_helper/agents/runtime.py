@@ -97,10 +97,9 @@ async def open_agent(
 
     settings = get_settings()
     if llm is None:
-        from jeonyeok_helper.llm import get_chat_model, get_fast_chat_model
+        from jeonyeok_helper.llm import get_answer_model, get_fast_chat_model
 
-        # 같은 질문에 같은 혜택이 나오도록 온도 0 (일관성 점검에서 넓은 질문의 항목이 흔들렸음)
-        llm = get_chat_model(temperature=0, thinking_budget=settings.gemini_thinking_budget)
+        llm = get_answer_model()
         fast_llm = fast_llm or get_fast_chat_model()
     db = settings.state_db if state_db is _DEFAULT else state_db
 

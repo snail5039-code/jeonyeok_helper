@@ -15,6 +15,8 @@ from typing import Any
 import httpx
 from langchain_core.documents import Document
 
+from jeonyeok_helper.benefits.regions import region_keys
+
 BASE_URL = "https://www.law.go.kr/DRF"
 
 
@@ -50,13 +52,34 @@ class LawApiClient:
         self.oc = oc
         self.client = client or httpx.Client(timeout=30)
 
-    def search(self, query: str) -> list[dict]:
+    def _get(self, path: str, **params) -> dict:
         resp = self.client.get(
-            f"{BASE_URL}/lawSearch.do",
-            params={"OC": self.oc, "target": "law", "type": "JSON", "query": query},
+            f"{BASE_URL}/{path}", params={"OC": self.oc, "type": "JSON", **params}
         )
         resp.raise_for_status()
-        return _as_list(resp.json().get("LawSearch", {}).get("law"))
+        return resp.json()
+
+    def _search_all(self, target: str, keywords: list[str], items_of, key_of) -> list[dict]:
+        """키워드마다 목록을 끝 페이지까지 받아 key_of(항목)로 중복을 뺀다."""
+        found: dict[str, dict] = {}
+        for keyword in keywords:
+            page = 1
+            while True:
+                data = self._get(
+                    "lawSearch.do", target=target, query=keyword, display=100, page=page
+                )
+                items = _as_list(items_of(next(iter(data.values()), {})))
+                for item in items:
+                    if key := key_of(item):
+                        found.setdefault(key, item)
+                if len(items) < 100:
+                    break
+                page += 1
+        return list(found.values())
+
+    def search(self, query: str) -> list[dict]:
+        data = self._get("lawSearch.do", target="law", query=query)
+        return _as_list(data.get("LawSearch", {}).get("law"))
 
     def find_current(self, law_name: str) -> dict | None:
         """이름이 정확히 일치하는 현행 법령 1건. 없으면 None."""
@@ -66,64 +89,26 @@ class LawApiClient:
         return None
 
     def fetch(self, mst: str) -> dict:
-        resp = self.client.get(
-            f"{BASE_URL}/lawService.do",
-            params={"OC": self.oc, "target": "law", "type": "JSON", "MST": mst},
-        )
-        resp.raise_for_status()
-        return resp.json()
-
-    def search_ordinances(self, query: str, page: int = 1, display: int = 100) -> list[dict]:
-        resp = self.client.get(
-            f"{BASE_URL}/lawSearch.do",
-            params={
-                "OC": self.oc,
-                "target": "ordin",
-                "type": "JSON",
-                "query": query,
-                "display": display,
-                "page": page,
-            },
-        )
-        resp.raise_for_status()
-        return _as_list(resp.json().get("OrdinSearch", {}).get("law"))
+        return self._get("lawService.do", target="law", MST=mst)
 
     def fetch_ordinance(self, mst: str) -> dict:
-        resp = self.client.get(
-            f"{BASE_URL}/lawService.do",
-            params={"OC": self.oc, "target": "ordin", "type": "JSON", "MST": mst},
-        )
-        resp.raise_for_status()
-        return resp.json()
+        return self._get("lawService.do", target="ordin", MST=mst)
 
     def find_ordinances(
         self, keywords: list[str], include: list[str], exclude: list[str]
     ) -> list[dict]:
         """키워드로 찾은 자치법규 중 이름에 include가 있고 exclude가 없는 '조례'만 (중복 제거)."""
-        found: dict[str, dict] = {}
-        for keyword in keywords:
-            page = 1
-            while True:
-                items = self.search_ordinances(keyword, page=page)
-                for item in items:
-                    name = item.get("자치법규명", "")
-                    if (
-                        item.get("자치법규종류") == "조례"
-                        and any(w in name for w in include)
-                        and not any(w in name for w in exclude)
-                    ):
-                        found.setdefault(item["자치법규일련번호"], item)
-                if len(items) < 100:
-                    break
-                page += 1
-        return list(found.values())
 
-    def _get(self, path: str, **params) -> dict:
-        resp = self.client.get(
-            f"{BASE_URL}/{path}", params={"OC": self.oc, "type": "JSON", **params}
-        )
-        resp.raise_for_status()
-        return resp.json()
+        def key_of(item: dict) -> str | None:
+            name = item.get("자치법규명", "")
+            wanted = (
+                item.get("자치법규종류") == "조례"
+                and any(w in name for w in include)
+                and not any(w in name for w in exclude)
+            )
+            return item.get("자치법규일련번호") if wanted else None
+
+        return self._search_all("ordin", keywords, lambda root: root.get("law"), key_of)
 
     def load_admin_rule(self, name: str) -> list[Document]:
         """행정규칙(훈령·고시·예규)을 이름으로 찾아 조문 단위로 가져온다."""
@@ -137,23 +122,12 @@ class LawApiClient:
 
     def find_interpretations(self, target: str, keywords: list[str]) -> list[dict]:
         """법령해석례 목록. target은 expc(법제처) 또는 부처별 mpvaCgmExpc 등."""
-        found: dict[str, dict] = {}
-        for keyword in keywords:
-            page = 1
-            while True:
-                data = self._get(
-                    "lawSearch.do", target=target, query=keyword, display=100, page=page
-                )
-                root = next(iter(data.values()), {})
-                items = _as_list(root.get("expc") or root.get("cgmExpc"))
-                for item in items:
-                    key = item.get("법령해석례일련번호") or item.get("법령해석일련번호")
-                    if key:
-                        found.setdefault(key, item)
-                if len(items) < 100:
-                    break
-                page += 1
-        return list(found.values())
+        return self._search_all(
+            target,
+            keywords,
+            lambda root: root.get("expc") or root.get("cgmExpc"),
+            lambda item: item.get("법령해석례일련번호") or item.get("법령해석일련번호"),
+        )
 
     def load_interpretation(self, target: str, item: dict) -> Document | None:
         key = item.get("법령해석례일련번호") or item.get("법령해석일련번호")
@@ -244,19 +218,6 @@ def interpretation_json_to_document(data: dict, target: str, key: str) -> Docume
             "doc_id": f"interp:{target}:{key}",
         },
     )
-
-
-def region_keys(region: str) -> list[str]:
-    """'경기도 가평군' → ['경기', '가평'], '부산광역시' → ['부산']. 지역 필터의 비교 값."""
-    from jeonyeok_helper.benefits.gov24 import normalize_region
-
-    keys = []
-    for part in region.split():
-        part = normalize_region(part)
-        if len(part) > 2 and part[-1] in "시군구":
-            part = part[:-1]
-        keys.append(part)
-    return [k for k in keys if k]
 
 
 def ordinance_json_to_documents(data: dict) -> list[Document]:

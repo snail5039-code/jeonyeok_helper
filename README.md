@@ -36,7 +36,7 @@
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
 | LLM | Gemini |
 | 에이전트 | LangChain, LangGraph |
-| 평가 | 평가 데이터셋 30문항 (`jeonyeok-eval`) |
+| 평가 | 평가 데이터셋 40문항 (`jeonyeok-eval`) |
 | 도구 연동 | MCP |
 | RAG | Chroma, HyDE, Re-ranking |
 | 서버 | FastAPI (SSE), SQLite (대화 기록·프로필), SQLAlchemy 2.0 + Alembic (피드백) |
@@ -102,7 +102,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
 | `uv run jeonyeok-mcp` | MCP 서버 (stdio) |
 | `uv run jeonyeok-chat` | 터미널에서 에이전트와 대화 |
-| `uv run jeonyeok-eval` | 평가 30문항 채점, `data/eval/results/`에 보고서 |
+| `uv run jeonyeok-eval` | 평가 40문항 채점, `data/eval/results/`에 보고서 |
 
 ### API
 

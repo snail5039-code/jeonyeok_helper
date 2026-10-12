@@ -2,6 +2,7 @@ import httpx
 import pytest
 import respx
 
+from jeonyeok_helper.benefits.regions import region_keys
 from jeonyeok_helper.rag.law_api import (
     BASE_URL,
     LawApiClient,
@@ -9,7 +10,6 @@ from jeonyeok_helper.rag.law_api import (
     interpretation_json_to_document,
     law_json_to_documents,
     ordinance_json_to_documents,
-    region_keys,
 )
 
 SAMPLE_LAW = {

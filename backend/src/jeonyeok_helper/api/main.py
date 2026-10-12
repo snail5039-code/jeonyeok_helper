@@ -85,12 +85,9 @@ def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
     async def roadmap(profile: RoadmapProfile) -> dict:
         nonlocal organizer
         if organizer is None:
-            from jeonyeok_helper.llm import get_chat_model
+            from jeonyeok_helper.llm import get_answer_model
 
-            s = get_settings()
-            organizer = make_organizer(
-                get_chat_model(temperature=0.1, thinking_budget=s.gemini_thinking_budget)
-            )
+            organizer = make_organizer(get_answer_model())
         return await build_roadmap(services, organizer, profile)
 
     return (lambda: open_agent(services=services)), roadmap
@@ -133,6 +130,7 @@ def create_app(
                 "gemini": bool(s.google_api_key),
                 "law_api": bool(s.law_api_oc),
                 "data_go_kr": bool(s.data_go_kr_service_key),
+                "youthcenter": bool(s.youthcenter_api_key),
             },
         }
 

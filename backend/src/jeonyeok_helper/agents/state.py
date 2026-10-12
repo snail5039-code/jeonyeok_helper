@@ -71,7 +71,9 @@ class Profile(BaseModel):
         ),
     )
     service_years: float | None = Field(default=None, description="복무 기간(년)")
-    discharge_date: str | None = Field(default=None, description="전역일 또는 예정일 (YYYY-MM)")
+    discharge_date: str | None = Field(
+        default=None, description="전역일 또는 예정일 (YYYY-MM, 월을 모르면 YYYY)"
+    )
     age: int | None = None
     region: str | None = Field(default=None, description="거주 시·도 (예: 서울, 경기)")
     merit_status: str | None = Field(default=None, description="보훈 대상 여부와 종류")

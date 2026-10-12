@@ -26,34 +26,29 @@ def load_law_list(path: Path = LAWS_FILE) -> list[dict]:
     return load_yaml(path, "laws")
 
 
-def ingest_laws(client, store, laws: list[dict]) -> tuple[int, list[str]]:
-    """법령별로 수집한다. 한 법령이 실패해도 나머지는 계속 진행. (저장 수, 실패 메시지)."""
+def _ingest_each(store, entries: list[dict], load) -> tuple[int, list[str]]:
+    """항목별로 수집한다. 하나가 실패해도 나머지는 계속 진행. (저장 수, 실패 메시지)."""
     total, errors = 0, []
-    for law in laws:
-        name = law["name"]
+    for entry in entries:
+        name = entry["name"]
         try:
-            docs = client.load_law(name, articles=law.get("articles"))
+            docs = load(entry)
             total += store.upsert(docs)
             print(f"  ✓ {name}: {len(docs)}개 조문")
         except Exception as e:
             errors.append(f"{name}: {e}")
             print(f"  ✗ {name}: {e}")
     return total, errors
+
+
+def ingest_laws(client, store, laws: list[dict]) -> tuple[int, list[str]]:
+    return _ingest_each(store, laws, lambda law: client.load_law(law["name"], law.get("articles")))
 
 
 def ingest_admin_rules(client, store, path: Path = LAWS_FILE) -> tuple[int, list[str]]:
     """laws.yaml의 admin_rules(훈령·고시)를 이름으로 수집한다."""
-    total, errors = 0, []
-    for rule in load_yaml(path, "admin_rules"):
-        name = rule["name"]
-        try:
-            docs = client.load_admin_rule(name)
-            total += store.upsert(docs)
-            print(f"  ✓ {name}: {len(docs)}개 조문")
-        except Exception as e:
-            errors.append(f"{name}: {e}")
-            print(f"  ✗ {name}: {e}")
-    return total, errors
+    rules = load_yaml(path, "admin_rules")
+    return _ingest_each(store, rules, lambda rule: client.load_admin_rule(rule["name"]))
 
 
 def ingest_interpretations(

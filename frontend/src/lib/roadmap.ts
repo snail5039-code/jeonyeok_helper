@@ -1,5 +1,6 @@
 // 전역 로드맵: 프로필 한 번으로 시기별 할 일 목록을 받는다 (백엔드 POST /roadmap).
 
+import { postJson } from "./api";
 import { readStorage, writeStorage } from "./storage";
 import type { ServiceType, Source } from "./types";
 
@@ -35,18 +36,7 @@ export const REGIONS = [
 ]; // prettier-ignore
 
 export async function fetchRoadmap(input: RoadmapInput, signal?: AbortSignal): Promise<Roadmap> {
-  const res = await fetch("/api/roadmap", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    signal,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      typeof body.detail === "string" ? body.detail : "로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
-    );
-  }
+  const res = await postJson("roadmap", input, "로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요.", signal);
   return res.json();
 }
 

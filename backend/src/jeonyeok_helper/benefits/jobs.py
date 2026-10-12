@@ -7,14 +7,14 @@
 
 from __future__ import annotations
 
-import time
 import xml.etree.ElementTree as ET
 from datetime import date
 
 import httpx
 from pydantic import BaseModel
 
-from jeonyeok_helper.benefits.gov24 import BenefitApiError
+from jeonyeok_helper.benefits.common import BenefitApiError, TimedCache
+from jeonyeok_helper.benefits.regions import region_keys, short_province
 
 BASE_URL = "https://vnet.go.kr/empn/jobsearchxml.do"
 
@@ -31,16 +31,12 @@ LOCATION_CODES = {
     "경기": "9",
     "강원": "10",
     "충북": "11",
-    "충청북": "11",
     "충남": "12",
-    "충청남": "12",
     "전북": "13",
     "전남": "14",
-    "전라남": "14",
+    "전남광주통합": "14",  # 2026년 통합특별시. 브이넷은 아직 광주(5)·전남(14)을 따로 둔다
     "경북": "15",
-    "경상북": "15",
     "경남": "16",
-    "경상남": "16",
     "제주": "17",
     "해외": "18",
 }
@@ -79,21 +75,18 @@ def parse_jobs(xml_text: str) -> list[Job]:
 class VnetJobClient:
     def __init__(self, client: httpx.Client | None = None, cache_ttl: float = 3600):
         self.client = client or httpx.Client(timeout=30)
-        self.cache_ttl = cache_ttl
-        self._cache: dict[str, tuple[float, list[Job]]] = {}
+        self._cache = TimedCache(cache_ttl)
 
     def _fetch(self, code: str) -> list[Job]:
-        hit = self._cache.get(code)
-        if hit and time.monotonic() - hit[0] < self.cache_ttl:
-            return hit[1]
-        try:
-            resp = self.client.get(BASE_URL, params={"location": code} if code else {})
-            resp.raise_for_status()
-            jobs = parse_jobs(resp.text)
-        except (httpx.HTTPError, ET.ParseError) as e:
-            raise BenefitApiError(f"제대군인지원센터 채용정보 호출 실패: {e}") from e
-        self._cache[code] = (time.monotonic(), jobs)
-        return jobs
+        def load() -> list[Job]:
+            try:
+                resp = self.client.get(BASE_URL, params={"location": code} if code else {})
+                resp.raise_for_status()
+                return parse_jobs(resp.text)
+            except (httpx.HTTPError, ET.ParseError) as e:
+                raise BenefitApiError(f"제대군인지원센터 채용정보 호출 실패: {e}") from e
+
+        return self._cache.get(code, load)
 
     def search(
         self,
@@ -103,13 +96,8 @@ class VnetJobClient:
         today: date | None = None,
     ) -> list[Job]:
         """마감이 안 지난 공고를 최신순으로. region은 시도 단위(예: '부산', '경기도 포천')."""
-        from jeonyeok_helper.rag.law_api import region_keys
-
-        code = ""
-        for key in region_keys(region or ""):
-            if key in LOCATION_CODES:
-                code = LOCATION_CODES[key]
-                break
+        codes = (LOCATION_CODES.get(short_province(k)) for k in region_keys(region))
+        code = next((c for c in codes if c), "")
         today_str = (today or date.today()).isoformat()
         jobs = [j for j in self._fetch(code) if not j.deadline or j.deadline >= today_str]
         if keyword:

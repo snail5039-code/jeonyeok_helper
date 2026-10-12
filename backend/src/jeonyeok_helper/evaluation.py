@@ -242,7 +242,7 @@ def _run(argv: list[str] | None) -> int:
 
     from jeonyeok_helper.agents.runtime import open_agent
     from jeonyeok_helper.config import get_settings
-    from jeonyeok_helper.llm import get_chat_model, get_fast_chat_model
+    from jeonyeok_helper.llm import get_answer_model, get_fast_chat_model
 
     model = args.model or get_settings().gemini_model
     print(f"모델: {model}, 문항: {len(cases)}개\n")
@@ -251,7 +251,8 @@ def _run(argv: list[str] | None) -> int:
         mark = "✓" if r.score == 1 else ("✗" if r.score == 0 else "△")
         print(f"{mark} {r.id} {r.score:.0%} {r.seconds:.1f}s  {r.question}")
 
-    llm, fast_llm = get_chat_model(model=model), get_fast_chat_model()
+    # 서비스와 같은 설정(온도 0, 생각 예산)으로 평가한다
+    llm, fast_llm = get_answer_model(model), get_fast_chat_model()
     results = asyncio.run(
         run_eval(lambda: open_agent(llm, fast_llm=fast_llm, state_db=None), cases, show)
     )

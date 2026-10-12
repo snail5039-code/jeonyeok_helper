@@ -15,36 +15,35 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from jeonyeok_helper.benefits.gov24 import BenefitApiError
+from jeonyeok_helper.benefits.common import BenefitApiError, TimedCache, fetch_all_pages
+from jeonyeok_helper.benefits.regions import region_keys, short_province
 
 BASE_URL = "https://www.youthcenter.go.kr/go/ythip/getPlcy"
 PAGE_SIZE = 1000
 DETAIL_URL = "https://www.youthcenter.go.kr/youthPolicy/ythPlcyTotalSearch/ythPlcyDetail/{}"
+RETRY_STATUS = {400, 429, 500, 502, 503, 504}
 
-# zipCd(시군구 법정동 코드)의 앞 두 자리 → 시도
-SIDO_CODES = {
-    "서울": "11",
-    "부산": "26",
-    "대구": "27",
-    "인천": "28",
-    "광주": "29",
-    "대전": "30",
-    "울산": "31",
-    "세종": "36",
-    "경기": "41",
+# zipCd(시군구 법정동 코드)의 앞 두 자리 → 시도. 강원·전북은 특별자치도 전환 전후 코드,
+# 광주·전남은 2026년 전남광주통합특별시 코드(12)도 본다 (2026-10 실제 응답으로 확인).
+SIDO_CODES: dict[str, tuple[str, ...]] = {
+    "서울": ("11",),
+    "부산": ("26",),
+    "대구": ("27",),
+    "인천": ("28",),
+    "광주": ("29", "12"),
+    "대전": ("30",),
+    "울산": ("31",),
+    "세종": ("36",),
+    "경기": ("41",),
     "강원": ("42", "51"),
-    "충북": "43",
-    "충청북": "43",
-    "충남": "44",
-    "충청남": "44",
+    "충북": ("43",),
+    "충남": ("44",),
     "전북": ("45", "52"),
-    "전남": "46",
-    "전라남": "46",
-    "경북": "47",
-    "경상북": "47",
-    "경남": "48",
-    "경상남": "48",
-    "제주": "50",
+    "전남": ("46", "12"),
+    "전남광주통합": ("12",),
+    "경북": ("47",),
+    "경남": ("48",),
+    "제주": ("50",),
 }
 # 시도 코드가 이만큼 넘게 걸쳐 있으면 전국 정책으로 본다.
 NATIONWIDE_SIDO_COUNT = 10
@@ -113,55 +112,53 @@ class YouthPolicy(BaseModel):
 
 
 def _sido_codes(region: str) -> set[str]:
-    from jeonyeok_helper.rag.law_api import region_keys
-
-    codes: set[str] = set()
-    for key in region_keys(region):
-        found = SIDO_CODES.get(key)
-        if found:
-            codes.update((found,) if isinstance(found, str) else found)
-    return codes
+    return {c for key in region_keys(region) for c in SIDO_CODES.get(short_province(key), ())}
 
 
 class YouthPolicyClient:
     def __init__(
-        self, api_key: str, client: httpx.Client | None = None, cache_ttl: float = 12 * 3600
+        self,
+        api_key: str,
+        client: httpx.Client | None = None,
+        cache_ttl: float = 12 * 3600,
+        retry_wait: float = 1.0,
     ):
         self.api_key = api_key
+        self.retry_wait = retry_wait
         # 기본 User-Agent(python-httpx)는 403으로 막힌다.
         self.client = client or httpx.Client(timeout=60, headers={"User-Agent": "Mozilla/5.0"})
-        self.cache_ttl = cache_ttl
-        self._cache: tuple[float, list[YouthPolicy]] | None = None
+        self._cache = TimedCache(cache_ttl)
 
     def all(self) -> list[YouthPolicy]:
-        if self._cache and time.monotonic() - self._cache[0] < self.cache_ttl:
-            return self._cache[1]
         if not self.api_key:
             raise BenefitApiError("온통청년 인증키(YOUTHCENTER_API_KEY)가 설정되지 않았습니다.")
-        policies: list[YouthPolicy] = []
-        page = 1
-        try:
-            while True:
-                resp = self.client.get(
-                    BASE_URL,
-                    params={
-                        "apiKeyNm": self.api_key,
-                        "pageNum": page,
-                        "pageSize": PAGE_SIZE,
-                        "rtnType": "json",
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("resultCode") not in (200, "200"):
-                    raise BenefitApiError(f"온통청년 API 오류: {data.get('resultMessage')}")
-                result = data.get("result") or {}
-                items = result.get("youthPolicyList") or []
-                policies += [YouthPolicy.from_api(i) for i in items]
-                total = int((result.get("pagging") or {}).get("totCount") or 0)
-                if not items or page * PAGE_SIZE >= total:
+        return self._cache.get("all", self._load)
+
+    def _load(self) -> list[YouthPolicy]:
+        def page(n: int) -> tuple[list[YouthPolicy], int]:
+            params = {
+                "apiKeyNm": self.api_key,
+                "pageNum": n,
+                "pageSize": PAGE_SIZE,
+                "rtnType": "json",
+            }
+            # 동시에 여러 번 부르면 가끔 400·500이 나고 곧 다시 된다 (2026-10 확인). 두 번 더 시도.
+            for attempt in range(3):
+                resp = self.client.get(BASE_URL, params=params)
+                if resp.status_code not in RETRY_STATUS or attempt == 2:
                     break
-                page += 1
+                time.sleep(self.retry_wait * (attempt + 1))
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("resultCode") not in (200, "200"):
+                raise BenefitApiError(f"온통청년 API 오류: {data.get('resultMessage')}")
+            result = data.get("result") or {}
+            items = result.get("youthPolicyList") or []
+            total = int((result.get("pagging") or {}).get("totCount") or 0)
+            return [YouthPolicy.from_api(i) for i in items], total
+
+        try:
+            return fetch_all_pages(page, PAGE_SIZE)
         except httpx.HTTPStatusError as e:
             # 예외 문자열에는 인증키가 든 URL이 있어 상태 코드만 남긴다.
             raise BenefitApiError(
@@ -169,8 +166,6 @@ class YouthPolicyClient:
             ) from None
         except (httpx.HTTPError, ValueError) as e:
             raise BenefitApiError(f"온통청년 API 호출 실패: {type(e).__name__}") from None
-        self._cache = (time.monotonic(), policies)
-        return policies
 
     def search(
         self,

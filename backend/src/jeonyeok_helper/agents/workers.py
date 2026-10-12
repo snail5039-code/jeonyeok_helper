@@ -96,26 +96,25 @@ def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: 
     return RunnableLambda(run)
 
 
+def _tool_texts(messages: Sequence[AnyMessage], limit: int) -> list[str]:
+    """도구 결과를 '[도구 이름] 원문' 문자열로. 원문은 limit자에서 자른다."""
+    texts = []
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            data = _tool_payload(msg)
+            text = json.dumps(data, ensure_ascii=False) if data is not None else str(msg.content)
+            texts.append(f"[{msg.name}] {text[:limit]}")
+    return texts
+
+
 def summarize(messages: Sequence[AnyMessage], limit: int = 600) -> str:
     """라우터가 '충분히 찾았는지' 판단할 짧은 요약. 도구를 안 썼으면 워커의 마지막 말."""
-    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
-    if not tool_msgs:
-        return messages[-1].text if messages else ""
-    parts = []
-    for msg in tool_msgs:
-        data = _tool_payload(msg)
-        text = json.dumps(data, ensure_ascii=False) if data is not None else str(msg.content)
-        parts.append(f"[{msg.name}] {text[:limit]}")
-    return "\n".join(parts)
+    if texts := _tool_texts(messages, limit):
+        return "\n".join(texts)
+    return messages[-1].text if messages else ""
 
 
 def extract_evidence(messages: Sequence[AnyMessage], limit: int = 3000) -> list[str]:
     """도구가 실제로 돌려준 원문. 근거 검증은 워커 요약이 아니라 이 원문을 기준으로 한다
     (요약에는 LLM이 자기 지식을 섞을 수 있다)."""
-    evidence = []
-    for msg in messages:
-        if isinstance(msg, ToolMessage):
-            data = _tool_payload(msg)
-            text = json.dumps(data, ensure_ascii=False) if data is not None else str(msg.content)
-            evidence.append(f"[{msg.name}] {text[:limit]}")
-    return evidence
+    return _tool_texts(messages, limit)

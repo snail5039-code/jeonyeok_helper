@@ -158,7 +158,7 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
             pool.submit(safely, services.retriever.retrieve, t, k=3, region=profile.region)
             for t in topics
         ]
-        benefits = pool.submit(safely, services.gov24.search, region=profile.region, limit=20)
+        benefits = pool.submit(safely, services.gov24.search, region=profile.region, limit=60)
         youth = (
             pool.submit(
                 safely, services.youth.search, region=profile.region, age=profile.age, limit=8
@@ -172,7 +172,10 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
             add("regulation", d.metadata.get("citation", ""), d.metadata.get("url", ""),
                 d.page_content)  # fmt: skip
 
-    for b in [b for b in benefits.result() if fits_service_type(b, profile.service_type)][:10]:
+    fitting = [b for b in benefits.result() if fits_service_type(b, profile.service_type)]
+    # 관련도 순으로만 자르면 지자체 혜택이 모두 밀려나서, 사용자 지역 혜택 자리를 따로 둔다
+    picked = [b for b in fitting if not b.is_local][:8] + [b for b in fitting if b.is_local][:4]
+    for b in picked:
         text = f"{b.summary} 대상: {b.target} 내용: {b.content} 신청: {b.how_to_apply}"
         add("benefit", b.name, b.url, f"{text} 소관: {b.agency}")
 

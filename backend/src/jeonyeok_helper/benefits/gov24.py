@@ -12,11 +12,13 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any
 
 import httpx
 from pydantic import BaseModel
+
+from jeonyeok_helper.benefits.common import DATA_GO_KR_KEY_MISSING, BenefitApiError, TimedCache
+from jeonyeok_helper.benefits.regions import region_keys, same_province
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +49,9 @@ _FIELDS: dict[str, tuple[str, ...]] = {
     "laws": ("법령",),
     "ordinances": ("자치법규",),
 }
+
+# 실제 값: 시군구, 광역시도, 지방공기업, 지방출자_출연기관 / 중앙행정기관, 공공기관
+_LOCAL_AGENCY_TYPES = {"시군구", "광역시도"}
 
 
 class Benefit(BaseModel):
@@ -82,38 +87,21 @@ class Benefit(BaseModel):
 
     @property
     def is_local(self) -> bool:
-        # 실제 값: 시군구, 광역시도, 지방공기업, 지방출자_출연기관 / 중앙행정기관, 공공기관
         return self.agency_type in _LOCAL_AGENCY_TYPES or self.agency_type.startswith("지방")
 
 
-_LOCAL_AGENCY_TYPES = {"시군구", "광역시도"}
-
-
-_REGION_ALIASES = {
-    "충북": "충청북",
-    "충남": "충청남",
-    "전북": "전북",  # 2024년부터 전북특별자치도
-    "전라북도": "전북",
-    "전남": "전라남",
-    "경북": "경상북",
-    "경남": "경상남",
-}
-_REGION_SUFFIXES = ("특별자치시", "특별자치도", "특별시", "광역시", "도", "시")
-
-
-def normalize_region(region: str) -> str:
-    """'서울', '서울시', '서울특별시' → '서울' / '충북', '충청북도' → '충청북'."""
-    region = region.strip()
-    if region in _REGION_ALIASES:
-        return _REGION_ALIASES[region]
-    for suffix in _REGION_SUFFIXES:
-        if region.endswith(suffix) and len(region) > len(suffix) + 1:
-            return region.removesuffix(suffix)
-    return region
-
-
-class BenefitApiError(RuntimeError):
-    pass
+def agency_in_region(agency: str, keys: list[str]) -> bool:
+    """지자체 소관기관명('부산광역시 해운대구', '전남광주통합특별시 여수시', '부산시설공단')이
+    사용자 지역(region_keys)에 있는지. 사용자가 시군구까지 말했으면 같은 시군구 것만 남긴다."""
+    agency_keys = region_keys(agency)
+    if not agency_keys:
+        return False
+    if not same_province(agency_keys[0], keys[0]):
+        # '포천'처럼 시군구만 말한 경우
+        return len(keys) == 1 and len(agency_keys) > 1 and agency_keys[1] == keys[0]
+    if len(keys) > 1 and len(agency_keys) > 1:
+        return agency_keys[1] == keys[1]
+    return True
 
 
 class Gov24Client:
@@ -125,28 +113,23 @@ class Gov24Client:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=20)
-        self.cache_ttl = cache_ttl
-        self._cache: dict[tuple, tuple[float, Any]] = {}
+        self._cache = TimedCache(cache_ttl)
 
     def _get(self, path: str, params: dict[str, Any]) -> dict:
         if not self.service_key:
-            raise BenefitApiError(
-                "공공데이터포털 서비스키(DATA_GO_KR_SERVICE_KEY)가 설정되지 않았습니다."
-            )
-        key = (path, tuple(sorted(params.items())))
-        hit = self._cache.get(key)
-        if hit and time.monotonic() - hit[0] < self.cache_ttl:
-            return hit[1]
-        try:
-            resp = self.client.get(
-                f"{BASE_URL}/{path}", params={**params, "serviceKey": self.service_key}
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except (httpx.HTTPError, ValueError) as e:
-            raise BenefitApiError(f"공공서비스 API 호출 실패: {e}") from e
-        self._cache[key] = (time.monotonic(), data)
-        return data
+            raise BenefitApiError(DATA_GO_KR_KEY_MISSING)
+
+        def load() -> dict:
+            try:
+                resp = self.client.get(
+                    f"{BASE_URL}/{path}", params={**params, "serviceKey": self.service_key}
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except (httpx.HTTPError, ValueError) as e:
+                raise BenefitApiError(f"공공서비스 API 호출 실패: {e}") from e
+
+        return self._cache.get((path, tuple(sorted(params.items()))), load)
 
     def list_services(self, field: str, keyword: str, per_page: int = 100) -> list[Benefit]:
         data = self._get(
@@ -186,9 +169,8 @@ class Gov24Client:
             log.warning("공공서비스 API 일부 요청 실패: %d건", len(errors))
 
         results = list(found.values())
-        if region:
-            key = normalize_region(region)
-            results = [b for b in results if not b.is_local or key in b.agency]
+        if keys := region_keys(region):
+            results = [b for b in results if not b.is_local or agency_in_region(b.agency, keys)]
 
         def relevance(b: Benefit) -> int:
             return sum(3 * (k in b.name) + (k in b.target) + (k in b.content) for k in keywords)

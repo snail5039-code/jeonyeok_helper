@@ -1,3 +1,4 @@
+import { postJson } from "./api";
 import type { ChatEvent } from "./types";
 
 /** SSE 텍스트 버퍼에서 완성된 이벤트를 꺼낸다. 덜 받은 마지막 조각은 rest로 남긴다. */
@@ -21,16 +22,8 @@ export interface ChatRequest {
 
 /** /api/chat 에 질문을 보내고 SSE 이벤트를 하나씩 돌려준다. */
 export async function* streamChat(req: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `서버가 응답하지 않아요 (${res.status}). 잠시 후 다시 시도해 주세요.`);
-  }
+  const res = await postJson("chat", req, "서버가 응답하지 않아요. 잠시 후 다시 시도해 주세요.", signal);
+  if (!res.body) throw new Error("서버가 응답하지 않아요. 잠시 후 다시 시도해 주세요.");
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
   while (true) {

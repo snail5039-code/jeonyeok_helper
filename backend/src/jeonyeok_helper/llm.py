@@ -25,6 +25,14 @@ def get_chat_model(
     )
 
 
+def get_answer_model(model: str | None = None) -> ChatGoogleGenerativeAI:
+    """답변·로드맵 작성 모델. 같은 질문에 같은 답이 나오도록 온도 0
+    (일관성 점검에서 넓은 질문의 항목이 흔들렸음), 생각 예산은 설정값."""
+    return get_chat_model(
+        temperature=0, model=model, thinking_budget=get_settings().gemini_thinking_budget
+    )
+
+
 def get_fast_chat_model() -> ChatGoogleGenerativeAI:
     """프로필 추출, 라우팅, 근거 검증처럼 짧고 정해진 형식의 단계에 쓰는 모델."""
     s = get_settings()

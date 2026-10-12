@@ -9,14 +9,18 @@
 
 from __future__ import annotations
 
-import time
 import xml.etree.ElementTree as ET
 
 import httpx
 from pydantic import BaseModel
 
-from jeonyeok_helper.benefits.gov24 import BenefitApiError
-from jeonyeok_helper.benefits.hospitals import address_in_region
+from jeonyeok_helper.benefits.common import (
+    DATA_GO_KR_KEY_MISSING,
+    BenefitApiError,
+    TimedCache,
+    fetch_all_pages,
+)
+from jeonyeok_helper.benefits.regions import address_in_region, region_keys
 
 BASE_URL = "https://apis.data.go.kr/1300000/JwctMmaUdhygigwan/getjwctMmaUdhygigwan"
 PAGE_SIZE = 1000
@@ -60,43 +64,29 @@ class StoreClient:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=30)
-        self.cache_ttl = cache_ttl
-        self._cache: tuple[float, list[Store]] | None = None
+        self._cache = TimedCache(cache_ttl)
 
     def all(self) -> list[Store]:
-        if self._cache and time.monotonic() - self._cache[0] < self.cache_ttl:
-            return self._cache[1]
         if not self.service_key:
-            raise BenefitApiError(
-                "공공데이터포털 서비스키(DATA_GO_KR_SERVICE_KEY)가 설정되지 않았습니다."
+            raise BenefitApiError(DATA_GO_KR_KEY_MISSING)
+        return self._cache.get("all", self._load)
+
+    def _load(self) -> list[Store]:
+        def page(n: int) -> tuple[list[Store], int]:
+            resp = self.client.get(
+                BASE_URL,
+                params={"serviceKey": self.service_key, "numOfRows": PAGE_SIZE, "pageNo": n},
             )
-        stores: list[Store] = []
-        page = 1
+            resp.raise_for_status()
+            return parse_stores(resp.text)
+
         try:
-            while True:
-                resp = self.client.get(
-                    BASE_URL,
-                    params={
-                        "serviceKey": self.service_key,
-                        "numOfRows": PAGE_SIZE,
-                        "pageNo": page,
-                    },
-                )
-                resp.raise_for_status()
-                items, total = parse_stores(resp.text)
-                stores += items
-                if not items or page * PAGE_SIZE >= total:
-                    break
-                page += 1
+            return fetch_all_pages(page, PAGE_SIZE)
         except (httpx.HTTPError, ET.ParseError) as e:
             raise BenefitApiError(f"나라사랑가게 API 호출 실패: {e}") from e
-        self._cache = (time.monotonic(), stores)
-        return stores
 
     def find(self, region: str, keyword: str | None = None, limit: int = 10) -> list[Store]:
         """지역(필수) 안에서, keyword를 주면 가게 이름에 그 단어가 있는 곳만."""
-        from jeonyeok_helper.rag.law_api import region_keys
-
         keys = region_keys(region)
         if not keys:
             return []

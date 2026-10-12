@@ -7,13 +7,8 @@ import pytest
 import respx
 from langchain_core.documents import Document
 
-from jeonyeok_helper.benefits.gov24 import (
-    BASE_URL,
-    Benefit,
-    BenefitApiError,
-    Gov24Client,
-    normalize_region,
-)
+from jeonyeok_helper.benefits.common import BenefitApiError
+from jeonyeok_helper.benefits.gov24 import BASE_URL, Benefit, Gov24Client, agency_in_region
 from jeonyeok_helper.benefits.hospitals import BASE_URL as HOSPITAL_URL
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import InstitutionDirectory
@@ -21,6 +16,7 @@ from jeonyeok_helper.benefits.jobs import BASE_URL as JOBS_URL
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.mcp_server import Services, create_server, fits_service_type
 from jeonyeok_helper.benefits.offices import VeteransOffice, find_offices, load_offices
+from jeonyeok_helper.benefits.regions import normalize_region, region_keys
 from jeonyeok_helper.benefits.stores import BASE_URL as STORES_URL
 from jeonyeok_helper.benefits.stores import StoreClient
 from jeonyeok_helper.benefits.youth import BASE_URL as YOUTH_URL
@@ -99,6 +95,26 @@ def test_region_filter_keeps_central_and_matching_local():
     )
     results = Gov24Client("KEY").search(keywords=["전역"], region="서울시")
     assert {b.service_id for b in results} == {"c", "s", "k"}
+
+
+@pytest.mark.parametrize(
+    "agency, region, expected",
+    [
+        ("부산광역시 해운대구", "부산", True),
+        ("부산광역시 해운대구", "부산 해운대", True),  # 시군구까지 말해도 남는다
+        ("부산광역시 해운대구", "부산광역시 해운대구", True),
+        ("부산광역시 동래구", "부산 해운대", False),  # 같은 시도의 다른 구는 뺀다
+        ("부산광역시", "부산 해운대", True),  # 시도 혜택은 남긴다
+        ("부산교통공사", "부산 해운대", True),
+        ("전남광주통합특별시 여수시", "전남", True),  # 2026 통합 후 표기
+        ("전남광주통합특별시 여수시", "전라남도 여수시", True),
+        ("경기도 포천시", "포천", True),  # 시군구만 말한 경우
+        ("경기도 포천시", "서울", False),
+        ("경상북도 포항시", "경북", True),
+    ],
+)
+def test_agency_in_region(agency, region, expected):
+    assert agency_in_region(agency, region_keys(region)) is expected
 
 
 @pytest.mark.parametrize(
@@ -424,6 +440,19 @@ def test_youth_api_error_does_not_leak_key():
     assert "SECRET-KEY" not in str(err.value) and "403" in str(err.value)
 
 
+@respx.mock
+def test_youth_api_retries_temporary_errors():
+    ok = {
+        "resultCode": 200,
+        "result": {"pagging": {"totCount": 1}, "youthPolicyList": [{"plcyNo": "1", "plcyNm": "a"}]},
+    }
+    route = respx.get(YOUTH_URL).mock(
+        side_effect=[httpx.Response(500), httpx.Response(400), httpx.Response(200, json=ok)]
+    )
+    assert [p.name for p in YouthPolicyClient("KEY", retry_wait=0).all()] == ["a"]
+    assert route.call_count == 3
+
+
 # ---------- 지방보훈관서 ----------
 
 
@@ -472,6 +501,7 @@ def test_find_offices_by_region(region, expected):
         ("국가유공자 차량취득세 감면", "", "long_term", False),
         ("국가유공자 차량취득세 감면", "", "merit", True),
         ("제대군인 및 국가유공자 취업지원", "", "conscript", True),  # 제대군인도 대상
+        ("국가유공상이자 등 교통시설 이용지원", "", "conscript", False),  # '국가유공상이자' 표기
     ],
 )
 def test_benefits_for_other_service_types_are_dropped(name, target, service_type, expected):

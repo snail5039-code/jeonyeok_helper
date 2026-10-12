@@ -8,24 +8,25 @@ from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
+from jeonyeok_helper.benefits.regions import province_variants, region_keys
 from jeonyeok_helper.config import get_settings
 
 
 def region_filter(region: str | None) -> dict:
     """조례는 사용자 지역 것만 검색한다. 지자체마다 비슷한 조례가 수백 개라
     섞어 두면 법령이 밀려난다. 지역을 모르면 조례는 빼고 법령·파일만 찾는다."""
-    from jeonyeok_helper.rag.law_api import region_keys
-
     not_ordinance = {"source_type": {"$ne": "ordinance"}}
-    keys = region_keys(region or "")
+    keys = region_keys(region)
     if not keys:
         return not_ordinance
+    # 시도 이름은 통합 전후 표기('광주', '(구)광주', '전남광주통합')를 모두 본다
+    sidos = sorted({v for k in keys for v in province_variants(k)})
     local = [
         {"sigungu": {"$in": keys}},  # 시군구 조례
-        {"$and": [{"sido": {"$in": keys}}, {"sigungu": ""}]},  # 시도 조례
+        {"$and": [{"sido": {"$in": sidos}}, {"sigungu": ""}]},  # 시도 조례
     ]
     if len(keys) == 1:  # '경기'처럼 시도만 말하면 그 안의 시군구 조례도
-        local.append({"sido": {"$in": keys}})
+        local.append({"sido": {"$in": sidos}})
     return {"$or": [not_ordinance, *local]}
 
 

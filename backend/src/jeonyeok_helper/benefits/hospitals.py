@@ -8,15 +8,21 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 import httpx
 from pydantic import BaseModel
 
-from jeonyeok_helper.benefits.gov24 import BenefitApiError
+from jeonyeok_helper.benefits.common import (
+    DATA_GO_KR_KEY_MISSING,
+    BenefitApiError,
+    TimedCache,
+    fetch_all_pages,
+)
+from jeonyeok_helper.benefits.regions import address_in_region, region_keys
 
 BASE_URL = "https://api.odcloud.kr/api/witak2/v1/witak2"
+PAGE_SIZE = 500
 
 
 class Hospital(BaseModel):
@@ -61,56 +67,31 @@ class HospitalClient:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=30)
-        self.cache_ttl = cache_ttl
-        self._cache: tuple[float, list[Hospital]] | None = None
+        self._cache = TimedCache(cache_ttl)
 
     def all(self) -> list[Hospital]:
-        if self._cache and time.monotonic() - self._cache[0] < self.cache_ttl:
-            return self._cache[1]
         if not self.service_key:
-            raise BenefitApiError(
-                "공공데이터포털 서비스키(DATA_GO_KR_SERVICE_KEY)가 설정되지 않았습니다."
+            raise BenefitApiError(DATA_GO_KR_KEY_MISSING)
+        return self._cache.get("all", self._load)
+
+    def _load(self) -> list[Hospital]:
+        def page(n: int) -> tuple[list[dict], int]:
+            resp = self.client.get(
+                BASE_URL, params={"page": n, "perPage": PAGE_SIZE, "serviceKey": self.service_key}
             )
-        hospitals: list[Hospital] = []
-        page = 1
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", []), data.get("totalCount", 0)
+
         try:
-            while True:
-                resp = self.client.get(
-                    BASE_URL,
-                    params={"page": page, "perPage": 500, "serviceKey": self.service_key},
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                items = data.get("data", [])
-                hospitals += [Hospital.from_api(i) for i in items if i.get("use_yn", "Y") == "Y"]
-                if not items or page * 500 >= data.get("totalCount", 0):
-                    break
-                page += 1
+            items = fetch_all_pages(page, PAGE_SIZE)
         except (httpx.HTTPError, ValueError) as e:
             raise BenefitApiError(f"위탁병원 API 호출 실패: {e}") from e
-        self._cache = (time.monotonic(), hospitals)
-        return hospitals
+        return [Hospital.from_api(i) for i in items if i.get("use_yn", "Y") == "Y"]
 
     def find(self, region: str, limit: int = 10) -> list[Hospital]:
         """주소에 지역 이름이 모두 들어간 병원. '경기 포천' → 경기·포천이 다 있는 곳."""
-        from jeonyeok_helper.rag.law_api import region_keys
-
         keys = region_keys(region)
         if not keys:
             return []
         return [h for h in self.all() if address_in_region(h.address, keys)][:limit]
-
-
-def address_in_region(address: str, keys: list[str]) -> bool:
-    """주소에 지역 키(region_keys)가 모두 들어 있는지. '전남'·'전라남도' 표기를 둘 다 본다."""
-    return all(k in address or _SHORT_PROVINCE.get(k, k) in address for k in keys)
-
-
-# 주소는 '전남 강진군'처럼 줄여 쓴다. normalize_region은 '전라남'으로 바꾸므로 둘 다 본다.
-_SHORT_PROVINCE = {
-    "충청북": "충북",
-    "충청남": "충남",
-    "전라남": "전남",
-    "경상북": "경북",
-    "경상남": "경남",
-}

@@ -29,13 +29,15 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
+from jeonyeok_helper.benefits.common import BenefitApiError
+from jeonyeok_helper.benefits.gov24 import Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.offices import find_offices, load_offices
 from jeonyeok_helper.benefits.stores import StoreClient
 from jeonyeok_helper.benefits.youth import YouthPolicyClient
+from jeonyeok_helper.config import get_settings
 
 # 병무청 나라사랑가게 안내 (대상, 이용 방법)
 STORE_INFO_URL = "https://www.mma.go.kr/contents.do?mc=mma0003356"
@@ -44,28 +46,9 @@ STORE_INFO_URL = "https://www.mma.go.kr/contents.do?mc=mma0003356"
 FALLBACK_INSTITUTION_IDS = ["gov24", "youth", "vnet"]
 
 
-def _default_gov24() -> Gov24Client:
-    from jeonyeok_helper.config import get_settings
-
-    return Gov24Client(get_settings().data_go_kr_service_key)
-
-
-def _default_hospitals() -> HospitalClient:
-    from jeonyeok_helper.config import get_settings
-
-    return HospitalClient(get_settings().data_go_kr_service_key)
-
-
-def _default_stores() -> StoreClient:
-    from jeonyeok_helper.config import get_settings
-
-    return StoreClient(get_settings().data_go_kr_service_key)
-
-
-def _default_youth() -> YouthPolicyClient:
-    from jeonyeok_helper.config import get_settings
-
-    return YouthPolicyClient(get_settings().youthcenter_api_key)
+def _with_key(client_cls: Callable[[str], Any], setting: str) -> Callable[[], Any]:
+    """설정의 키로 클라이언트를 만드는 팩토리. 키는 처음 쓸 때 읽는다."""
+    return lambda: client_cls(getattr(get_settings(), setting))
 
 
 def _default_retriever():
@@ -84,13 +67,17 @@ def _default_directory() -> InstitutionDirectory:
 class Services:
     """도구가 쓰는 의존성. 처음 쓸 때 만들어서 키가 없어도 서버는 뜬다. 테스트에서 교체 가능."""
 
-    gov24_factory: Callable[[], Gov24Client] = _default_gov24
+    gov24_factory: Callable[[], Gov24Client] = _with_key(Gov24Client, "data_go_kr_service_key")
     retriever_factory: Callable[[], Any] = _default_retriever
     directory_factory: Callable[[], InstitutionDirectory] = _default_directory
-    hospitals_factory: Callable[[], HospitalClient] = _default_hospitals
+    hospitals_factory: Callable[[], HospitalClient] = _with_key(
+        HospitalClient, "data_go_kr_service_key"
+    )
     jobs_factory: Callable[[], VnetJobClient] = VnetJobClient
-    stores_factory: Callable[[], StoreClient] = _default_stores
-    youth_factory: Callable[[], YouthPolicyClient] = _default_youth
+    stores_factory: Callable[[], StoreClient] = _with_key(StoreClient, "data_go_kr_service_key")
+    youth_factory: Callable[[], YouthPolicyClient] = _with_key(
+        YouthPolicyClient, "youthcenter_api_key"
+    )
     _cache: dict[str, Any] = field(default_factory=dict)
 
     def _get(self, name: str, factory: Callable[[], Any]) -> Any:
@@ -132,7 +119,7 @@ _LONG_TERM_ONLY = re.compile(r"중\s?[.·ㆍ]?\s?장기|장기\s?복무")
 # 보훈대상자(국가유공자·보훈가족 등) 전용 혜택. 이름에 있으면 보훈대상자가 아닌 사람에게는 빼고,
 # 이름에 '제대군인'이 같이 있으면(제대군인도 대상) 남긴다.
 _MERIT_ONLY = re.compile(
-    r"보훈\s?(가족|대상자|명예|수당|급여)|국가유공자|참전|독립유공자|고엽제|유족"
+    r"보훈\s?(가족|대상자|명예|수당|급여)|국가유공|참전|독립유공|고엽제|유족|상이(군경|자)"
 )
 
 
