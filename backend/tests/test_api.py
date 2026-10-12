@@ -1,7 +1,9 @@
 """FastAPI 서버 테스트. 에이전트는 가짜 컴포넌트로 만든 실제 그래프를 쓴다."""
 
 import json
+import tempfile
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from helpers import make_components
@@ -15,6 +17,12 @@ from langgraph.store.memory import InMemoryStore
 from jeonyeok_helper.agents.graph import build_graph
 from jeonyeok_helper.agents.state import Profile, Route
 from jeonyeok_helper.api.main import create_app
+from jeonyeok_helper.db import Feedback
+
+
+def temp_db() -> str:
+    """테스트마다 새 SQLite 파일 (실제 data/app.sqlite는 건드리지 않는다)."""
+    return f"sqlite:///{Path(tempfile.mkdtemp()).as_posix()}/app.sqlite"
 
 
 def make_client(routes, **kwargs) -> TestClient:
@@ -25,7 +33,7 @@ def make_client(routes, **kwargs) -> TestClient:
     async def factory():
         yield graph
 
-    return TestClient(create_app(agent_factory=factory))
+    return TestClient(create_app(agent_factory=factory, db_url=temp_db()))
 
 
 def no_agent_client() -> TestClient:
@@ -34,7 +42,7 @@ def no_agent_client() -> TestClient:
         raise RuntimeError("GOOGLE_API_KEY가 설정되지 않았습니다.")
         yield
 
-    return TestClient(create_app(agent_factory=factory))
+    return TestClient(create_app(agent_factory=factory, db_url=temp_db()))
 
 
 def parse_sse(body: str) -> list[tuple[str, dict]]:
@@ -83,7 +91,7 @@ def test_chat_streams_draft_deltas_before_verified_answer():
     async def factory():
         yield graph
 
-    with TestClient(create_app(agent_factory=factory)) as client:
+    with TestClient(create_app(agent_factory=factory, db_url=temp_db())) as client:
         events = parse_sse(client.post("/chat", json={"message": "질문"}).text)
 
     names = [e for e, _ in events]
@@ -132,3 +140,22 @@ def test_chat_without_agent_returns_503_with_reason():
 def test_empty_message_is_rejected():
     with make_client([Route(next="answer")]) as client:
         assert client.post("/chat", json={"message": ""}).status_code == 422
+
+
+def test_feedback_is_saved_and_counted():
+    with make_client([Route(next="answer")]) as client:
+        body = {"rating": "up", "question": "군복무 크레딧?", "answer": "가입기간에 넣어 줘요"}
+        first = client.post("/feedback", json=body | {"thread_id": "t1", "user_id": "u1"})
+        client.post("/feedback", json=body | {"rating": "down", "comment": "금액이 없어요"})
+
+        assert first.status_code == 201 and first.json()["id"] == 1
+        assert client.get("/feedback/summary").json() == {"up": 1, "down": 1}
+        with client.app.state.db.session() as session:
+            saved = session.get(Feedback, 2)
+            assert (saved.rating, saved.comment) == ("down", "금액이 없어요")
+
+
+def test_feedback_rejects_unknown_rating():
+    with make_client([Route(next="answer")]) as client:
+        body = {"rating": "meh", "question": "q", "answer": "a"}
+        assert client.post("/feedback", json=body).status_code == 422

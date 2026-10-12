@@ -22,6 +22,7 @@ backend/data/raw/*
 !backend/data/raw/.gitkeep
 backend/data/datasets/
 backend/data/state.sqlite*
+backend/data/app.sqlite*
 backend/data/eval/results/
 
 # 에디터, OS, 로컬 도구

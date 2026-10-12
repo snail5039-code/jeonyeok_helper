@@ -3,6 +3,8 @@
 - GET  /health            : 상태와 키 설정 여부
 - POST /chat              : 질문 → SSE 스트리밍 (진행 단계, 최종 답변)
 - GET  /profile/{user_id} : 저장된 사용자 프로필
+- POST /feedback          : 답변 피드백(도움이 됐어요/아쉬워요) 저장
+- GET  /feedback/summary  : 피드백 수
 
 SSE 이벤트
     event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
@@ -19,16 +21,19 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
 from jeonyeok_helper import __version__
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.config import get_settings
+from jeonyeok_helper.db import Database, Feedback
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +55,15 @@ class ChatRequest(BaseModel):
     user_id: str | None = None
 
 
+class FeedbackRequest(BaseModel):
+    rating: Literal["up", "down"]
+    question: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(min_length=1, max_length=20000)
+    comment: str | None = Field(default=None, max_length=1000)
+    thread_id: str | None = Field(default=None, max_length=64)
+    user_id: str | None = Field(default=None, max_length=64)
+
+
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -60,9 +74,13 @@ def _default_factory() -> AbstractAsyncContextManager[CompiledStateGraph]:
     return open_agent()
 
 
-def create_app(agent_factory: AgentFactory = _default_factory) -> FastAPI:
+def create_app(
+    agent_factory: AgentFactory = _default_factory, db_url: str | None = None
+) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.db = Database(db_url or get_settings().app_db_url)
+        app.state.db.migrate()  # 최신 스키마까지 자동으로
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -135,6 +153,24 @@ def create_app(agent_factory: AgentFactory = _default_factory) -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.post("/feedback", status_code=201)
+    def feedback(req: FeedbackRequest, request: Request) -> dict:
+        with request.app.state.db.session() as session:
+            row = Feedback(**req.model_dump())
+            session.add(row)
+            session.flush()
+            return {"id": row.id}
+
+    @app.get("/feedback/summary")
+    def feedback_summary(request: Request) -> dict:
+        with request.app.state.db.session() as session:
+            counts = dict(
+                session.execute(
+                    select(Feedback.rating, func.count()).group_by(Feedback.rating)
+                ).all()
+            )
+        return {"up": counts.get("up", 0), "down": counts.get("down", 0)}
 
     @app.get("/profile/{user_id}")
     async def profile(user_id: str, request: Request) -> dict:

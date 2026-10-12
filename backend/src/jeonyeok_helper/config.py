@@ -57,6 +57,8 @@ class Settings(BaseSettings):
 
     # 대화 기록과 사용자 프로필을 저장하는 SQLite 파일 (서버를 재시작해도 유지)
     state_db: Path = DATA_DIR / "state.sqlite"
+    # 서비스 테이블(피드백 등). SQLAlchemy URL이라 Postgres 등으로 바꿀 수 있다.
+    app_db_url: str = f"sqlite:///{(DATA_DIR / 'app.sqlite').as_posix()}"
 
     # 슈퍼바이저가 한 질문에서 워커를 호출할 수 있는 최대 횟수 (무한 루프 방지)
     max_worker_calls: int = 4

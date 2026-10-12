@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { demoChat } from "@/lib/demo";
+import { sendFeedback, type Rating } from "@/lib/feedback";
 import { streamChat } from "@/lib/sse";
 import { getUserId, writeStorage } from "@/lib/storage";
 import type { ChatEvent, Profile, Turn } from "@/lib/types";
@@ -110,6 +111,21 @@ export function ChatApp() {
     [busy, demo, profile.service_type],
   );
 
+  const feedback = useCallback(
+    async (turn: Turn, rating: Rating, comment?: string) => {
+      if (demo) return; // 데모 답변은 저장하지 않는다
+      await sendFeedback({
+        rating,
+        comment,
+        question: turn.question,
+        answer: turn.text,
+        thread_id: threadId.current,
+        user_id: userId.current,
+      });
+    },
+    [demo],
+  );
+
   // 시작: 서버 에이전트가 준비됐는지 보고, 아니면 데모 모드로 연다.
   useEffect(() => {
     userId.current = getUserId();
@@ -168,7 +184,7 @@ export function ChatApp() {
             <div className="mx-auto grid max-w-[1120px] gap-7 px-4 pt-6 pb-[120px] lg:px-8 lg:pt-10 lg:pb-[140px] xl:grid-cols-[minmax(0,1fr)_288px] xl:gap-12">
               <div className="grid min-w-0 content-start gap-8">
                 {turns.map((t) => (
-                  <TurnView key={t.id} turn={t} onAsk={ask} />
+                  <TurnView key={t.id} turn={t} onAsk={ask} onFeedback={feedback} />
                 ))}
               </div>
               <aside aria-label="근거 자료" className="sticky top-0 hidden content-start gap-3.5 xl:grid">

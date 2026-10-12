@@ -38,7 +38,7 @@
 | 평가 | 평가 데이터셋 30문항 (`jeonyeok-eval`) |
 | 도구 연동 | MCP |
 | RAG | Chroma, HyDE, Re-ranking |
-| 서버 | FastAPI (SSE), SQLite (대화 기록·프로필) |
+| 서버 | FastAPI (SSE), SQLite (대화 기록·프로필), SQLAlchemy 2.0 + Alembic (피드백) |
 | 배포 | Docker Compose, GitHub Actions |
 
 ## 폴더
@@ -109,6 +109,8 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 |---|---|
 | `POST /chat` | `{message, thread_id?, user_id?}` → SSE (`thread`, `step`, `answer` / `question`, `error`, `done`) |
 | `GET /profile/{user_id}` | 저장된 사용자 프로필 |
+| `POST /feedback` | 답변 피드백 저장 `{rating: up/down, question, answer, comment?}` |
+| `GET /feedback/summary` | 피드백 수 (화면 프록시로는 열지 않음) |
 | `GET /health` | 상태, 에이전트 준비 여부, 키 설정 여부 |
 
 ### MCP 도구

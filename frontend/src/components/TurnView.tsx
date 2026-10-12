@@ -1,9 +1,10 @@
 "use client";
 
-import { ChevronRight, CircleHelp, Copy, ShieldCheck, ThumbsUp } from "lucide-react";
+import { Check, ChevronRight, CircleHelp, Copy, ShieldCheck, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useState } from "react";
 
 import { parseAnswer } from "@/lib/answer";
+import type { Rating } from "@/lib/feedback";
 import { SERVICE_TYPE_LABELS, type Profile, type Source, type Turn } from "@/lib/types";
 
 import { BenefitList } from "./BenefitList";
@@ -123,43 +124,122 @@ function Lines({ lines, sources, muted }: { lines: string[]; sources: Source[]; 
   );
 }
 
-function Feedback({ text }: { text: string }) {
-  const [liked, setLiked] = useState(false);
+export type FeedbackHandler = (turn: Turn, rating: Rating, comment?: string) => Promise<void>;
+
+function Feedback({ turn, onFeedback }: { turn: Turn; onFeedback: FeedbackHandler }) {
+  // idle → (아쉬워요: comment) → sending → sent / error
+  const [state, setState] = useState<"idle" | "comment" | "sending" | "sent" | "error">("idle");
+  const [rating, setRating] = useState<Rating | null>(null);
+  const [comment, setComment] = useState("");
   const [copyLabel, setCopyLabel] = useState("복사");
   const base =
-    "inline-flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold";
+    "inline-flex h-[34px] items-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold disabled:cursor-default";
+  const done = state === "sending" || state === "sent";
+
+  const submit = async (r: Rating, text?: string) => {
+    setRating(r);
+    setState("sending");
+    try {
+      await onFeedback(turn, r, text?.trim() || undefined);
+      setState("sent");
+    } catch {
+      setState("error");
+    }
+  };
+
+  const ratingButton = (r: Rating, label: string, Icon: typeof ThumbsUp) => (
+    <button
+      type="button"
+      disabled={done}
+      aria-pressed={rating === r}
+      onClick={() => (r === "up" ? submit("up") : (setRating("down"), setState("comment")))}
+      className={`${base} ${rating === r ? "border-accent text-accent" : "border-transparent text-fg-2"}`}
+    >
+      <Icon className="size-[15px]" strokeWidth={1.8} />
+      {label}
+    </button>
+  );
+
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-line pb-2">
-      <button
-        type="button"
-        onClick={() => setLiked(!liked)}
-        aria-pressed={liked}
-        className={`${base} ${liked ? "border-accent text-accent" : "border-transparent text-fg-2"}`}
-      >
-        <ThumbsUp className="size-[15px]" strokeWidth={1.8} />
-        도움이 됐어요
-      </button>
-      <button
-        type="button"
-        className={`${base} border-transparent text-fg-2`}
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(text);
-            setCopyLabel("복사했어요");
-          } catch {
-            setCopyLabel("복사하지 못했어요");
-          }
-          setTimeout(() => setCopyLabel("복사"), 1600);
-        }}
-      >
-        <Copy className="size-[15px]" strokeWidth={1.8} />
-        {copyLabel}
-      </button>
+    <div className="grid gap-2 border-b border-line pb-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {ratingButton("up", "도움이 됐어요", ThumbsUp)}
+        {ratingButton("down", "아쉬워요", ThumbsDown)}
+        <button
+          type="button"
+          className={`${base} border-transparent text-fg-2`}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(turn.text);
+              setCopyLabel("복사했어요");
+            } catch {
+              setCopyLabel("복사하지 못했어요");
+            }
+            setTimeout(() => setCopyLabel("복사"), 1600);
+          }}
+        >
+          <Copy className="size-[15px]" strokeWidth={1.8} />
+          {copyLabel}
+        </button>
+        {state === "sent" && (
+          <span role="status" className="inline-flex items-center gap-1 text-[13px] text-fg-3">
+            <Check className="size-[15px] text-accent" strokeWidth={2} />
+            의견 고마워요
+          </span>
+        )}
+        {state === "error" && (
+          <span role="alert" className="text-[13px] text-warn">
+            의견을 보내지 못했어요. 다시 눌러 주세요.
+          </span>
+        )}
+      </div>
+      {state === "comment" && (
+        <form
+          className="grid gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit("down", comment);
+          }}
+        >
+          <label htmlFor={`${turn.id}-comment`} className="text-[13px] text-fg-2">
+            무엇이 부족했나요? (선택)
+          </label>
+          <textarea
+            id={`${turn.id}-comment`}
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            maxLength={1000}
+            rows={2}
+            placeholder="예: 우리 지역 혜택이 빠졌어요, 신청 방법이 없어요"
+            className="w-full resize-none rounded-lg border border-line-strong bg-bg px-3 py-2 text-sm"
+          />
+          <div className="flex gap-1.5">
+            <button type="submit" className={`${base} border-accent bg-accent text-white`}>
+              보내기
+            </button>
+            <button
+              type="button"
+              onClick={() => (setRating(null), setState("idle"))}
+              className={`${base} border-transparent text-fg-2`}
+            >
+              취소
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
 
-export function TurnView({ turn, onAsk }: { turn: Turn; onAsk: (text: string) => void }) {
+export function TurnView({
+  turn,
+  onAsk,
+  onFeedback,
+}: {
+  turn: Turn;
+  onAsk: (text: string) => void;
+  onFeedback: FeedbackHandler;
+}) {
   return (
     <article id={turn.id} className="grid scroll-mt-6 gap-5 border-b border-line pb-8 last:border-b-0">
       <h1 className="text-[21px] leading-[1.4] font-bold tracking-[-0.03em] text-balance md:text-[26px]">{turn.question}</h1>
@@ -202,14 +282,22 @@ export function TurnView({ turn, onAsk }: { turn: Turn; onAsk: (text: string) =>
         </div>
       )}
 
-      {turn.status === "streaming" && <Answer turn={turn} streaming />}
-      {turn.status === "answer" && <Answer turn={turn} />}
+      {turn.status === "streaming" && <Answer turn={turn} onFeedback={onFeedback} streaming />}
+      {turn.status === "answer" && <Answer turn={turn} onFeedback={onFeedback} />}
     </article>
   );
 }
 
 /** streaming: 초안이 들어오는 중. 근거 검증 전이라 출처·피드백은 최종 답변에서만 보인다. */
-function Answer({ turn, streaming = false }: { turn: Turn; streaming?: boolean }) {
+function Answer({
+  turn,
+  onFeedback,
+  streaming = false,
+}: {
+  turn: Turn;
+  onFeedback: FeedbackHandler;
+  streaming?: boolean;
+}) {
   const { lead, benefits, tail } = parseAnswer(turn.text);
   return (
     <div className="grid gap-5" aria-busy={streaming}>
@@ -224,7 +312,7 @@ function Answer({ turn, streaming = false }: { turn: Turn; streaming?: boolean }
           <SourceList sources={turn.sources} />
         </div>
       )}
-      {!streaming && <Feedback text={turn.text} />}
+      {!streaming && <Feedback turn={turn} onFeedback={onFeedback} />}
     </div>
   );
 }
