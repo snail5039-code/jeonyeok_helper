@@ -1,5 +1,6 @@
 """환경변수(.env) 기반 설정."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,6 +13,15 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 # 라이브러리가 os.environ에서 직접 읽는 값도 .env에서 불러온다.
 load_dotenv(PROJECT_ROOT / ".env")
+
+
+def default_chroma_dir(data_dir: Path = DATA_DIR, windows: bool = os.name == "nt") -> Path:
+    """Windows에서 경로에 한글이 있으면 Chroma가 검색 인덱스(HNSW) 파일을 쓰지 못해
+    다음 실행에서 'Error loading hnsw index'가 난다. 그때는 영문 경로(LOCALAPPDATA)에 둔다."""
+    local = os.environ.get("LOCALAPPDATA")
+    if windows and not str(data_dir).isascii() and local:
+        return Path(local) / "jeonyeok_helper" / "chroma"
+    return data_dir / "chroma"
 
 
 class Settings(BaseSettings):
@@ -34,7 +44,7 @@ class Settings(BaseSettings):
     data_go_kr_service_key: str = ""
 
     # RAG
-    chroma_dir: Path = DATA_DIR / "chroma"
+    chroma_dir: Path = default_chroma_dir()
     chroma_collection: str = "regulations"
     raw_docs_dir: Path = DATA_DIR / "raw"
     retrieval_k: int = 6

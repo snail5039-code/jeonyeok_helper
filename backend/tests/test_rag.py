@@ -6,6 +6,7 @@ from langchain_core.embeddings import DeterministicFakeEmbedding
 from langchain_core.language_models import GenericFakeChatModel
 from langchain_core.runnables import RunnableLambda
 
+from jeonyeok_helper import config
 from jeonyeok_helper.rag.ingest import ingest_laws, load_law_list
 from jeonyeok_helper.rag.loaders import load_directory, load_file
 from jeonyeok_helper.rag.retriever import DocScore, RegulationRetriever, RerankResult
@@ -66,6 +67,19 @@ def test_store_upsert_does_not_duplicate(tmp_path: Path):
         "law:1:제1조",
         "law:1:제2조",
     }
+
+
+def test_chroma_dir_avoids_non_ascii_path_on_windows(monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/me/AppData/Local")
+
+    assert config.default_chroma_dir(Path("C:/전역/data"), windows=True) == Path(
+        "C:/Users/me/AppData/Local/jeonyeok_helper/chroma"
+    )
+    assert config.default_chroma_dir(Path("C:/app/data"), windows=True) == Path(
+        "C:/app/data/chroma"
+    )
+    # Docker·Linux는 그대로
+    assert config.default_chroma_dir(Path("/전역/data"), windows=False) == Path("/전역/data/chroma")
 
 
 # ---------- 검색기 ----------
