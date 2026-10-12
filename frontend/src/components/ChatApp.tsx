@@ -76,6 +76,9 @@ export function ChatApp() {
           case "step":
             updateTurn(id, (t) => ({ steps: [...t.steps, e.data.label] }));
             break;
+          case "delta":
+            updateTurn(id, (t) => ({ status: "streaming", text: t.text + e.data.text }));
+            break;
           case "answer":
             updateTurn(id, () => ({ status: "answer", text: e.data.text, sources: e.data.sources ?? [], profile: e.data.profile ?? {} }));
             mergeProfile(e.data.profile);

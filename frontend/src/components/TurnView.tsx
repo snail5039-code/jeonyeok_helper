@@ -59,7 +59,7 @@ function summary(sources: Source[], steps: number) {
 
 function Process({ turn }: { turn: Turn }) {
   const [open, setOpen] = useState(false);
-  const live = turn.status === "loading";
+  const live = turn.status === "loading" || turn.status === "streaming";
   const showSteps = live || open;
   return (
     <div
@@ -68,7 +68,13 @@ function Process({ turn }: { turn: Turn }) {
       }`}
     >
       <ShieldCheck className="size-[18px] shrink-0 text-accent" strokeWidth={1.8} />
-      <span>{live ? "답변을 준비하고 있어요" : summary(turn.sources, turn.steps.length)}</span>
+      <span>
+        {turn.status === "streaming"
+          ? "답변을 쓰고 있어요. 근거 확인이 끝나면 출처가 붙어요"
+          : live
+            ? "답변을 준비하고 있어요"
+            : summary(turn.sources, turn.steps.length)}
+      </span>
       {!live && turn.steps.length > 0 && (
         <button
           type="button"
@@ -159,7 +165,9 @@ export function TurnView({ turn, onAsk }: { turn: Turn; onAsk: (text: string) =>
       <h1 className="text-[21px] leading-[1.4] font-bold tracking-[-0.03em] text-balance md:text-[26px]">{turn.question}</h1>
 
       {turn.status === "answer" && <AppliedProfile profile={turn.profile} />}
-      {(turn.status === "loading" || turn.status === "answer") && <Process turn={turn} />}
+      {(turn.status === "loading" || turn.status === "streaming" || turn.status === "answer") && (
+        <Process turn={turn} />
+      )}
 
       {turn.status === "loading" && (
         <div className="grid gap-2.5">
@@ -194,26 +202,29 @@ export function TurnView({ turn, onAsk }: { turn: Turn; onAsk: (text: string) =>
         </div>
       )}
 
+      {turn.status === "streaming" && <Answer turn={turn} streaming />}
       {turn.status === "answer" && <Answer turn={turn} />}
     </article>
   );
 }
 
-function Answer({ turn }: { turn: Turn }) {
+/** streaming: 초안이 들어오는 중. 근거 검증 전이라 출처·피드백은 최종 답변에서만 보인다. */
+function Answer({ turn, streaming = false }: { turn: Turn; streaming?: boolean }) {
   const { lead, benefits, tail } = parseAnswer(turn.text);
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-5" aria-busy={streaming}>
       {lead.length > 0 && <Lines lines={lead} sources={turn.sources} />}
       {benefits.length > 0 && <BenefitList benefits={benefits} sources={turn.sources} />}
       {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
-      {turn.sources.length > 0 && (
+      {streaming && <span className="stream-caret" aria-hidden />}
+      {!streaming && turn.sources.length > 0 && (
         // 넓은 화면은 오른쪽 목록에 보이므로 좁은 화면에서만 답변 아래에 둔다.
         <div className="grid gap-2 xl:hidden">
           <h3 className="text-sm font-bold">근거 자료</h3>
           <SourceList sources={turn.sources} />
         </div>
       )}
-      <Feedback text={turn.text} />
+      {!streaming && <Feedback text={turn.text} />}
     </div>
   );
 }

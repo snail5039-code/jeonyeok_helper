@@ -22,6 +22,8 @@ export interface Profile {
 export type ChatEvent =
   | { event: "thread"; data: { thread_id: string } }
   | { event: "step"; data: { node?: string; label: string } }
+  // 답변 초안 조각. 이어 붙여 바로 보여 주고, 검증을 마친 answer가 오면 그것으로 바꾼다.
+  | { event: "delta"; data: { text: string } }
   | { event: "answer"; data: { text: string; sources: Source[]; profile: Profile } }
   | { event: "question"; data: { text: string; profile?: Profile } }
   | { event: "error"; data: { message: string } }
@@ -30,7 +32,7 @@ export type ChatEvent =
 export interface Turn {
   id: string;
   question: string;
-  status: "loading" | "answer" | "question" | "error";
+  status: "loading" | "streaming" | "answer" | "question" | "error";
   steps: string[];
   text: string;
   sources: Source[];

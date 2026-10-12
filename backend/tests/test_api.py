@@ -5,6 +5,10 @@ from contextlib import asynccontextmanager
 
 from fastapi.testclient import TestClient
 from helpers import make_components
+from langchain_core.language_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
@@ -66,6 +70,28 @@ def test_chat_streams_steps_then_answer_with_sources():
     assert answer["text"] == "최종 답변 [1]"
     assert answer["sources"][0]["title"] == "국민연금법 제18조"
     assert answer["profile"] == {"service_type": "conscript"}
+
+
+def test_chat_streams_draft_deltas_before_verified_answer():
+    components, _ = make_components([Route(next="answer")])
+    # 실제 모델처럼 토큰을 나눠 내보내는 가짜 모델 (단어 단위)
+    model = GenericFakeChatModel(messages=iter([AIMessage("초안 답변 입니다")]))
+    components.responder = RunnableLambda(lambda _: "프롬프트") | model | StrOutputParser()
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    @asynccontextmanager
+    async def factory():
+        yield graph
+
+    with TestClient(create_app(agent_factory=factory)) as client:
+        events = parse_sse(client.post("/chat", json={"message": "질문"}).text)
+
+    names = [e for e, _ in events]
+    deltas = [d["text"] for e, d in events if e == "delta"]
+    assert len(deltas) > 1 and "".join(deltas) == "초안 답변 입니다"
+    # 초안 조각이 먼저 오고, 검증을 마친 최종 답변이 뒤에 온다
+    assert names.index("delta") < names.index("answer")
+    assert next(d for e, d in events if e == "answer")["text"] == "최종 답변 [1]"
 
 
 def test_chat_sends_question_when_agent_asks_back():

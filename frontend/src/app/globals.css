@@ -97,6 +97,20 @@ body {
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
+/* 답변이 써지는 중임을 알리는 커서 */
+.stream-caret {
+  display: block;
+  width: 8px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -109,7 +123,8 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .step-dot,
-  .skeleton-line {
+  .skeleton-line,
+  .stream-caret {
     animation: none;
   }
 }

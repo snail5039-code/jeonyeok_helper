@@ -51,15 +51,17 @@ export async function* demoChat(message: string, knowsServiceType: boolean): Asy
     };
     return;
   }
-  for (const label of [
-    "관련 법령을 찾고 있어요",
-    "받을 수 있는 혜택을 조회하고 있어요",
-    "신청 기관을 찾고 있어요",
-    "답변을 정리하고 있어요",
-    "근거를 확인하고 있어요",
-  ]) {
+  for (const label of ["관련 법령을 찾고 있어요", "받을 수 있는 혜택을 조회하고 있어요", "신청 기관을 찾고 있어요"]) {
     yield { event: "step", data: { label } };
     await sleep(550);
   }
+  // 실제 서버처럼 초안을 조각으로 보낸 뒤, 근거 확인을 마친 최종 답변을 보낸다.
+  yield { event: "step", data: { label: "답변을 정리하고 있어요" } };
+  for (const piece of DEMO_TEXT.match(/[\s\S]{1,12}/g) ?? []) {
+    yield { event: "delta", data: { text: piece } };
+    await sleep(25);
+  }
+  yield { event: "step", data: { label: "근거를 확인하고 있어요" } };
+  await sleep(400);
   yield { event: "answer", data: { text: DEMO_TEXT, sources: DEMO_SOURCES, profile: DEMO_PROFILE } };
 }

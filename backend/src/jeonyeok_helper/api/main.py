@@ -6,7 +6,9 @@
 
 SSE 이벤트
     event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
+    event: delta     data: {"text": "..."}   # 답변 초안 조각 (이어 붙여서 바로 보여 준다)
     event: answer    data: {"text": "...", "sources": [...], "profile": {...}}
+                     # 근거 검증을 마친 최종 답변. 초안과 다를 수 있으니 화면은 이것으로 바꾼다.
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
     event: done      data: {}
@@ -101,10 +103,18 @@ def create_app(agent_factory: AgentFactory = _default_factory) -> FastAPI:
         async def events() -> AsyncIterator[str]:
             yield _sse("thread", {"thread_id": thread_id})
             try:
-                async for update in agent.astream(
-                    {"messages": [("user", req.message)]}, config, stream_mode="updates"
+                async for mode, chunk in agent.astream(
+                    {"messages": [("user", req.message)]},
+                    config,
+                    stream_mode=["updates", "messages"],
                 ):
-                    for node in update:
+                    if mode == "messages":
+                        # 답변 초안을 만들어지는 대로 보낸다 (다른 노드의 LLM 출력은 제외)
+                        token, meta = chunk
+                        if meta.get("langgraph_node") == "respond" and (text := token.text):
+                            yield _sse("delta", {"text": text})
+                        continue
+                    for node in chunk:
                         if label := STEP_LABELS.get(node):
                             yield _sse("step", {"node": node, "label": label})
                 state = (await agent.aget_state(config)).values
