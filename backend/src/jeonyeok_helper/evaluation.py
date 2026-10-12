@@ -1,6 +1,6 @@
 """평가: data/eval/questions.yaml의 질문을 에이전트에 물어보고 채점한다.
 
-    uv run jeonyeok-eval                 # 전체 30문항
+    uv run jeonyeok-eval                 # 전체 40문항
     uv run jeonyeok-eval --ids c01 m05   # 일부만
     uv run jeonyeok-eval --limit 5
     uv run jeonyeok-eval --model gemini-3.5-flash   # 다른 모델과 비교
@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 import time
 import uuid
 from collections import defaultdict
@@ -33,6 +34,7 @@ CATEGORY_NAMES = {
     "short_term_officer": "단기 간부",
     "long_term": "중·장기 복무",
     "merit": "보훈대상자",
+    "tools": "외부 도구·자료",
     "general": "일반",
 }
 
@@ -56,6 +58,7 @@ class CaseResult:
     seconds: float
     checks: list[Check] = field(default_factory=list)
     error: str = ""
+    tools: list[str] = field(default_factory=list)
 
     @property
     def score(self) -> float:
@@ -78,8 +81,23 @@ def _profile_matches(expected, actual) -> bool:
     return str(expected) in str(actual) or str(actual) in str(expected)
 
 
-def grade(case: dict, answer: str, asked: bool, sources: list[dict], profile: dict) -> list[Check]:
+def tools_used(evidence: list[str]) -> list[str]:
+    """도구 원문은 '[도구이름] 내용'으로 쌓인다. 실제로 부른 도구 이름 목록."""
+    return sorted({m[1] for e in evidence if (m := re.match(r"\[(\w+)\]", e))})
+
+
+def grade(
+    case: dict,
+    answer: str,
+    asked: bool,
+    sources: list[dict],
+    profile: dict,
+    tools: list[str] | None = None,
+) -> list[Check]:
     checks: list[Check] = []
+    if (words := case.get("tools_any")) and not asked:
+        hit = next((w for w in words if w in (tools or [])), None)
+        checks.append(Check("도구 사용", hit is not None, hit or f"쓴 도구: {tools or '없음'}"))
     if "should_ask" in case:
         want = case["should_ask"]
         checks.append(
@@ -124,9 +142,10 @@ async def run_case(agent, case: dict) -> CaseResult:
     asked = not state.get("draft")
     sources = state.get("sources", [])
     profile = state.get("profile", {})
+    tools = tools_used(state.get("evidence", []))
     return CaseResult(
         case["id"], case["category"], case["question"], answer, asked, sources, profile, seconds,
-        grade(case, answer, asked, sources, profile),
+        grade(case, answer, asked, sources, profile, tools), tools=tools,
     )  # fmt: skip
 
 

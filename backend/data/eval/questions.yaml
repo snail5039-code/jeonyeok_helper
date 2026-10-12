@@ -1,13 +1,14 @@
-# 전역도우미 평가 질문 (30개)
+# 전역도우미 평가 질문 (40개)
 #
 # 정답 문장을 맞히는지가 아니라 '무엇을 근거로, 어떻게 행동했는지'를 본다.
 # 금액·기한 같은 구체적 사실은 법령 개정으로 바뀔 수 있어 기준에 넣지 않는다.
 #
 # 항목
 #   category     : conscript(병사) / short_term_officer(단기 간부) / long_term(중·장기) /
-#                  merit(보훈대상자) / general(일반)
+#                  merit(보훈대상자) / tools(외부 도구·자료) / general(일반)
 #   sources_any  : 출처 제목 중 하나라도 이 단어를 포함해야 함
 #   answer_any   : 답변에 이 단어 중 하나라도 있어야 함
+#   tools_any    : 이 도구 중 하나라도 실제로 불러야 함 (실시간 API 연결 확인)
 #   profile      : 대화에서 추출해야 하는 프로필 값
 #   should_ask   : true면 답하지 말고 되물어야 함 / false면 되묻지 말아야 함
 
@@ -171,6 +172,65 @@ questions:
     sources_any: [국가보훈부]
     answer_any: [1577-0606]
 
+  # ---------- 외부 도구·자료 (실시간 API와 공공데이터) ----------
+  - id: t01
+    category: tools
+    question: 24살이고 부산 사는 병장 전역자예요. 받을 수 있는 청년정책 있어요?
+    tools_any: [search_youth_policies]
+    profile: { service_type: conscript, region: 부산 }
+    should_ask: false
+  - id: t02
+    category: tools
+    question: 서울 사는 25살 병사 전역자인데 월세나 주거 지원 받을 수 있나요?
+    tools_any: [search_youth_policies, search_benefits]
+    answer_any: [월세, 주거, 임대]
+    should_ask: false
+  - id: t03
+    category: tools
+    question: 부산에서 제대군인 채용공고 볼 수 있는 곳 있어요?
+    tools_any: [search_jobs]
+    answer_any: [채용]
+    should_ask: false
+  - id: t04
+    category: tools
+    question: 중사로 전역했는데 경기도 시설관리 일자리 공고 있어요?
+    tools_any: [search_jobs]
+    should_ask: false
+  - id: t05
+    category: tools
+    question: 예비군 훈련 받으면 할인해 주는 가게가 있다던데 수원에도 있어요?
+    tools_any: [find_stores]
+    answer_any: [나라사랑]
+    should_ask: false
+  - id: t06
+    category: tools
+    question: 국가유공자인데 대구 수성구 근처 보훈 위탁병원 알려주세요
+    tools_any: [find_hospitals]
+    answer_any: [병원, 의원]
+    should_ask: false
+  - id: t07
+    category: tools
+    question: 부산 해운대 사는데 국가유공자 등록 신청은 어디로 가야 해요?
+    tools_any: [find_veterans_office]
+    answer_any: [부산지방보훈청]
+    should_ask: false
+  - id: t08
+    category: tools
+    question: 경기 포천 사는 장기복무 제대군인인데 상담받으러 갈 보훈청이 어디예요?
+    answer_any: [경기북부보훈지청]
+    should_ask: false
+  - id: t09
+    category: tools
+    question: 국가유공자 등록 신청할 때 필요한 서류 알려주세요
+    sources_any: [민원 안내, 국가유공자 등 예우 및 지원에 관한 법률]
+    answer_any: [서류]
+    should_ask: false
+  - id: t10
+    category: tools
+    question: 병장으로 전역하고 복학하는데 한국장학재단 장학금이나 학자금 받을 수 있나요?
+    sources_any: [한국장학재단]
+    answer_any: [장학, 학자금]
+    should_ask: false
   # ---------- 일반 / 되묻기 ----------
   - id: g01
     category: general
