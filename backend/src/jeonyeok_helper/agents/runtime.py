@@ -40,14 +40,18 @@ from jeonyeok_helper.agents.workers import make_react_worker
 def build_components(
     llm: BaseChatModel, tools: list[BaseTool], fast_llm: BaseChatModel | None = None
 ) -> Components:
-    """llm은 도구를 쓰는 워커와 답변 작성에, fast_llm은 짧은 판단 단계에 쓴다."""
+    """llm은 답변 작성에, fast_llm은 판단 단계와 워커에 쓴다.
+
+    워커는 도구를 고르고 결과를 옮기는 일이라 깊은 추론이 필요 없고, 답변은 워커 요약이 아니라
+    도구 원문(evidence)을 근거로 쓰기 때문에 빠른 설정으로도 품질이 유지된다.
+    """
     fast = fast_llm or llm
     by_name = {t.name: t for t in tools}
     workers = {}
     for worker, names in WORKER_TOOLS.items():
         worker_tools = [by_name[n] for n in names if n in by_name]
         if worker_tools:
-            workers[worker] = make_react_worker(llm, worker_tools, WORKER_PROMPTS[worker])
+            workers[worker] = make_react_worker(fast, worker_tools, WORKER_PROMPTS[worker])
     return Components(
         profile_extractor=PROFILE_PROMPT | fast.with_structured_output(Profile),
         router=ROUTER_PROMPT | fast.with_structured_output(Route),

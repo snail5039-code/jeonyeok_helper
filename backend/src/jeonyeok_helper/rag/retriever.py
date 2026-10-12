@@ -126,7 +126,8 @@ class RegulationRetriever:
 
 
 def build_default_retriever() -> RegulationRetriever:
-    from jeonyeok_helper.llm import get_chat_model
+    from jeonyeok_helper.llm import get_fast_chat_model
     from jeonyeok_helper.rag.store import RegulationStore
 
-    return RegulationRetriever(RegulationStore(), llm=get_chat_model(temperature=0))
+    # 가상 조문 작성과 점수 매기기는 깊은 추론이 필요 없어 생각을 끈 빠른 설정을 쓴다.
+    return RegulationRetriever(RegulationStore(), llm=get_fast_chat_model())

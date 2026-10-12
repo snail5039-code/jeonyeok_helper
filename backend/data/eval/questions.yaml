@@ -62,7 +62,7 @@ questions:
     category: conscript
     question: 사회복무요원도 군복무 크레딧을 받을 수 있나요?
     sources_any: [국민연금법, 국민연금공단]
-    answer_any: [크레딧]
+    answer_any: [크레딧, 가입기간]
 
   # ---------- 단기 간부 ----------
   - id: s01

@@ -26,16 +26,35 @@ def add_or_reset(old: list | None, new: list | None) -> list:
     return [*(old or []), *new]
 
 
+def add_unique_or_reset(old: list | None, new: list | None) -> list:
+    """출처 목록. 동시에 돈 워커들이 같은 기관을 찾는 경우가 많아 같은 출처는 한 번만."""
+    if new is None:
+        return []
+    merged, seen = [], set()
+    for s in [*(old or []), *new]:
+        key = (s.get("type"), s.get("title"), s.get("url", ""))
+        if key not in seen:
+            seen.add(key)
+            merged.append(s)
+    return merged
+
+
+def count_or_reset(old: int | None, new: int | None) -> int:
+    """워커 호출 횟수. 동시에 돈 워커들이 각자 1을 더한다. None이면 초기화."""
+    return 0 if new is None else (old or 0) + new
+
+
 class AgentState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     # 대화가 이어지는 동안 유지 (+ user_id가 있으면 장기 메모리에도 저장)
     profile: Annotated[dict, merge_profile]
     # 아래는 질문(턴)마다 초기화
     findings: Annotated[list[dict], add_or_reset]  # 워커별 요약 {worker, summary}
-    sources: Annotated[list[dict], add_or_reset]  # 출처 {type, title, url}
+    sources: Annotated[list[dict], add_unique_or_reset]  # 출처 {type, title, url}
     evidence: Annotated[list[str], add_or_reset]  # 도구가 돌려준 원문 (근거 검증 기준)
-    worker_calls: int
+    worker_calls: Annotated[int, count_or_reset]
     next: str
+    also: list[str]  # next와 동시에 돌릴 워커
     instruction: str
     draft: str
 
@@ -64,6 +83,10 @@ class Route(BaseModel):
             "institution=신청 기관·연락처 찾기, ask_user=답하려면 사용자 정보가 꼭 필요할 때 "
             "되묻기, answer=모은 정보로 답변"
         )
+    )
+    also: list[Literal["regulation", "benefit", "institution"]] = Field(
+        default_factory=list,
+        description="next가 워커일 때, 같은 질문에 함께 필요해서 동시에 돌릴 다른 워커",
     )
     instruction: str = Field(default="", description="워커에게 맡길 구체적인 작업")
     question: str = Field(default="", description="ask_user일 때 사용자에게 할 질문")

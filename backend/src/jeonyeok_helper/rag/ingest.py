@@ -117,12 +117,12 @@ def _run(argv: list[str] | None) -> int:
         print(f"저장된 문서: {store.count()}개")
         return 0
 
-    from jeonyeok_helper.llm import get_chat_model
+    from jeonyeok_helper.llm import get_fast_chat_model
     from jeonyeok_helper.rag.retriever import RegulationRetriever
 
     retriever = RegulationRetriever(
         store,
-        llm=get_chat_model(temperature=0),
+        llm=get_fast_chat_model(),
         use_hyde=not args.no_hyde,
         use_rerank=not args.no_rerank,
     )

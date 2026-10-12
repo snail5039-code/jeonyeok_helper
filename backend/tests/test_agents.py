@@ -74,6 +74,25 @@ def test_worker_calls_are_capped():
     assert state["messages"][-1].text == "최종 답변 [1]"
 
 
+def test_also_workers_run_together_and_merge_results():
+    components, rec = make_components(
+        [
+            Route(next="benefit", also=["regulation"], instruction="제대군인 혜택"),
+            Route(next="answer"),
+        ]
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    state = ask(graph, "제대군인 혜택 받을 수 있나요?")
+
+    assert len(rec["worker"].calls) == 2  # 두 워커가 한 번에
+    assert sorted(c["instruction"] for c in rec["worker"].calls) == ["", "제대군인 혜택"]
+    assert {f["worker"] for f in state["findings"]} == {"benefit", "regulation"}
+    assert state["worker_calls"] == 2
+    assert len(state["sources"]) == 1  # 두 워커가 같은 출처를 찾아도 한 번만
+    assert len(rec["router"].calls) == 2  # 라우터는 동시 실행이 끝난 뒤 한 번만 다시 판단
+
+
 def test_same_worker_is_called_at_most_twice():
     components, rec = make_components([Route(next="regulation", instruction="또 찾아")])
     graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=10)

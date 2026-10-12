@@ -1,6 +1,6 @@
 """LangGraph 슈퍼바이저 그래프.
 
-start → profile → supervisor ─┬→ regulation / benefit / institution → supervisor (반복)
+start → profile → supervisor ─┬→ regulation / benefit / institution → supervisor (반복·동시)
                               ├→ ask_user → END            (정보가 부족하면 되묻기)
                               └→ respond → verify → END    (답변 초안 → 근거 검증)
 
@@ -68,7 +68,8 @@ def build_graph(
             "findings": None,
             "sources": None,
             "evidence": None,
-            "worker_calls": 0,
+            "worker_calls": None,
+            "also": [],
             "draft": "",
         }
         # 새 대화라도 같은 사용자면 장기 메모리의 프로필을 불러온다.
@@ -109,40 +110,44 @@ def build_graph(
             return {"next": "answer"}
         if route.next == "ask_user":
             return {"next": "ask_user", "instruction": route.question}
-        if route.next in WORKERS and route.next not in c.workers:
+        if route.next not in WORKERS:
             return {"next": "answer"}
+
+        # 규정·혜택처럼 서로 기다릴 필요 없는 워커는 같이 돌린다 (also).
         # 같은 워커를 계속 부르며 시간만 쓰는 경우가 있어, 한 질문에서 워커당 2번까지만 허용한다.
-        used = sum(f["worker"] == route.next for f in state.get("findings", []))
-        if route.next in WORKERS and used >= MAX_CALLS_PER_WORKER:
+        findings = state.get("findings", [])
+        batch: list[str] = []
+        for name in [route.next, *route.also]:
+            used = sum(f["worker"] == name for f in findings)
+            if name in c.workers and name not in batch and used < MAX_CALLS_PER_WORKER:
+                batch.append(name)
+        batch = batch[: max_worker_calls - calls]
+        if not batch:
             return {"next": "answer"}
-        return {"next": route.next, "instruction": route.instruction}
+        # 지시는 next 워커에게만 해당한다. also 워커는 마지막 질문을 그대로 처리한다.
+        instruction = route.instruction if batch[0] == route.next else ""
+        return {"next": batch[0], "also": batch[1:], "instruction": instruction}
 
     def make_worker_node(name: str):
         async def worker(state: AgentState):
+            instruction = state.get("instruction", "") if state.get("next") == name else ""
             try:
                 out = await c.workers[name].ainvoke(
                     {
                         "messages": state["messages"],
-                        "instruction": state.get("instruction", ""),
+                        "instruction": instruction,
                         "profile": state.get("profile", {}),
                     }
                 )
             except Exception as e:  # 폴백: 실패를 기록하고 다른 경로로 계속 진행
                 log.warning("%s 워커 실패", name, exc_info=True)
                 out = {"summary": f"(조회 실패: {e})", "sources": []}
-            # 여러 워커가 같은 기관을 찾는 경우가 많아서, 이미 있는 출처는 빼고 더한다.
-            seen = {(s["type"], s["title"], s.get("url", "")) for s in state.get("sources", [])}
-            new_sources = []
-            for s in out.get("sources", []):
-                key = (s.get("type"), s.get("title"), s.get("url", ""))
-                if key not in seen:
-                    seen.add(key)
-                    new_sources.append(s)
+            # 출처 중복 제거와 호출 횟수 합산은 상태의 reducer가 한다 (동시 실행 대비).
             return {
                 "findings": [{"worker": name, "summary": out.get("summary", "")}],
-                "sources": new_sources,
+                "sources": out.get("sources", []),
                 "evidence": out.get("evidence", []),
-                "worker_calls": state.get("worker_calls", 0) + 1,
+                "worker_calls": 1,
             }
 
         return worker
@@ -196,11 +201,15 @@ def build_graph(
     g.add_edge(START, "start")
     g.add_edge("start", "profile")
     g.add_edge("profile", "supervisor")
-    g.add_conditional_edges(
-        "supervisor",
-        lambda s: "respond" if s["next"] == "answer" else s["next"],
-        [*c.workers, "ask_user", "respond"],
-    )
+
+    def after_supervisor(s: AgentState) -> str | list[str]:
+        if s["next"] == "answer":
+            return "respond"
+        if s["next"] == "ask_user":
+            return "ask_user"
+        return [s["next"], *s.get("also", [])]  # 목록이면 동시에 실행
+
+    g.add_conditional_edges("supervisor", after_supervisor, [*c.workers, "ask_user", "respond"])
     g.add_edge("ask_user", END)
     g.add_edge("respond", "verify")
     g.add_edge("verify", END)
