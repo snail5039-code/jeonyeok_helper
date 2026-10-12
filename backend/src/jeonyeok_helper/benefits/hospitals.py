@@ -98,11 +98,12 @@ class HospitalClient:
         keys = region_keys(region)
         if not keys:
             return []
+        return [h for h in self.all() if address_in_region(h.address, keys)][:limit]
 
-        def matches(address: str, key: str) -> bool:
-            return key in address or _SHORT_PROVINCE.get(key, key) in address
 
-        return [h for h in self.all() if all(matches(h.address, k) for k in keys)][:limit]
+def address_in_region(address: str, keys: list[str]) -> bool:
+    """주소에 지역 키(region_keys)가 모두 들어 있는지. '전남'·'전라남도' 표기를 둘 다 본다."""
+    return all(k in address or _SHORT_PROVINCE.get(k, k) in address for k in keys)
 
 
 # 주소는 '전남 강진군'처럼 줄여 쓴다. normalize_region은 '전라남'으로 바꾸므로 둘 다 본다.

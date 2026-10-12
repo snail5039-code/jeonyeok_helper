@@ -20,6 +20,8 @@ from jeonyeok_helper.benefits.institutions import InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import BASE_URL as JOBS_URL
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.mcp_server import Services, create_server
+from jeonyeok_helper.benefits.stores import BASE_URL as STORES_URL
+from jeonyeok_helper.benefits.stores import StoreClient
 
 
 def api_item(sid: str, name: str, agency: str = "국가보훈부", agency_type: str = "중앙행정기관"):
@@ -198,6 +200,7 @@ def test_server_exposes_four_tools():
         "get_benefit_detail",
         "find_hospitals",
         "search_jobs",
+        "find_stores",
         "find_institutions",
     }
 
@@ -301,3 +304,55 @@ def test_jobs_use_verified_location_code_and_hide_closed():
         "A공사"
     ]
     assert route.call_count == 1  # 지역별 캐시
+
+
+# ---------- 나라사랑가게 ----------
+
+
+def stores_page(*items: tuple[str, str], total: int) -> str:
+    rows = "".join(
+        f"<item><udaeGgm>{n}</udaeGgm><gtcdNm>할인</gtcdNm><juso>{a}</juso>"
+        f"<udgigwanTelno>000</udgigwanTelno></item>"
+        for n, a in items
+    )
+    return (
+        "<response><header><resultCode>00</resultCode><resultMsg>OK</resultMsg></header>"
+        f"<body><items>{rows}</items><totalCount>{total}</totalCount></body></response>"
+    )
+
+
+@respx.mock
+def test_stores_are_paged_cached_and_filtered(monkeypatch):
+    monkeypatch.setattr("jeonyeok_helper.benefits.stores.PAGE_SIZE", 2)
+    route = respx.get(STORES_URL).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                text=stores_page(
+                    ("다비치안경 해운대점", "부산광역시해운대구 1"),
+                    ("포항 영화관", "경상북도포항시 북구"),
+                    total=3,
+                ),
+            ),
+            httpx.Response(200, text=stores_page(("해운대 식당", "부산광역시해운대구 2"), total=3)),
+        ]
+    )
+    client = StoreClient("KEY")
+
+    assert [s.name for s in client.find("부산 해운대")] == ["다비치안경 해운대점", "해운대 식당"]
+    assert [s.name for s in client.find("경북")] == ["포항 영화관"]  # '경상북도' 표기
+    assert [s.name for s in client.find("부산", keyword="안경")] == ["다비치안경 해운대점"]
+    assert route.call_count == 2  # 두 페이지를 받은 뒤 캐시
+
+
+@respx.mock
+def test_stores_api_error_code_raises():
+    respx.get(STORES_URL).mock(
+        return_value=httpx.Response(
+            200,
+            text="<response><header><resultCode>30</resultCode>"
+            "<resultMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</resultMsg></header></response>",
+        )
+    )
+    with pytest.raises(BenefitApiError, match="SERVICE_KEY"):
+        StoreClient("KEY").all()

@@ -9,6 +9,7 @@
 - search_benefits    : 공공서비스(혜택) 조회
 - get_benefit_detail : 혜택 상세
 - search_jobs        : 제대군인지원센터 채용공고
+- find_stores        : 병무청 나라사랑가게 (병역이행자 할인)
 - find_hospitals     : 지역별 보훈 위탁병원
 - find_institutions  : 관련 기관 링크·연락처
 
@@ -27,6 +28,10 @@ from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import VnetJobClient
+from jeonyeok_helper.benefits.stores import StoreClient
+
+# 병무청 나라사랑가게 안내 (대상, 이용 방법)
+STORE_INFO_URL = "https://www.mma.go.kr/contents.do?mc=mma0003356"
 
 # 혜택 조회가 안 될 때 직접 찾아볼 수 있는 곳
 FALLBACK_INSTITUTION_IDS = ["gov24", "youth", "vnet"]
@@ -42,6 +47,12 @@ def _default_hospitals() -> HospitalClient:
     from jeonyeok_helper.config import get_settings
 
     return HospitalClient(get_settings().data_go_kr_service_key)
+
+
+def _default_stores() -> StoreClient:
+    from jeonyeok_helper.config import get_settings
+
+    return StoreClient(get_settings().data_go_kr_service_key)
 
 
 def _default_retriever():
@@ -65,6 +76,7 @@ class Services:
     directory_factory: Callable[[], InstitutionDirectory] = _default_directory
     hospitals_factory: Callable[[], HospitalClient] = _default_hospitals
     jobs_factory: Callable[[], VnetJobClient] = VnetJobClient
+    stores_factory: Callable[[], StoreClient] = _default_stores
     _cache: dict[str, Any] = field(default_factory=dict)
 
     def _get(self, name: str, factory: Callable[[], Any]) -> Any:
@@ -75,6 +87,10 @@ class Services:
     @property
     def gov24(self) -> Gov24Client:
         return self._get("gov24", self.gov24_factory)
+
+    @property
+    def stores(self) -> StoreClient:
+        return self._get("stores", self.stores_factory)
 
     @property
     def jobs(self) -> VnetJobClient:
@@ -194,6 +210,19 @@ def create_server(services: Services | None = None) -> FastMCP:
         except BenefitApiError as e:
             return {"jobs": [], "error": str(e), "fallback": fallback("취업")}
         return {"jobs": [j.model_dump() for j in jobs]}
+
+    @server.tool()
+    def find_stores(region: str, keyword: str | None = None, limit: int = 10) -> dict:
+        """병무청 나라사랑가게: 예비군 동원훈련 이수자, 현역병·사회복무요원, 병역명문가에게
+        할인 등을 주는 가게. region은 필수(예: '부산 해운대'), keyword는 가게 이름(예: '안경')."""
+        try:
+            stores = svc.stores.find(region, keyword=keyword, limit=limit)
+        except BenefitApiError as e:
+            return {"stores": [], "error": str(e), "fallback": fallback("병역")}
+        return {
+            "stores": [s.model_dump() for s in stores],
+            "info_url": STORE_INFO_URL,
+        }
 
     @server.tool()
     def find_hospitals(region: str, limit: int = 10) -> dict:
