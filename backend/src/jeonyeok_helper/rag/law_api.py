@@ -2,6 +2,7 @@
 
 - 검색: https://www.law.go.kr/DRF/lawSearch.do?target=law&type=JSON&query=...
 - 본문: https://www.law.go.kr/DRF/lawService.do?target=law&type=JSON&MST=...
+- 자치법규(조례)는 target=ordin으로 같은 주소를 쓴다.
 
 응답 JSON은 항목이 하나면 dict, 여러 개면 list로 오는 경우가 많아서 `_as_list`로 맞춘다.
 """
@@ -72,6 +73,51 @@ class LawApiClient:
         resp.raise_for_status()
         return resp.json()
 
+    def search_ordinances(self, query: str, page: int = 1, display: int = 100) -> list[dict]:
+        resp = self.client.get(
+            f"{BASE_URL}/lawSearch.do",
+            params={
+                "OC": self.oc,
+                "target": "ordin",
+                "type": "JSON",
+                "query": query,
+                "display": display,
+                "page": page,
+            },
+        )
+        resp.raise_for_status()
+        return _as_list(resp.json().get("OrdinSearch", {}).get("law"))
+
+    def fetch_ordinance(self, mst: str) -> dict:
+        resp = self.client.get(
+            f"{BASE_URL}/lawService.do",
+            params={"OC": self.oc, "target": "ordin", "type": "JSON", "MST": mst},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    def find_ordinances(
+        self, keywords: list[str], include: list[str], exclude: list[str]
+    ) -> list[dict]:
+        """키워드로 찾은 자치법규 중 이름에 include가 있고 exclude가 없는 '조례'만 (중복 제거)."""
+        found: dict[str, dict] = {}
+        for keyword in keywords:
+            page = 1
+            while True:
+                items = self.search_ordinances(keyword, page=page)
+                for item in items:
+                    name = item.get("자치법규명", "")
+                    if (
+                        item.get("자치법규종류") == "조례"
+                        and any(w in name for w in include)
+                        and not any(w in name for w in exclude)
+                    ):
+                        found.setdefault(item["자치법규일련번호"], item)
+                if len(items) < 100:
+                    break
+                page += 1
+        return list(found.values())
+
     def load_law(self, law_name: str, articles: list[str] | None = None) -> list[Document]:
         """현행 법령을 조문 단위로 가져온다. articles를 주면 그 조문만 남긴다 (예: ["제18조"])."""
         found = self.find_current(law_name)
@@ -81,6 +127,66 @@ class LawApiClient:
         if articles:
             docs = [d for d in docs if d.metadata["article"] in articles]
         return docs
+
+
+def region_keys(region: str) -> list[str]:
+    """'경기도 가평군' → ['경기', '가평'], '부산광역시' → ['부산']. 지역 필터의 비교 값."""
+    from jeonyeok_helper.benefits.gov24 import normalize_region
+
+    keys = []
+    for part in region.split():
+        part = normalize_region(part)
+        if len(part) > 2 and part[-1] in "시군구":
+            part = part[:-1]
+        keys.append(part)
+    return [k for k in keys if k]
+
+
+def ordinance_json_to_documents(data: dict) -> list[Document]:
+    """자치법규 본문 JSON → 조문 단위 Document. 지역 필터용으로 시도·시군구를 메타데이터에 둔다."""
+    ordin = data.get("LawService", data)
+    info = ordin.get("자치법규기본정보", {})
+    name = info.get("자치법규명", "알 수 없는 조례")
+    ordin_id = info.get("자치법규ID", "")
+    agency = info.get("지자체기관명", "")
+    keys = region_keys(agency)
+
+    docs: dict[str, Document] = {}
+    for article in _as_list(ordin.get("조문", {}).get("조")):
+        if article.get("조문여부") != "Y":
+            continue
+        text = (article.get("조내용") or "").strip()
+        if not text:
+            continue
+        # 조문번호 '000102' → 제1조의2 (앞 4자리 조, 뒤 2자리 가지)
+        raw_no = _as_list(article.get("조문번호"))[0] if article.get("조문번호") else ""
+        if not (raw_no.isdigit() and len(raw_no) == 6):
+            continue
+        no, sub = int(raw_no[:4]), int(raw_no[4:])
+        label = f"제{no}조" + (f"의{sub}" if sub else "")
+        title = article.get("조제목", "")
+        # 같은 조문 번호가 두 번 오는 조례가 있다 (예: 삭제된 조와 새 조). 본문을 이어 붙인다.
+        if label in docs:
+            docs[label].page_content += f"\n{text}"
+            continue
+        docs[label] = Document(
+            page_content=f"[{name} {label}({title})] ({agency})\n{text}",
+            metadata={
+                "source_type": "ordinance",
+                "law_name": name,
+                "article": label,
+                "article_title": title,
+                "citation": f"{name} {label}" + (f"({title})" if title else ""),
+                "agency": agency,
+                "sido": keys[0] if keys else "",
+                "sigungu": keys[1] if len(keys) > 1 else "",
+                "enforced_at": info.get("시행일자", ""),
+                "contact": info.get("전화번호", ""),
+                "url": f"https://www.law.go.kr/자치법규/{name.replace(' ', '')}",
+                "doc_id": f"ordin:{ordin_id}:{label}",
+            },
+        )
+    return list(docs.values())
 
 
 def law_json_to_documents(data: dict) -> list[Document]:

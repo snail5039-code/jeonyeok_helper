@@ -171,7 +171,7 @@ class FakeGov24:
 
 
 class FakeRetriever:
-    def retrieve(self, question, k=5):
+    def retrieve(self, question, k=5, region=None):
         return [Document(page_content="본문", metadata={"citation": "병역법 제1조", "url": "u"})]
 
 

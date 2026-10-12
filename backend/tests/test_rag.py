@@ -69,6 +69,35 @@ def test_store_upsert_does_not_duplicate(tmp_path: Path):
     }
 
 
+def test_store_searches_only_users_local_ordinances(tmp_path: Path):
+    def ordin(doc_id: str, sido: str, sigungu: str) -> Document:
+        meta = {"doc_id": doc_id, "source_type": "ordinance", "sido": sido, "sigungu": sigungu}
+        return Document(page_content=doc_id, metadata=meta)
+
+    store = RegulationStore(
+        embeddings=DeterministicFakeEmbedding(size=32), persist_dir=tmp_path, collection="test-col"
+    )
+    law = doc("law:1:제1조")
+    law.metadata["source_type"] = "law"
+    store.upsert(
+        [
+            law,
+            ordin("포천", "경기", "포천"),
+            ordin("가평", "경기", "가평"),
+            ordin("경기도", "경기", ""),
+            ordin("부산", "부산", ""),
+        ]
+    )
+
+    def found(region):
+        return {d.metadata["doc_id"] for d in store.search("조례", k=10, region=region)}
+
+    assert found(None) == {"law:1:제1조"}  # 지역을 모르면 조례는 빼고
+    assert found("경기 포천") == {"law:1:제1조", "포천", "경기도"}  # 시군구 + 시도 조례
+    assert found("경기도") == {"law:1:제1조", "포천", "가평", "경기도"}
+    assert found("부산광역시") == {"law:1:제1조", "부산"}
+
+
 def test_chroma_dir_avoids_non_ascii_path_on_windows(monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", "C:/Users/me/AppData/Local")
 
@@ -92,7 +121,7 @@ class FakeStore:
         self.results = results
         self.queries: list[str] = []
 
-    def search(self, query: str, k: int) -> list[Document]:
+    def search(self, query: str, k: int, region: str | None = None) -> list[Document]:
         self.queries.append(query)
         return self.results.get(query, [])[:k]
 

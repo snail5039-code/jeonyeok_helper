@@ -98,10 +98,13 @@ def create_server(services: Services | None = None) -> FastMCP:
         return [_institution_dict(i) for i in unique[:limit]]
 
     @server.tool()
-    def search_regulations(question: str, k: int = 5) -> dict:
-        """전역자 관련 법령, 시행령, 국가보훈부 자료에서 질문의 근거가 되는 조문·문단을 찾는다."""
+    def search_regulations(question: str, k: int = 5, region: str | None = None) -> dict:
+        """전역자 관련 법령, 시행령, 국가보훈부 자료에서 질문의 근거가 되는 조문·문단을 찾는다.
+
+        region(예: '부산', '경기 포천')을 주면 그 지역 지자체 조례도 함께 찾는다.
+        """
         try:
-            docs = svc.retriever.retrieve(question, k=k)
+            docs = svc.retriever.retrieve(question, k=k, region=region)
         except RuntimeError as e:  # API 키 누락 등
             return {"results": [], "error": str(e)}
         return {

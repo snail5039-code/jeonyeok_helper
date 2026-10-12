@@ -33,8 +33,13 @@ ROUTER_PROMPT = ChatPromptTemplate.from_messages(
             "되묻기. '군인연금은 몇 년 복무해야 해?'처럼 특정 제도·법령·기관에 대한 질문은 "
             "되묻지 말고 바로 찾기\n"
             "- answer: 이미 모은 정보로 충분히 답할 수 있을 때\n\n"
-            "같은 워커를 같은 지시로 반복 호출하지 마세요. 단순 인사나 서비스 소개 질문은 "
-            "바로 answer를 고르세요.\n\n"
+            "규칙:\n"
+            "- 당신의 지식으로 답하지 마세요. 단순 인사나 서비스 소개가 아니면, 이번 질문에서 "
+            "워커를 한 번도 부르지 않은 상태로 answer를 고르지 마세요.\n"
+            "- 자격, 기간, 대상, 제도 간 차이, 지원 내용처럼 법령에 정해진 내용을 묻거나 "
+            "'~받을 수 있나요?'처럼 자격을 물으면 regulation을 부르세요. 혜택(benefit)을 "
+            "찾았더라도 근거 법령을 아직 찾지 않았다면 regulation도 부르세요.\n"
+            "- 같은 워커를 같은 지시로 반복 호출하지 마세요.\n\n"
             "사용자 프로필: {profile}\n"
             "이번 질문에서 워커가 찾은 내용:\n{findings}\n"
             "워커 호출 횟수: {worker_calls}/{max_worker_calls}",
@@ -54,6 +59,7 @@ GROUNDING = (
 WORKER_PROMPTS = {
     "regulation": COMMON
     + "\n\n당신은 규정 담당입니다. search_regulations 도구로 근거 조문을 찾고, "
+    "사용자 지역을 알면 region에 넣어 그 지역 조례도 찾으세요. "
     "질문과 관련된 내용을 출처(조문명)와 함께 요약하세요. 찾지 못했으면 찾지 못했다고 하세요."
     + GROUNDING,
     "benefit": COMMON + "\n\n당신은 혜택 담당입니다. search_benefits, get_benefit_detail 도구로 "

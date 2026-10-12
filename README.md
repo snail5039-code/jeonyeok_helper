@@ -94,8 +94,9 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | 명령 | 설명 |
 |---|---|
 | `uv run jeonyeok-rag laws` | `data/laws.yaml`의 법령 수집 (LAW_API_OC 필요) |
+| `uv run jeonyeok-rag ordinances` | `data/ordinances.yaml` 기준 지자체 조례 수집 (LAW_API_OC 필요) |
 | `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (HWP는 PDF로 변환) |
-| `uv run jeonyeok-rag search "질문"` | HyDE + Re-ranking 검색 결과 확인 |
+| `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
 | `uv run jeonyeok-mcp` | MCP 서버 (stdio) |
 | `uv run jeonyeok-chat` | 터미널에서 에이전트와 대화 |
 | `uv run jeonyeok-eval` | 평가 30문항 채점, `data/eval/results/`에 보고서 |
@@ -112,7 +113,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 
 | 도구 | 하는 일 |
 |---|---|
-| `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색 |
+| `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색, 지역을 주면 그 지역 조례도 |
 | `search_benefits` | 정부24 공공서비스(혜택)에서 전역자 혜택 조회, 지역 필터 |
 | `get_benefit_detail` | 혜택의 선정기준, 구비서류, 신청방법 |
 | `find_institutions` | 주제별 기관 사이트·연락처 ([institutions.yaml](backend/data/institutions.yaml)) |

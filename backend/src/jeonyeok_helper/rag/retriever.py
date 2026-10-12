@@ -109,7 +109,8 @@ class RegulationRetriever:
             docs[i].metadata["rerank_score"] = scores.get(i, -1)
         return [docs[i] for i in order[:k]]
 
-    def retrieve(self, question: str, k: int = 6) -> list[Document]:
+    def retrieve(self, question: str, k: int = 6, region: str | None = None) -> list[Document]:
+        """region을 주면 그 지역 조례도 함께 찾는다."""
         # 아직 아무것도 수집하지 않았으면 LLM(HyDE) 호출 없이 바로 끝낸다.
         if hasattr(self.store, "count") and self.store.count() == 0:
             return []
@@ -119,7 +120,7 @@ class RegulationRetriever:
 
         seen: dict[str, Document] = {}
         for q in queries:
-            for doc in self.store.search(q, k=self.candidates_per_query):
+            for doc in self.store.search(q, k=self.candidates_per_query, region=region):
                 seen.setdefault(doc.metadata.get("doc_id") or doc.page_content, doc)
         return self._rerank(question, list(seen.values()), k)
 
