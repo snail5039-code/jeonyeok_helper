@@ -8,6 +8,7 @@
 - search_regulations : 법령·보훈부 자료 검색 (RAG)
 - search_benefits    : 공공서비스(혜택) 조회
 - get_benefit_detail : 혜택 상세
+- find_hospitals     : 지역별 보훈 위탁병원
 - find_institutions  : 관련 기관 링크·연락처
 
 외부 API가 실패하면 예외 대신 error와 대체 안내(fallback 기관 링크)를 돌려준다.
@@ -22,6 +23,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
+from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
 
 # 혜택 조회가 안 될 때 직접 찾아볼 수 있는 곳
@@ -32,6 +34,12 @@ def _default_gov24() -> Gov24Client:
     from jeonyeok_helper.config import get_settings
 
     return Gov24Client(get_settings().data_go_kr_service_key)
+
+
+def _default_hospitals() -> HospitalClient:
+    from jeonyeok_helper.config import get_settings
+
+    return HospitalClient(get_settings().data_go_kr_service_key)
 
 
 def _default_retriever():
@@ -53,6 +61,7 @@ class Services:
     gov24_factory: Callable[[], Gov24Client] = _default_gov24
     retriever_factory: Callable[[], Any] = _default_retriever
     directory_factory: Callable[[], InstitutionDirectory] = _default_directory
+    hospitals_factory: Callable[[], HospitalClient] = _default_hospitals
     _cache: dict[str, Any] = field(default_factory=dict)
 
     def _get(self, name: str, factory: Callable[[], Any]) -> Any:
@@ -63,6 +72,10 @@ class Services:
     @property
     def gov24(self) -> Gov24Client:
         return self._get("gov24", self.gov24_factory)
+
+    @property
+    def hospitals(self) -> HospitalClient:
+        return self._get("hospitals", self.hospitals_factory)
 
     @property
     def retriever(self):
@@ -164,6 +177,26 @@ def create_server(services: Services | None = None) -> FastMCP:
         if benefit is None:
             return {"error": f"서비스ID {service_id}를 찾지 못했습니다."}
         return benefit.model_dump(exclude={"agency_type"})
+
+    @server.tool()
+    def find_hospitals(region: str, limit: int = 10) -> dict:
+        """지역(예: '부산 해운대', '전남 강진')의 보훈 위탁병원(국가유공자 진료비 감면) 목록."""
+        try:
+            hospitals = svc.hospitals.find(region, limit=limit)
+        except BenefitApiError as e:
+            return {"hospitals": [], "error": str(e), "fallback": fallback("의료")}
+        return {
+            "hospitals": [
+                {
+                    "name": h.name,
+                    "type": h.type,
+                    "address": h.address,
+                    "phone": h.phone,
+                    "map_url": h.map_url,
+                }
+                for h in hospitals
+            ]
+        }
 
     @server.tool()
     def find_institutions(query: str, target: str | None = None) -> dict:

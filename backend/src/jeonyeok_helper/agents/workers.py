@@ -50,6 +50,8 @@ def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
             add("benefit", b.get("name", ""), b.get("url", ""))
         if msg.name == "get_benefit_detail" and data.get("name"):
             add("benefit", data["name"], data.get("url", ""))
+        for h in data.get("hospitals", []):
+            add("institution", h.get("name", ""), h.get("map_url", ""))
         for inst in [*data.get("institutions", []), *data.get("fallback", [])]:
             add("institution", inst.get("name", ""), inst.get("url", ""))
     return sources

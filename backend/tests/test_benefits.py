@@ -13,6 +13,8 @@ from jeonyeok_helper.benefits.gov24 import (
     Gov24Client,
     normalize_region,
 )
+from jeonyeok_helper.benefits.hospitals import BASE_URL as HOSPITAL_URL
+from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import InstitutionDirectory
 from jeonyeok_helper.benefits.mcp_server import Services, create_server
 
@@ -191,6 +193,7 @@ def test_server_exposes_four_tools():
         "search_regulations",
         "search_benefits",
         "get_benefit_detail",
+        "find_hospitals",
         "find_institutions",
     }
 
@@ -223,3 +226,44 @@ def test_fallback_puts_topic_institutions_first():
     assert names[0] == "고용24"
     assert "정부24 (보조금24)" in names  # 공통 안내도 함께
     assert len(names) == len(set(names)) <= 4
+
+
+# ---------- 보훈 위탁병원 ----------
+
+
+def hospital(name: str, addr1: str, use_yn: str = "Y") -> dict:
+    return {
+        "name": name,
+        "addr1": addr1,
+        "addr2": "1번길",
+        "tel": "000",
+        "type": "병원",
+        "latitude": "35.1",
+        "longitude": "129.0",
+        "use_yn": use_yn,
+    }
+
+
+@respx.mock
+def test_hospitals_are_fetched_once_and_filtered_by_region():
+    route = respx.get(HOSPITAL_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "totalCount": 4,
+                "data": [
+                    hospital("해운대병원", "부산 해운대구"),
+                    hospital("강진의료원", "전남 강진군"),
+                    hospital("폐업병원", "부산 해운대구", use_yn="N"),
+                    hospital("서울병원", "서울 강남구"),
+                ],
+            },
+        )
+    )
+    client = HospitalClient("KEY")
+
+    assert [h.name for h in client.find("부산광역시 해운대구")] == ["해운대병원"]  # 폐업 제외
+    assert [h.name for h in client.find("전라남도")] == ["강진의료원"]  # '전남'으로 줄여 쓴 주소
+    assert client.find("") == []
+    assert route.call_count == 1  # 전체 목록은 캐시
+    assert client.find("부산")[0].map_url.startswith("https://map.kakao.com/link/map/해운대병원,")

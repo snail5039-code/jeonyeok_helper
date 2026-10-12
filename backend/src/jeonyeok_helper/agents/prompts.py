@@ -69,14 +69,16 @@ WORKER_PROMPTS = {
     "사용자 유형과 지역에 맞는 혜택을 찾고, 혜택명·지원 내용·대상·신청 방법을 요약하세요. "
     "대상이 맞지 않는 혜택은 빼세요." + GROUNDING,
     "institution": COMMON + "\n\n당신은 기관 연계 담당입니다. find_institutions 도구로 "
-    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요." + GROUNDING,
+    "신청하거나 문의할 기관의 사이트와 연락처를 찾아 정리하세요. 보훈대상자의 병원·진료 "
+    "질문이면 find_hospitals로 사용자 지역의 위탁병원을 찾으세요(지역을 모르면 쓰지 말 것)."
+    + GROUNDING,
 }
 
 # 워커별로 쓸 수 있는 MCP 도구
 WORKER_TOOLS = {
     "regulation": ["search_regulations"],
     "benefit": ["search_benefits", "get_benefit_detail"],
-    "institution": ["find_institutions"],
+    "institution": ["find_institutions", "find_hospitals"],
 }
 
 RESPOND_PROMPT = ChatPromptTemplate.from_messages(
