@@ -95,7 +95,10 @@ def ingest_ordinances(client, store, path: Path = ORDINANCES_FILE) -> tuple[int,
 
 def ingest_files(store, directory: Path) -> tuple[int, list[str]]:
     from jeonyeok_helper.rag.loaders import load_directory
+    from jeonyeok_helper.rag.transcribe import ensure_transcripts
 
+    for name in ensure_transcripts(directory):
+        print(f"  ✓ 글자 정보가 없는 PDF를 옮겨 적음: {name}")
     docs, skipped = load_directory(directory)
     for reason in skipped:
         print(f"  - 건너뜀: {reason}")

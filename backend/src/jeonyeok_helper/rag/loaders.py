@@ -9,6 +9,8 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
+from jeonyeok_helper.rag.transcribe import TRANSCRIPT_DIR, read_transcript
+
 SUPPORTED = {".pdf", ".txt", ".md"}
 
 # 한국어 안내문은 문단·항목 단위로 끊기는 게 자연스러워서 줄바꿈과 항목 기호를 먼저 본다.
@@ -23,7 +25,14 @@ def _read_pages(path: Path) -> list[tuple[int | None, str]]:
     """(페이지 번호, 텍스트) 목록. 페이지 개념이 없는 파일은 번호가 None."""
     if path.suffix.lower() == ".pdf":
         reader = PdfReader(path)
-        return [(i + 1, page.extract_text() or "") for i, page in enumerate(reader.pages)]
+        pages = [(i + 1, page.extract_text() or "") for i, page in enumerate(reader.pages)]
+        if any(text.strip() for _, text in pages):
+            return pages
+        # 글자 정보가 없는 PDF는 Gemini로 옮겨 적어 둔 글을 쓴다 (rag.transcribe)
+        transcript = read_transcript(path)
+        if transcript is None:
+            raise ValueError(f"글자를 추출할 수 없는 PDF입니다 (옮겨 적기 필요): {path.name}")
+        return transcript
     return [(None, path.read_text(encoding="utf-8"))]
 
 
@@ -62,7 +71,8 @@ def load_directory(directory: Path) -> tuple[list[Document], list[str]]:
     docs: list[Document] = []
     skipped: list[str] = []
     for path in sorted(directory.rglob("*")):
-        if not path.is_file() or path.name.startswith("."):
+        # 옮겨 적은 글(.transcripts)은 원본 PDF를 읽을 때 같이 쓰므로 따로 읽지 않는다
+        if not path.is_file() or path.name.startswith(".") or TRANSCRIPT_DIR in path.parts:
             continue
         try:
             docs.extend(load_file(path))

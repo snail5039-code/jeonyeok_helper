@@ -227,3 +227,38 @@ def test_empty_store_skips_llm_calls():
 
     assert retriever.retrieve("군인연금") == []
     assert store.queries == []
+
+
+def test_pdf_without_text_is_transcribed_once_and_loaded_by_page(tmp_path):
+    from pypdf import PdfWriter
+
+    from jeonyeok_helper.rag.transcribe import ensure_transcripts, transcript_path
+
+    writer = PdfWriter()
+    writer.add_blank_page(100, 100)
+    writer.add_blank_page(100, 100)
+    pdf = tmp_path / "전직교육 안내서.pdf"
+    with pdf.open("wb") as f:
+        writer.write(f)
+
+    # 옮겨 적기 전에는 건너뛴다
+    docs, skipped = load_directory(tmp_path)
+    assert docs == [] and "옮겨 적기" in skipped[0]
+
+    calls = []
+
+    def fake(page: bytes) -> str:
+        calls.append(page)
+        return f"전직지원교육 {len(calls)}쪽 내용"
+
+    assert ensure_transcripts(tmp_path, fake) == ["전직교육 안내서.pdf"]
+    assert len(calls) == 2  # 한 쪽씩
+    assert ensure_transcripts(tmp_path, fake) == []  # 이미 옮겨 적었으면 다시 부르지 않음
+    assert transcript_path(pdf).exists()
+
+    docs, skipped = load_directory(tmp_path)  # 옮겨 적은 .md는 따로 읽지 않는다
+    assert skipped == []
+    assert sorted(d.metadata["citation"] for d in docs) == [
+        "전직교육 안내서 (1쪽)",
+        "전직교육 안내서 (2쪽)",
+    ]

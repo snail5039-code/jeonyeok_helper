@@ -30,4 +30,5 @@ backend/data/eval/results/
 .idea/
 .DS_Store
 Thumbs.db
-.claude/
+.claude/*
+!.claude/skills/
