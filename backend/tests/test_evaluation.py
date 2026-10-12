@@ -127,3 +127,46 @@ def test_run_eval_end_to_end_with_fake_agent(tmp_path):
     text = report.read_text(encoding="utf-8")
     assert "의무복무 병사" in text and "`c99`" in text
     assert report.with_suffix(".json").exists()
+
+
+# ---------- 규정 검색 골든셋 ----------
+
+
+def test_retrieval_grading_counts_groups_rank_and_leaks():
+    from jeonyeok_helper.retrieval_eval import RetrievalResult, grade_retrieval, load_golden
+
+    case = {
+        "expect": [["국민연금법 제18조"], ["국민연금법 시행령 제24조의3", "크레딧 안내"]],
+        "forbid": ["경기도"],
+    }
+    cites = ["병역법 제1조", "국민연금법 제18조(군 복무기간)", "경기도 조례 제1조"]
+    found, first, leaked = grade_retrieval(case, cites)
+    assert found == [True, False] and first == 2 and leaked == ["경기도 조례 제1조"]
+
+    r = RetrievalResult("x", "c", "q", cites, found, first, leaked)
+    assert r.recall == 0.5 and not r.hit and r.rr == 0  # 다른 지역 출처가 섞이면 실패
+
+    golden = load_golden()
+    assert len({c["id"] for c in golden}) == len(golden) >= 50
+    # YAML에서 '안내: …'처럼 콜론이 있으면 문자열이 아니라 dict로 읽힌다
+    alts = [a for c in golden for g in c["expect"] for a in g] + [
+        f for c in golden for f in c.get("forbid", [])
+    ]
+    assert all(isinstance(a, str) and a for a in alts)
+
+
+def test_retrieval_eval_runs_with_fake_retriever():
+    from langchain_core.documents import Document
+
+    from jeonyeok_helper.retrieval_eval import run_retrieval_eval, summarize_retrieval
+
+    class Fake:
+        def retrieve(self, question, k=6, region=None):
+            return [Document(page_content="", metadata={"citation": f"{question} 제1조"})]
+
+    cases = [
+        {"id": "a", "category": "x", "question": "예비군법", "expect": [["예비군법"]]},
+        {"id": "b", "category": "x", "question": "병역법", "expect": [["군인연금법"]]},
+    ]
+    s = summarize_retrieval(run_retrieval_eval(Fake(), cases))["overall"]
+    assert s["hit"] == 0.5 and s["mrr"] == 0.5

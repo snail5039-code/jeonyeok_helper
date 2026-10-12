@@ -4,6 +4,7 @@
     uv run jeonyeok-eval --ids c01 m05   # 일부만
     uv run jeonyeok-eval --limit 5
     uv run jeonyeok-eval --model gemini-3.5-flash   # 다른 모델과 비교
+    uv run jeonyeok-eval --retrieval [--ablation]   # 규정 검색 골든셋 (retrieval_eval.py)
 
 결과는 data/eval/results/에 JSON과 마크다운 보고서로 남는다.
 """
@@ -232,7 +233,17 @@ def _run(argv: list[str] | None) -> int:
     parser.add_argument("--ids", nargs="*", help="평가할 문항 id")
     parser.add_argument("--limit", type=int, help="앞에서부터 N문항만")
     parser.add_argument("--model", help="평가할 Gemini 모델 (기본: .env의 GEMINI_MODEL)")
+    parser.add_argument(
+        "--retrieval", action="store_true", help="규정 검색 골든셋 평가 (답변 없이 검색만)"
+    )
+    parser.add_argument("--ablation", action="store_true", help="검색 설정 3가지 비교")
+    parser.add_argument("-k", type=int, default=6, help="검색 평가의 상위 k개")
     args = parser.parse_args(argv)
+
+    if args.retrieval:
+        from jeonyeok_helper.retrieval_eval import main_retrieval
+
+        return main_retrieval(args.ablation, args.ids, args.k)
 
     cases = load_questions()
     if args.ids:

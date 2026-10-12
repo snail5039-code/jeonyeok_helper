@@ -47,6 +47,26 @@ RERANK_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
+# 사람들이 쓰는 말 → 법령에 적힌 말. 벡터 검색은 '실업급여'와 '구직급여'를 가깝게 보지 못해
+# 골든셋에서 고용보험법 조문을 놓쳤다 (후보를 30개로 늘려도 못 찾음).
+LEGAL_TERMS = {
+    "실업급여": "구직급여 수급 요건",
+    "실업수당": "구직급여 수급 요건",
+    "군복무 크레딧": "군 복무기간 가입기간 추가 산입",
+    "군 복무 크레딧": "군 복무기간 가입기간 추가 산입",
+    "퇴직금": "퇴직일시금",
+    "가산점": "가점",
+    "내일배움카드": "직업능력개발훈련",
+    "피부양자": "건강보험 피부양자 적용 대상",
+}
+
+
+def expand_query(question: str) -> str:
+    """질문에 흔히 쓰는 말이 있으면 법령 용어를 덧붙인다."""
+    extra = [term for word, term in LEGAL_TERMS.items() if word in question]
+    return f"{question} ({', '.join(extra)})" if extra else question
+
+
 class DocScore(BaseModel):
     index: int = Field(description="문서 번호")
     score: float = Field(description="관련도 0~10")
@@ -144,7 +164,7 @@ class RegulationRetriever:
         # 가상 조문을 만드는 동안(약 1.7초) 원래 질문으로 먼저 검색해 둔다.
         with ThreadPoolExecutor(max_workers=2) as pool:
             hyde = pool.submit(self._hyde, question)
-            results = search(question)
+            results = search(expand_query(question))
             if hypothetical := hyde.result():
                 results += search(hypothetical)
 
