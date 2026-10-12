@@ -11,6 +11,7 @@ LLM이 없거나 호출에 실패하면 해당 단계만 건너뛰고 벡터 검
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
@@ -37,7 +38,8 @@ RERANK_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "질문에 답하는 데 각 문서가 얼마나 직접적인 근거가 되는지 0~10점으로 매기세요. "
+            "질문에 답하는 데 직접적인 근거가 되는 문서를 골라 0~10점으로 매기세요. "
+            "관련 있는 문서만 점수가 높은 순으로 최대 {k}개까지 쓰고, 나머지는 쓰지 마세요. "
             "질문과 대상(병사, 간부, 장기복무, 보훈대상자 등)이 다르면 점수를 낮게 주세요.",
         ),
         ("human", "질문: {question}\n\n문서 목록:\n{documents}"),
@@ -94,10 +96,11 @@ class RegulationRetriever:
     def _rerank(self, question: str, docs: list[Document], k: int) -> list[Document]:
         if self.rerank_chain is None or len(docs) <= 1:
             return docs[:k]
-        listing = "\n\n".join(f"[{i}] {d.page_content[:600]}" for i, d in enumerate(docs))
+        # 점수는 상위 k개만 받는다. 후보 전부에 점수를 쓰게 하면 출력이 길어져 2초 넘게 걸린다.
+        listing = "\n\n".join(f"[{i}] {d.page_content[:400]}" for i, d in enumerate(docs))
         try:
             result: RerankResult = self.rerank_chain.invoke(
-                {"question": question, "documents": listing}
+                {"question": question, "documents": listing, "k": k}
             )
         except Exception:
             log.warning("Re-ranking 실패, 벡터 검색 순서를 그대로 씁니다.", exc_info=True)
@@ -114,14 +117,20 @@ class RegulationRetriever:
         # 아직 아무것도 수집하지 않았으면 LLM(HyDE) 호출 없이 바로 끝낸다.
         if hasattr(self.store, "count") and self.store.count() == 0:
             return []
-        queries = [question]
-        if hypothetical := self._hyde(question):
-            queries.append(hypothetical)
+
+        def search(q: str) -> list[Document]:
+            return self.store.search(q, k=self.candidates_per_query, region=region)
+
+        # 가상 조문을 만드는 동안(약 1.7초) 원래 질문으로 먼저 검색해 둔다.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            hyde = pool.submit(self._hyde, question)
+            results = search(question)
+            if hypothetical := hyde.result():
+                results += search(hypothetical)
 
         seen: dict[str, Document] = {}
-        for q in queries:
-            for doc in self.store.search(q, k=self.candidates_per_query, region=region):
-                seen.setdefault(doc.metadata.get("doc_id") or doc.page_content, doc)
+        for doc in results:
+            seen.setdefault(doc.metadata.get("doc_id") or doc.page_content, doc)
         return self._rerank(question, list(seen.values()), k)
 
 
