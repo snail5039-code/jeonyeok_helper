@@ -22,6 +22,8 @@ from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.mcp_server import Services, create_server
 from jeonyeok_helper.benefits.stores import BASE_URL as STORES_URL
 from jeonyeok_helper.benefits.stores import StoreClient
+from jeonyeok_helper.benefits.youth import BASE_URL as YOUTH_URL
+from jeonyeok_helper.benefits.youth import YouthPolicyClient
 
 
 def api_item(sid: str, name: str, agency: str = "국가보훈부", agency_type: str = "중앙행정기관"):
@@ -201,6 +203,7 @@ def test_server_exposes_four_tools():
         "find_hospitals",
         "search_jobs",
         "find_stores",
+        "search_youth_policies",
         "find_institutions",
     }
 
@@ -356,3 +359,64 @@ def test_stores_api_error_code_raises():
     )
     with pytest.raises(BenefitApiError, match="SERVICE_KEY"):
         StoreClient("KEY").all()
+
+
+# ---------- 온통청년 청년정책 ----------
+
+ALL_SIDO = ",".join(f"{c}110" for c in ("11", "26", "27", "28", "29", "30", "31", "36", "41", "43"))
+
+
+def policy(no, name, zips, *, condition="", end="", min_age=19, max_age=34, explain="지원"):
+    return {
+        "plcyNo": no,
+        "plcyNm": name,
+        "plcyExplnCn": explain,
+        "zipCd": zips,
+        "addAplyQlfcCndCn": condition,
+        "bizPrdEndYmd": end,
+        "sprtTrgtMinAge": str(min_age),
+        "sprtTrgtMaxAge": str(max_age),
+        "sprtTrgtAgeLmtYn": "N",
+        "sprvsnInstCdNm": "기관",
+    }
+
+
+@respx.mock
+def test_youth_policies_filter_by_region_age_and_put_military_first():
+    route = respx.get(YOUTH_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "resultCode": 200,
+                "result": {
+                    "pagging": {"totCount": 6},
+                    "youthPolicyList": [
+                        policy("1", "전국 주거 지원", ALL_SIDO, explain="월세 주거"),
+                        policy("2", "부산 주거 지원", "26110,26140", explain="월세 주거"),
+                        policy("3", "서울 주거 지원", "11110", explain="월세 주거"),
+                        policy("4", "끝난 주거 사업", "26110", end="20260101", explain="주거"),
+                        policy("5", "중년 주거", "26110", min_age=40, max_age=49, explain="주거"),
+                        policy("6", "청년 취업", ALL_SIDO, condition="군 복무자는 연령 연장"),
+                    ],
+                },
+            },
+        )
+    )
+    client = YouthPolicyClient("KEY")
+    today = date(2026, 10, 12)
+
+    found = client.search(keyword="주거", region="부산광역시", age=25, today=today)
+    # 서울 정책·끝난 사업·나이 안 맞는 정책은 빼고, 지역 정책이 전국 정책보다 앞
+    assert [p.name for p in found] == ["부산 주거 지원", "전국 주거 지원"]
+    # 키워드가 없으면 군 복무 조건이 있는 정책이 가장 앞
+    assert client.search(region="부산", age=25, today=today)[0].name == "청년 취업"
+    assert route.call_count == 1  # 전체 목록은 캐시
+    assert route.calls[0].request.headers["User-Agent"] == "Mozilla/5.0"
+
+
+@respx.mock
+def test_youth_api_error_does_not_leak_key():
+    respx.get(YOUTH_URL).mock(return_value=httpx.Response(403))
+    with pytest.raises(BenefitApiError) as err:
+        YouthPolicyClient("SECRET-KEY").all()
+    assert "SECRET-KEY" not in str(err.value) and "403" in str(err.value)

@@ -117,6 +117,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색, 지역을 주면 그 지역 조례도 |
 | `search_benefits` | 정부24 공공서비스(혜택)에서 전역자 혜택 조회, 지역 필터 |
 | `get_benefit_detail` | 혜택의 선정기준, 구비서류, 신청방법 |
+| `search_youth_policies` | 온통청년 청년정책 3,000여 건, 지역·나이·키워드 필터, 군 복무 관련 정책 우선 |
 | `search_jobs` | 제대군인지원센터(브이넷) 마감 전 채용공고, 지역·키워드 필터 (키 불필요) |
 | `find_stores` | 병무청 나라사랑가게(예비군 훈련 이수자·현역병 할인) 지역별 목록 |
 | `find_hospitals` | 지역별 보훈 위탁병원(국가유공자 진료비 감면) 주소·전화·지도 링크 |
@@ -156,7 +157,8 @@ cd frontend && npm test && npm run lint && npm run typecheck
 |---|---|---|
 | `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) | Gemini |
 | `LAW_API_OC` | [국가법령정보센터 Open API](https://open.law.go.kr) | 법령, 조례 수집 |
-| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) | 공공서비스(혜택) 정보 |
+| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) | 공공서비스(혜택), 보훈 위탁병원, 나라사랑가게 |
+| `YOUTHCENTER_API_KEY` | [온통청년](https://www.youthcenter.go.kr) (마이페이지 > OPEN API) | 청년정책 |
 
 ## 안내
 

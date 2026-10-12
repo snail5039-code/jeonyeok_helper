@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # 공공데이터포털(data.go.kr) 서비스키 — '행정안전부_대한민국 공공서비스(혜택) 정보'
     data_go_kr_service_key: str = ""
 
+    # 온통청년(youthcenter.go.kr) 청년정책 OPEN API 인증키 — 마이페이지 > OPEN API에서 신청
+    youthcenter_api_key: str = ""
+
     # RAG
     chroma_dir: Path = default_chroma_dir()
     chroma_collection: str = "regulations"

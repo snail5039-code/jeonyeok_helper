@@ -10,6 +10,7 @@
 - get_benefit_detail : 혜택 상세
 - search_jobs        : 제대군인지원센터 채용공고
 - find_stores        : 병무청 나라사랑가게 (병역이행자 할인)
+- search_youth_policies : 온통청년 청년정책
 - find_hospitals     : 지역별 보훈 위탁병원
 - find_institutions  : 관련 기관 링크·연락처
 
@@ -31,6 +32,7 @@ from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.stores import StoreClient
+from jeonyeok_helper.benefits.youth import YouthPolicyClient
 
 # 병무청 나라사랑가게 안내 (대상, 이용 방법)
 STORE_INFO_URL = "https://www.mma.go.kr/contents.do?mc=mma0003356"
@@ -57,6 +59,12 @@ def _default_stores() -> StoreClient:
     return StoreClient(get_settings().data_go_kr_service_key)
 
 
+def _default_youth() -> YouthPolicyClient:
+    from jeonyeok_helper.config import get_settings
+
+    return YouthPolicyClient(get_settings().youthcenter_api_key)
+
+
 def _default_retriever():
     from jeonyeok_helper.rag.retriever import build_default_retriever
 
@@ -79,6 +87,7 @@ class Services:
     hospitals_factory: Callable[[], HospitalClient] = _default_hospitals
     jobs_factory: Callable[[], VnetJobClient] = VnetJobClient
     stores_factory: Callable[[], StoreClient] = _default_stores
+    youth_factory: Callable[[], YouthPolicyClient] = _default_youth
     _cache: dict[str, Any] = field(default_factory=dict)
 
     def _get(self, name: str, factory: Callable[[], Any]) -> Any:
@@ -89,6 +98,10 @@ class Services:
     @property
     def gov24(self) -> Gov24Client:
         return self._get("gov24", self.gov24_factory)
+
+    @property
+    def youth(self) -> YouthPolicyClient:
+        return self._get("youth", self.youth_factory)
 
     @property
     def stores(self) -> StoreClient:
@@ -227,6 +240,30 @@ def create_server(services: Services | None = None) -> FastMCP:
         except BenefitApiError as e:
             return {"jobs": [], "error": str(e), "fallback": fallback("취업")}
         return {"jobs": [j.model_dump() for j in jobs]}
+
+    @server.tool()
+    @threaded
+    def search_youth_policies(
+        keyword: str | None = None,
+        region: str | None = None,
+        age: int | None = None,
+        limit: int = 8,
+    ) -> dict:
+        """온통청년 청년정책(취업·주거·금융·교육 등). 병사 전역자 대부분이 청년이라 유용하다.
+
+        keyword: 정책 이름·설명에서 찾을 단어(예: '주거', '취업', '월세'), 비우면 전체
+        region: 사용자 지역(예: '부산'), age: 사용자 나이.
+        군 복무 관련 조건이 있는 정책이 앞에 온다.
+        """
+        try:
+            policies = svc.youth.search(keyword=keyword, region=region, age=age, limit=limit)
+        except BenefitApiError as e:
+            return {"policies": [], "error": str(e), "fallback": fallback("청년")}
+        return {
+            "policies": [
+                p.model_dump(exclude={"sido_codes", "business_end", "policy_id"}) for p in policies
+            ]
+        }
 
     @server.tool()
     @threaded
