@@ -96,7 +96,7 @@ questions:
   - id: s06
     category: short_term_officer
     question: 간부로 전역해도 예비군 훈련을 받아야 하나요?
-    sources_any: [예비군법, 병무청]
+    sources_any: [예비군법, 병무청, 예비군 교육훈련 훈령]
     answer_any: [예비군]
 
   # ---------- 중·장기 제대군인 ----------

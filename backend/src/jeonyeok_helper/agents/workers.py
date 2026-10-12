@@ -10,6 +10,7 @@ import json
 from collections.abc import Sequence
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest, wrap_model_call
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AnyMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import Runnable, RunnableLambda
@@ -65,11 +66,18 @@ def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
     return sources
 
 
+@wrap_model_call
+async def require_tool_call(request: ModelRequest, handler):
+    """워커는 반드시 도구를 부른다. 안 부르고 자기 지식으로 답하면 근거(evidence)가 없어
+    검증 단계에서 답변이 통째로 지워진다 (예: '병적증명서 어디서?' → 빈 답변)."""
+    return await handler(request.override(tool_choice="any"))
+
+
 def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: str) -> Runnable:
     # 도구를 부른 뒤 결과를 다시 LLM으로 요약하지 않고 바로 끝낸다 (return_direct).
     # 답변·검증은 요약이 아니라 도구 원문(evidence)을 근거로 쓰므로 요약은 시간만 든다(약 3초).
     direct = [t.model_copy(update={"return_direct": True}) for t in tools]
-    agent = create_agent(llm, direct, system_prompt=system_prompt)
+    agent = create_agent(llm, direct, system_prompt=system_prompt, middleware=[require_tool_call])
 
     async def run(inp: dict) -> dict:
         task = HumanMessage(

@@ -56,6 +56,25 @@ class RerankResult(BaseModel):
     scores: list[DocScore]
 
 
+def diversify(docs: list[Document], k: int, per_source: int = 2) -> list[Document]:
+    """순서를 지키면서 같은 문서(법령·파일·조례)는 per_source개까지만 고른다.
+
+    600쪽이 넘는 안내서처럼 조각이 많은 문서가 상위를 모두 차지해 법령 근거가 밀려나는 것을
+    막는다. 다른 출처가 모자라면 남은 자리는 원래 순서대로 채운다.
+    """
+    picked: list[Document] = []
+    rest: list[Document] = []
+    counts: dict[str, int] = {}
+    for d in docs:
+        key = d.metadata.get("law_name") or d.metadata.get("source") or d.page_content[:50]
+        if counts.get(key, 0) < per_source:
+            counts[key] = counts.get(key, 0) + 1
+            picked.append(d)
+        else:
+            rest.append(d)
+    return (picked + rest)[:k]
+
+
 class RegulationRetriever:
     def __init__(
         self,
@@ -95,22 +114,23 @@ class RegulationRetriever:
 
     def _rerank(self, question: str, docs: list[Document], k: int) -> list[Document]:
         if self.rerank_chain is None or len(docs) <= 1:
-            return docs[:k]
+            return diversify(docs, k)
         # 점수는 상위 k개만 받는다. 후보 전부에 점수를 쓰게 하면 출력이 길어져 2초 넘게 걸린다.
         listing = "\n\n".join(f"[{i}] {d.page_content[:400]}" for i, d in enumerate(docs))
         try:
             result: RerankResult = self.rerank_chain.invoke(
-                {"question": question, "documents": listing, "k": k}
+                # 같은 문서 제한(diversify)으로 빠질 수 있어 몇 개 더 받는다
+                {"question": question, "documents": listing, "k": k + 3}
             )
         except Exception:
             log.warning("Re-ranking 실패, 벡터 검색 순서를 그대로 씁니다.", exc_info=True)
-            return docs[:k]
+            return diversify(docs, k)
         scores = {s.index: s.score for s in result.scores if 0 <= s.index < len(docs)}
         # 점수를 못 받은 문서는 원래 순서를 유지한 채 뒤로 보낸다.
         order = sorted(range(len(docs)), key=lambda i: (-scores.get(i, -1), i))
         for i in order:
             docs[i].metadata["rerank_score"] = scores.get(i, -1)
-        return [docs[i] for i in order[:k]]
+        return diversify([docs[i] for i in order], k)
 
     def retrieve(self, question: str, k: int = 6, region: str | None = None) -> list[Document]:
         """region을 주면 그 지역 조례도 함께 찾는다."""

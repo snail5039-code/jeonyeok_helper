@@ -219,8 +219,12 @@ def test_extract_sources_from_mcp_tool_results():
     ]
 
 
+TOOL_CHOICES: list = []
+
+
 class FakeToolModel(GenericFakeChatModel):
     def bind_tools(self, tools, **kwargs):
+        TOOL_CHOICES.append(kwargs.get("tool_choice"))
         return self
 
 
@@ -247,6 +251,8 @@ def test_react_worker_calls_tool_and_returns_summary_with_sources():
 
     out = run(worker.ainvoke({"messages": [("user", "예비군 어디서 확인해?")], "instruction": ""}))
 
+    # 워커는 자기 지식으로 답하지 못하고 반드시 도구를 부른다.
+    assert TOOL_CHOICES[-1] == "any"
     # 도구 결과를 받으면 LLM 요약 없이 끝내고, 도구 원문을 요약으로 쓴다.
     assert out["summary"].startswith('[find_institutions] {"institutions"')
     assert "병무청" in out["evidence"][0]
