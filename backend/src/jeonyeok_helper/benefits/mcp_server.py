@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -109,6 +111,17 @@ class Services:
         return self._get("directory", self.directory_factory)
 
 
+def threaded(fn: Callable[..., dict]) -> Callable[..., Any]:
+    """도구 본문(HTTP 호출, 벡터 검색, LLM 호출)은 동기 코드라 이벤트 루프를 막는다.
+    스레드에서 돌려야 동시에 실행된 워커들(규정 + 혜택)이 서로를 기다리지 않는다."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> dict:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
+    return wrapper
+
+
 def _institution_dict(inst: Institution) -> dict:
     return inst.model_dump(include={"name", "url", "phone", "description"}, exclude_none=True)
 
@@ -134,6 +147,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         return [_institution_dict(i) for i in unique[:limit]]
 
     @server.tool()
+    @threaded
     def search_regulations(question: str, k: int = 5, region: str | None = None) -> dict:
         """전역자 관련 법령, 시행령, 국가보훈부 자료에서 질문의 근거가 되는 조문·문단을 찾는다.
 
@@ -156,6 +170,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         }
 
     @server.tool()
+    @threaded
     def search_benefits(
         keywords: list[str] | None = None, region: str | None = None, limit: int = 10
     ) -> dict:
@@ -191,6 +206,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         return {"benefits": results}
 
     @server.tool()
+    @threaded
     def get_benefit_detail(service_id: str) -> dict:
         """search_benefits로 찾은 혜택의 선정기준, 구비서류, 신청방법 등 상세 정보."""
         try:
@@ -202,6 +218,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         return benefit.model_dump(exclude={"agency_type"})
 
     @server.tool()
+    @threaded
     def search_jobs(region: str | None = None, keyword: str | None = None, limit: int = 10) -> dict:
         """제대군인지원센터(브이넷)의 마감 전 채용공고. region은 시도(예: '부산'),
         keyword는 공고 제목·회사명에서 찾을 단어(예: '경비', '시설', '공사')."""
@@ -212,6 +229,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         return {"jobs": [j.model_dump() for j in jobs]}
 
     @server.tool()
+    @threaded
     def find_stores(region: str, keyword: str | None = None, limit: int = 10) -> dict:
         """병무청 나라사랑가게: 예비군 동원훈련 이수자, 현역병·사회복무요원, 병역명문가에게
         할인 등을 주는 가게. region은 필수(예: '부산 해운대'), keyword는 가게 이름(예: '안경')."""
@@ -225,6 +243,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         }
 
     @server.tool()
+    @threaded
     def find_hospitals(region: str, limit: int = 10) -> dict:
         """지역(예: '부산 해운대', '전남 강진')의 보훈 위탁병원(국가유공자 진료비 감면) 목록."""
         try:
@@ -245,6 +264,7 @@ def create_server(services: Services | None = None) -> FastMCP:
         }
 
     @server.tool()
+    @threaded
     def find_institutions(query: str, target: str | None = None) -> dict:
         """주제(예: '취업', '연금', '예비군')로 관련 기관의 사이트와 연락처를 찾는다.
 

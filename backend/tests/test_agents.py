@@ -115,7 +115,9 @@ def test_worker_failure_is_recorded_and_flow_continues():
 
     state = ask(graph, "혜택 알려줘")
 
-    assert state["findings"] == [{"worker": "benefit", "summary": "(조회 실패: API 503)"}]
+    # 혜택을 찾을 때는 근거 법령(규정)도 같이 찾는다. 둘 다 실패해도 기록하고 답변까지 간다.
+    assert sorted(f["worker"] for f in state["findings"]) == ["benefit", "regulation"]
+    assert {f["summary"] for f in state["findings"]} == {"(조회 실패: API 503)"}
     assert state["messages"][-1].text == "최종 답변 [1]"
 
 
@@ -237,7 +239,7 @@ def test_react_worker_calls_tool_and_returns_summary_with_sources():
                         {"name": "find_institutions", "args": {"query": "예비군"}, "id": "c1"}
                     ],
                 ),
-                AIMessage("예비군은 병무청에서 확인하세요."),
+                AIMessage("이 요약 단계는 호출되지 않아야 한다"),
             ]
         )
     )
@@ -245,7 +247,9 @@ def test_react_worker_calls_tool_and_returns_summary_with_sources():
 
     out = run(worker.ainvoke({"messages": [("user", "예비군 어디서 확인해?")], "instruction": ""}))
 
-    assert out["summary"] == "예비군은 병무청에서 확인하세요."
+    # 도구 결과를 받으면 LLM 요약 없이 끝내고, 도구 원문을 요약으로 쓴다.
+    assert out["summary"].startswith('[find_institutions] {"institutions"')
+    assert "병무청" in out["evidence"][0]
     assert out["sources"] == [
         {"type": "institution", "title": "병무청", "url": "https://www.mma.go.kr"}
     ]

@@ -116,8 +116,13 @@ def build_graph(
         # 규정·혜택처럼 서로 기다릴 필요 없는 워커는 같이 돌린다 (also).
         # 같은 워커를 계속 부르며 시간만 쓰는 경우가 있어, 한 질문에서 워커당 2번까지만 허용한다.
         findings = state.get("findings", [])
+        wanted = [route.next, *route.also]
+        # 혜택 답변에는 근거 법령이 거의 항상 필요하다. 라우터가 also를 빠뜨려도 같이 돌려
+        # 혜택 → 규정을 차례로 기다리는 일을 막는다.
+        if route.next == "benefit" and not findings:
+            wanted.append("regulation")
         batch: list[str] = []
-        for name in [route.next, *route.also]:
+        for name in wanted:
             used = sum(f["worker"] == name for f in findings)
             if name in c.workers and name not in batch and used < MAX_CALLS_PER_WORKER:
                 batch.append(name)

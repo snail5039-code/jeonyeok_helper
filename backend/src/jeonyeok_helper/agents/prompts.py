@@ -125,7 +125,7 @@ VERIFY_PROMPT = ChatPromptTemplate.from_messages(
             "하고 그 부분을 지운 답변을 answer로 쓰세요.\n"
             "- 출처 번호가 그 내용을 담은 출처를 가리키지 않으면 고치세요.\n"
             "- 줄바꿈, '### 혜택명 | 소관기관' 블록, '-' 목록 형식은 그대로 유지하세요.\n"
-            "- 문제가 없으면 supported=true로 하고 초안을 그대로 answer로 돌려주세요.",
+            "- 문제가 없으면 supported=true로 하고 answer는 비워 두세요.",
         ),
         (
             "human",

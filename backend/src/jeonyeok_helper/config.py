@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Gemini
     google_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
+    # 답변 작성의 생각 예산 (None = 모델 기본값, 0 = 끔). 평가 30문항 비교 (2026-10-12):
+    #   기본값 30/30 27.1초, 1024 30/30 21.4초, 0 29/30 18.4초 ('혜택 다 알려줘'에 답이 좁아짐)
+    gemini_thinking_budget: int | None = 1024
     gemini_embedding_model: str = "models/gemini-embedding-001"
     # 프로필 추출·라우팅·근거 검증용 빠른 모델 (생각 예산 0 = 생각 단계 끔)
     gemini_fast_model: str = "gemini-2.5-flash"

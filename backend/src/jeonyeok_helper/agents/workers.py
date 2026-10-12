@@ -62,7 +62,10 @@ def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
 
 
 def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: str) -> Runnable:
-    agent = create_agent(llm, tools, system_prompt=system_prompt)
+    # 도구를 부른 뒤 결과를 다시 LLM으로 요약하지 않고 바로 끝낸다 (return_direct).
+    # 답변·검증은 요약이 아니라 도구 원문(evidence)을 근거로 쓰므로 요약은 시간만 든다(약 3초).
+    direct = [t.model_copy(update={"return_direct": True}) for t in tools]
+    agent = create_agent(llm, direct, system_prompt=system_prompt)
 
     async def run(inp: dict) -> dict:
         task = HumanMessage(
@@ -73,12 +76,25 @@ def make_react_worker(llm: BaseChatModel, tools: list[BaseTool], system_prompt: 
         result = await agent.ainvoke({"messages": history})
         produced = result["messages"][len(history) :]
         return {
-            "summary": produced[-1].text if produced else "",
+            "summary": summarize(produced),
             "sources": extract_sources(produced),
             "evidence": extract_evidence(produced),
         }
 
     return RunnableLambda(run)
+
+
+def summarize(messages: Sequence[AnyMessage], limit: int = 600) -> str:
+    """라우터가 '충분히 찾았는지' 판단할 짧은 요약. 도구를 안 썼으면 워커의 마지막 말."""
+    tool_msgs = [m for m in messages if isinstance(m, ToolMessage)]
+    if not tool_msgs:
+        return messages[-1].text if messages else ""
+    parts = []
+    for msg in tool_msgs:
+        data = _tool_payload(msg)
+        text = json.dumps(data, ensure_ascii=False) if data is not None else str(msg.content)
+        parts.append(f"[{msg.name}] {text[:limit]}")
+    return "\n".join(parts)
 
 
 def extract_evidence(messages: Sequence[AnyMessage], limit: int = 3000) -> list[str]:

@@ -95,4 +95,5 @@ class Route(BaseModel):
 class Verification(BaseModel):
     supported: bool = Field(description="초안의 모든 주장이 근거 자료로 뒷받침되는지")
     issues: list[str] = Field(default_factory=list, description="근거가 없거나 틀린 부분")
-    answer: str = Field(description="문제를 고친 최종 답변")
+    # 문제가 없을 때 답변 전체를 다시 쓰게 하면 그만큼 시간이 든다(약 3초). 고칠 때만 채운다.
+    answer: str = Field(default="", description="supported=false일 때만: 문제를 고친 최종 답변")

@@ -94,7 +94,7 @@ async def open_agent(
     if llm is None:
         from jeonyeok_helper.llm import get_chat_model, get_fast_chat_model
 
-        llm = get_chat_model(temperature=0.2)
+        llm = get_chat_model(temperature=0.2, thinking_budget=settings.gemini_thinking_budget)
         fast_llm = fast_llm or get_fast_chat_model()
     db = settings.state_db if state_db is _DEFAULT else state_db
 
