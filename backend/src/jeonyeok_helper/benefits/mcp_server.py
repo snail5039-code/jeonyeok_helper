@@ -8,6 +8,7 @@
 - search_regulations : 법령·보훈부 자료 검색 (RAG)
 - search_benefits    : 공공서비스(혜택) 조회
 - get_benefit_detail : 혜택 상세
+- search_jobs        : 제대군인지원센터 채용공고
 - find_hospitals     : 지역별 보훈 위탁병원
 - find_institutions  : 관련 기관 링크·연락처
 
@@ -25,6 +26,7 @@ from mcp.server.fastmcp import FastMCP
 from jeonyeok_helper.benefits.gov24 import BenefitApiError, Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
+from jeonyeok_helper.benefits.jobs import VnetJobClient
 
 # 혜택 조회가 안 될 때 직접 찾아볼 수 있는 곳
 FALLBACK_INSTITUTION_IDS = ["gov24", "youth", "vnet"]
@@ -62,6 +64,7 @@ class Services:
     retriever_factory: Callable[[], Any] = _default_retriever
     directory_factory: Callable[[], InstitutionDirectory] = _default_directory
     hospitals_factory: Callable[[], HospitalClient] = _default_hospitals
+    jobs_factory: Callable[[], VnetJobClient] = VnetJobClient
     _cache: dict[str, Any] = field(default_factory=dict)
 
     def _get(self, name: str, factory: Callable[[], Any]) -> Any:
@@ -72,6 +75,10 @@ class Services:
     @property
     def gov24(self) -> Gov24Client:
         return self._get("gov24", self.gov24_factory)
+
+    @property
+    def jobs(self) -> VnetJobClient:
+        return self._get("jobs", self.jobs_factory)
 
     @property
     def hospitals(self) -> HospitalClient:
@@ -177,6 +184,16 @@ def create_server(services: Services | None = None) -> FastMCP:
         if benefit is None:
             return {"error": f"서비스ID {service_id}를 찾지 못했습니다."}
         return benefit.model_dump(exclude={"agency_type"})
+
+    @server.tool()
+    def search_jobs(region: str | None = None, keyword: str | None = None, limit: int = 10) -> dict:
+        """제대군인지원센터(브이넷)의 마감 전 채용공고. region은 시도(예: '부산'),
+        keyword는 공고 제목·회사명에서 찾을 단어(예: '경비', '시설', '공사')."""
+        try:
+            jobs = svc.jobs.search(region=region, keyword=keyword, limit=limit)
+        except BenefitApiError as e:
+            return {"jobs": [], "error": str(e), "fallback": fallback("취업")}
+        return {"jobs": [j.model_dump() for j in jobs]}
 
     @server.tool()
     def find_hospitals(region: str, limit: int = 10) -> dict:

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date
 
 import httpx
 import pytest
@@ -16,6 +17,8 @@ from jeonyeok_helper.benefits.gov24 import (
 from jeonyeok_helper.benefits.hospitals import BASE_URL as HOSPITAL_URL
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import InstitutionDirectory
+from jeonyeok_helper.benefits.jobs import BASE_URL as JOBS_URL
+from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.mcp_server import Services, create_server
 
 
@@ -194,6 +197,7 @@ def test_server_exposes_four_tools():
         "search_benefits",
         "get_benefit_detail",
         "find_hospitals",
+        "search_jobs",
         "find_institutions",
     }
 
@@ -267,3 +271,33 @@ def test_hospitals_are_fetched_once_and_filtered_by_region():
     assert client.find("") == []
     assert route.call_count == 1  # 전체 목록은 캐시
     assert client.find("부산")[0].map_url.startswith("https://map.kakao.com/link/map/해운대병원,")
+
+
+# ---------- 제대군인지원센터 채용정보 ----------
+
+JOBS_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<root><total_count>3</total_count><articles>
+<item><company>A공사</company><link>https://vnet.go.kr/1</link><contents>시설 경비원</contents>
+<area>부산</area><pay/><regdate>2026-10-01</regdate><enddate>2026-10-20</enddate></item>
+<item><company>B</company><link>https://vnet.go.kr/2</link><contents>사무직</contents>
+<area>부산</area><pay>월 250만원</pay><regdate>2026-10-05</regdate>
+<enddate>2026-10-30</enddate></item>
+<item><company>C</company><link>https://vnet.go.kr/3</link><contents>마감된 공고</contents>
+<area>부산</area><pay/><regdate>2026-09-01</regdate><enddate>2026-09-30</enddate></item>
+</articles></root>"""
+
+
+@respx.mock
+def test_jobs_use_verified_location_code_and_hide_closed():
+    route = respx.get(JOBS_URL).mock(return_value=httpx.Response(200, text=JOBS_XML))
+    client = VnetJobClient()
+    today = date(2026, 10, 12)
+
+    jobs = client.search(region="부산광역시", today=today)
+
+    assert route.calls[0].request.url.params["location"] == "2"  # 안내 페이지 표로는 4
+    assert [j.company for j in jobs] == ["B", "A공사"]  # 마감 제외, 최신순
+    assert [j.company for j in client.search(region="부산", keyword="경비", today=today)] == [
+        "A공사"
+    ]
+    assert route.call_count == 1  # 지역별 캐시

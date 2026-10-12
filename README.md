@@ -117,6 +117,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색, 지역을 주면 그 지역 조례도 |
 | `search_benefits` | 정부24 공공서비스(혜택)에서 전역자 혜택 조회, 지역 필터 |
 | `get_benefit_detail` | 혜택의 선정기준, 구비서류, 신청방법 |
+| `search_jobs` | 제대군인지원센터(브이넷) 마감 전 채용공고, 지역·키워드 필터 (키 불필요) |
 | `find_hospitals` | 지역별 보훈 위탁병원(국가유공자 진료비 감면) 주소·전화·지도 링크 |
 | `find_institutions` | 주제별 기관 사이트·연락처 ([institutions.yaml](backend/data/institutions.yaml)) |
 
