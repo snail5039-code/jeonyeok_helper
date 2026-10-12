@@ -40,11 +40,38 @@ const DEMO_TEXT = [
 ].join("\n");
 
 const SERVICE_WORDS = /병장|병사|하사|중사|상사|소위|중위|대위|소령|간부|부사관|장교|복무|유공|보훈/;
+// 준비한 예시 답변(병사 전역자 혜택)과 관련 있는 질문인지
+const BENEFIT_WORDS = /혜택|지원|받을|받아|전역|제대|연금|크레딧|취업|일자리|예비군|복학|장학|학자금|월세|청년/;
+
+const DEMO_EXAMPLES = ["병장으로 전역했는데 받을 수 있는 혜택 있어요?", "군복무 크레딧이 뭐예요?"];
+
+/** 데모에서 이 질문에 무엇을 보여 줄지. 예시와 관계없는 질문에 같은 예시 답을 내지 않는다. */
+export function demoReply(message: string, knowsServiceType: boolean): "answer" | "ask" | "notice" {
+  if (!BENEFIT_WORDS.test(message) && !SERVICE_WORDS.test(message)) return "notice";
+  if (!knowsServiceType && !SERVICE_WORDS.test(message)) return "ask";
+  return "answer";
+}
 
 export async function* demoChat(message: string, knowsServiceType: boolean): AsyncGenerator<ChatEvent> {
   yield { event: "step", data: { label: "복무 정보를 정리하고 있어요" } };
   await sleep(500);
-  if (!knowsServiceType && !SERVICE_WORDS.test(message)) {
+  const reply = demoReply(message, knowsServiceType);
+  if (reply === "notice") {
+    yield {
+      event: "answer",
+      data: {
+        text:
+          "지금은 데모 모드라 미리 준비한 예시 답변만 보여 드릴 수 있어요. " +
+          "실제 서버가 연결되면 질문마다 법령과 공공서비스 정보를 찾아 답해요. " +
+          "아래 예시 질문으로 화면을 둘러보세요.",
+        sources: [],
+        profile: {},
+        follow_ups: DEMO_EXAMPLES,
+      },
+    };
+    return;
+  }
+  if (reply === "ask") {
     yield {
       event: "question",
       data: { text: "혜택이 복무 형태에 따라 많이 달라요. 어떻게 전역하셨나요? 사는 지역도 알려주시면 더 정확해요." },
