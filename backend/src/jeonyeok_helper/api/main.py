@@ -1,38 +1,45 @@
 """FastAPI 서버 (API 전용, 화면은 frontend/의 Next.js가 담당).
 
-- GET  /health            : 상태와 키 설정 여부
-- POST /chat              : 질문 → SSE 스트리밍 (진행 단계, 최종 답변)
-- GET  /profile/{user_id} : 저장된 사용자 프로필
-- POST /roadmap           : 프로필로 전역 로드맵(시기별 할 일) 만들기
-- POST /feedback          : 답변 피드백(도움이 됐어요/아쉬워요) 저장
-- GET  /feedback/summary  : 피드백 수
+- GET  /health                          : 상태와 키 설정 여부
+- POST /chat                            : 질문 → SSE (진행 단계, 최종 답변, 로드맵에 담은 할 일)
+- GET  /profile/{user_id}               : 저장된 사용자 프로필 ('내 정보' + 대화에서 알아낸 것)
+- PUT  /profile/{user_id}               : '내 정보' 화면에서 고친 프로필 저장
+- GET  /journey/{user_id}               : 전역 로드맵 할 일 목록
+- POST /journey/{user_id}/generate      : 프로필로 로드맵을 한 번에 채우기
+- PATCH  /journey/{user_id}/items/{id}  : 할 일 완료/취소
+- DELETE /journey/{user_id}/items/{id}  : 할 일 빼기
+- POST /feedback                        : 답변 피드백(도움이 됐어요/아쉬워요) 저장
+- GET  /feedback/summary                : 피드백 수
 
 SSE 이벤트
     event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
     event: delta     data: {"text": "..."}   # 답변 초안 조각 (이어 붙여서 바로 보여 준다)
     event: answer    data: {"text": "...", "sources": [...], "profile": {...}, "follow_ups": [...]}
                      # 근거 검증을 마친 최종 답변. 초안과 다를 수 있으니 화면은 이것으로 바꾼다.
+    event: plan      data: {"added": [할 일, ...]}   # 답변에서 뽑아 로드맵에 담은 할 일
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
     event: done      data: {}
 """
 
+import asyncio
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
-from typing import Literal
+from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from jeonyeok_helper import __version__
+from jeonyeok_helper import __version__, journey
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
+from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
@@ -49,12 +56,17 @@ STEP_LABELS = {
 }
 
 AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
+RoadmapBuilder = Callable[[RoadmapProfile], Awaitable[dict]]
+# 답변에서 할 일 뽑기: (question, answer, sources, profile, existing) → [할 일]
+Planner = Callable[..., Awaitable[list[dict]]]
+
+UserId = Annotated[str, Path(pattern=r"^[\w-]{1,64}$")]
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     thread_id: str | None = None
-    user_id: str | None = None
+    user_id: str | None = Field(default=None, pattern=r"^[\w-]{1,64}$")
 
 
 class FeedbackRequest(BaseModel):
@@ -66,47 +78,97 @@ class FeedbackRequest(BaseModel):
     user_id: str | None = Field(default=None, max_length=64)
 
 
+class ProfileUpdate(BaseModel):
+    """'내 정보' 화면의 값. 보낸 항목만 바꾸고, 빈 값을 보내면 그 항목을 지운다."""
+
+    service_type: Literal["conscript", "short_term_officer", "long_term", "merit"] | None = None
+    service_years: float | None = Field(default=None, ge=0, le=50)
+    discharge_date: str | None = Field(default=None, max_length=20)
+    age: int | None = Field(default=None, ge=15, le=100)
+    region: str | None = Field(default=None, max_length=30)
+    merit_status: str | None = Field(default=None, max_length=60)
+    branch: str | None = Field(default=None, max_length=20)
+    rank: str | None = Field(default=None, max_length=20)
+    specialty: str | None = Field(default=None, max_length=60)
+    education: str | None = Field(default=None, max_length=60)
+    goals: list[str] | None = Field(default=None, max_length=8)
+    desired_job: str | None = Field(default=None, max_length=100)
+    certificates: str | None = Field(default=None, max_length=200)
+    housing: str | None = Field(default=None, max_length=60)
+    injury: str | None = Field(default=None, max_length=100)
+    memo: str | None = Field(default=None, max_length=1000)
+
+
+class DoneUpdate(BaseModel):
+    done: bool
+
+
+# 로드맵 정리 단계에 '내 정보'로 넘길 항목 (복무 형태·지역 등은 RoadmapProfile 필드로 따로 간다)
+_NOTE_KEYS = ("branch", "rank", "specialty", "education", "desired_job", "certificates",
+              "housing", "injury", "merit_status", "memo")  # fmt: skip
+
+
+def roadmap_profile(profile: dict) -> RoadmapProfile:
+    notes = format_profile({k: profile[k] for k in _NOTE_KEYS if profile.get(k)})
+    return RoadmapProfile(
+        service_type=profile["service_type"],
+        service_years=profile.get("service_years"),
+        discharge_date=(profile.get("discharge_date") or None),
+        age=profile.get("age"),
+        region=profile.get("region"),
+        goals=profile.get("goals") or [],
+        notes="" if notes == "(아직 모름)" else notes,
+    )
+
+
 def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-RoadmapBuilder = Callable[[RoadmapProfile], Awaitable[dict]]
-
-
-def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
-    """채팅 에이전트와 로드맵이 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
+def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder, Planner]:
+    """채팅 에이전트·로드맵·플래너가 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
+    from jeonyeok_helper.agents.planner import make_planner, plan_from_answer
     from jeonyeok_helper.agents.roadmap import build_roadmap, make_organizer
     from jeonyeok_helper.agents.runtime import open_agent
     from jeonyeok_helper.benefits.mcp_server import Services
 
     services = Services()
-    organizer = None
+    chains: dict = {}
 
     async def roadmap(profile: RoadmapProfile) -> dict:
-        nonlocal organizer
-        if organizer is None:
+        if "organizer" not in chains:
             from jeonyeok_helper.llm import get_answer_model
 
-            organizer = make_organizer(get_answer_model())
-        return await build_roadmap(services, organizer, profile)
+            chains["organizer"] = make_organizer(get_answer_model())
+        return await build_roadmap(services, chains["organizer"], profile)
 
-    return (lambda: open_agent(services=services)), roadmap
+    async def plan(**kwargs) -> list[dict]:
+        if "planner" not in chains:
+            from jeonyeok_helper.llm import get_fast_chat_model
+
+            chains["planner"] = make_planner(get_fast_chat_model())
+        return await plan_from_answer(chains["planner"], **kwargs)
+
+    return (lambda: open_agent(services=services)), roadmap, plan
 
 
 def create_app(
     agent_factory: AgentFactory | None = None,
     db_url: str | None = None,
     roadmap_builder: RoadmapBuilder | None = None,
+    planner: Planner | None = None,
 ) -> FastAPI:
     if agent_factory is None:
-        agent_factory, default_roadmap = _default_runtime()
+        agent_factory, default_roadmap, default_planner = _default_runtime()
         roadmap_builder = roadmap_builder or default_roadmap
+        planner = planner or default_planner
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
         app.state.roadmap = roadmap_builder
+        app.state.planner = planner
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -117,6 +179,18 @@ def create_app(
             yield
 
     app = FastAPI(title="전역도우미", version=__version__, lifespan=lifespan)
+
+    def require_agent(request: Request) -> CompiledStateGraph:
+        agent: CompiledStateGraph | None = request.app.state.agent
+        if agent is None:
+            raise HTTPException(503, request.app.state.agent_error or "에이전트 준비 중")
+        return agent
+
+    async def stored_profile(agent: CompiledStateGraph, user_id: str) -> dict:
+        if agent.store is None:
+            return {}
+        item = await agent.store.aget(PROFILE_NAMESPACE, user_id)
+        return dict(item.value) if item else {}
 
     @app.get("/health")
     def health(request: Request) -> dict:
@@ -134,11 +208,34 @@ def create_app(
             },
         }
 
+    async def plan_events(req: ChatRequest, state: dict, db: Database) -> AsyncIterator[str]:
+        """답변에서 할 일을 뽑아 로드맵에 담고 plan 이벤트로 알린다. 실패해도 답변은 그대로."""
+        if not (req.user_id and planner and state.get("sources")):
+            return
+        try:
+            existing = [
+                i["title"] for i in await asyncio.to_thread(journey.list_items, db, req.user_id)
+            ]
+            items = await planner(
+                question=req.message,
+                answer=state["messages"][-1].text,
+                sources=state.get("sources", []),
+                profile=format_profile(state.get("profile")),
+                existing=existing,
+            )
+            added = await asyncio.to_thread(
+                journey.add_items, db, req.user_id, items, "chat", req.message
+            )
+        except Exception:
+            log.warning("답변에서 할 일 뽑기 실패", exc_info=True)
+            return
+        if added:
+            yield _sse("plan", {"added": added})
+
     @app.post("/chat")
     async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
-        agent: CompiledStateGraph | None = request.app.state.agent
-        if agent is None:
-            raise HTTPException(503, request.app.state.agent_error or "에이전트 준비 중")
+        agent = require_agent(request)
+        db: Database = request.app.state.db
 
         thread_id = req.thread_id or str(uuid.uuid4())
         config = {"configurable": {"thread_id": thread_id}}
@@ -174,6 +271,9 @@ def create_app(
                             "follow_ups": state.get("follow_ups", []),
                         },
                     )
+                    # 답변을 먼저 보여 준 뒤 로드맵에 담을 할 일을 뽑는다 (약 2초)
+                    async for event in plan_events(req, state, db):
+                        yield event
                 else:  # respond를 거치지 않았다면 되묻기
                     yield _sse("question", payload)
             except Exception:
@@ -187,19 +287,6 @@ def create_app(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
-
-    @app.post("/roadmap")
-    async def roadmap(profile: RoadmapProfile, request: Request) -> dict:
-        """프로필 하나로 시기별 할 일 목록(전역 로드맵)을 한 번에 만든다."""
-        if request.app.state.agent is None or request.app.state.roadmap is None:
-            raise HTTPException(503, request.app.state.agent_error or "로드맵을 만들 수 없어요")
-        try:
-            return await request.app.state.roadmap(profile)
-        except Exception:
-            log.exception("로드맵 생성 실패")
-            raise HTTPException(
-                500, "로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
-            ) from None
 
     @app.post("/feedback", status_code=201)
     def feedback(req: FeedbackRequest, request: Request) -> dict:
@@ -220,12 +307,67 @@ def create_app(
         return {"up": counts.get("up", 0), "down": counts.get("down", 0)}
 
     @app.get("/profile/{user_id}")
-    async def profile(user_id: str, request: Request) -> dict:
+    async def get_profile(user_id: UserId, request: Request) -> dict:
         agent: CompiledStateGraph | None = request.app.state.agent
-        if agent is None or agent.store is None:
+        if agent is None:
             return {"profile": {}}
-        item = await agent.store.aget(PROFILE_NAMESPACE, user_id)
-        return {"profile": item.value if item else {}}
+        return {"profile": await stored_profile(agent, user_id)}
+
+    @app.put("/profile/{user_id}")
+    async def put_profile(user_id: UserId, update: ProfileUpdate, request: Request) -> dict:
+        agent = require_agent(request)
+        if agent.store is None:
+            raise HTTPException(503, "프로필 저장소가 없어요")
+        profile = await stored_profile(agent, user_id)
+        for key, value in update.model_dump(exclude_unset=True).items():
+            if value in (None, "", []):
+                profile.pop(key, None)
+            else:
+                profile[key] = value
+        await agent.store.aput(PROFILE_NAMESPACE, user_id, profile)
+        return {"profile": profile}
+
+    @app.get("/journey/{user_id}")
+    def get_journey(user_id: UserId, request: Request) -> dict:
+        return {"items": journey.list_items(request.app.state.db, user_id)}
+
+    @app.post("/journey/{user_id}/generate")
+    async def generate_journey(user_id: UserId, request: Request) -> dict:
+        """저장된 프로필('내 정보')로 시기별 할 일을 한 번에 만들어 로드맵에 담는다."""
+        agent = require_agent(request)
+        if request.app.state.roadmap is None:
+            raise HTTPException(503, "로드맵을 만들 수 없어요")
+        profile = await stored_profile(agent, user_id)
+        if not profile.get("service_type"):
+            raise HTTPException(400, "복무 형태를 먼저 알려 주세요 ('내 정보'에서 고를 수 있어요)")
+        try:
+            roadmap = await request.app.state.roadmap(roadmap_profile(profile))
+        except Exception:
+            log.exception("로드맵 생성 실패")
+            raise HTTPException(
+                500, "로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
+            ) from None
+        db: Database = request.app.state.db
+        added = journey.add_items(db, user_id, journey.roadmap_to_items(roadmap), "plan")
+        return {
+            "intro": roadmap.get("intro", ""),
+            "added": len(added),
+            "items": journey.list_items(db, user_id),
+        }
+
+    @app.patch("/journey/{user_id}/items/{item_id}")
+    def update_journey_item(
+        user_id: UserId, item_id: str, update: DoneUpdate, request: Request
+    ) -> dict:
+        item = journey.set_done(request.app.state.db, user_id, item_id, update.done)
+        if item is None:
+            raise HTTPException(404, "없는 할 일이에요")
+        return item
+
+    @app.delete("/journey/{user_id}/items/{item_id}", status_code=204)
+    def delete_journey_item(user_id: UserId, item_id: str, request: Request) -> None:
+        if not journey.delete_item(request.app.state.db, user_id, item_id):
+            raise HTTPException(404, "없는 할 일이에요")
 
     return app
 

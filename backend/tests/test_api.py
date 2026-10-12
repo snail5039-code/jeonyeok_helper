@@ -25,7 +25,7 @@ def temp_db() -> str:
     return f"sqlite:///{Path(tempfile.mkdtemp()).as_posix()}/app.sqlite"
 
 
-def make_client(routes, **kwargs) -> TestClient:
+def make_client(routes, app_kwargs: dict | None = None, **kwargs) -> TestClient:
     components, _ = make_components(routes, **kwargs)
     graph = build_graph(components, checkpointer=InMemorySaver(), store=InMemoryStore())
 
@@ -33,7 +33,7 @@ def make_client(routes, **kwargs) -> TestClient:
     async def factory():
         yield graph
 
-    return TestClient(create_app(agent_factory=factory, db_url=temp_db()))
+    return TestClient(create_app(agent_factory=factory, db_url=temp_db(), **(app_kwargs or {})))
 
 
 def no_agent_client() -> TestClient:
@@ -168,27 +168,126 @@ def test_feedback_is_saved_and_counted():
             assert (saved.rating, saved.comment) == ("down", "금액이 없어요")
 
 
-def test_roadmap_endpoint_validates_profile_and_returns_stages():
+# ---------- 내 정보 ----------
+
+
+def test_profile_put_merges_and_clears_fields():
+    with make_client([Route(next="answer")]) as client:
+        body = {"service_type": "conscript", "region": "부산", "goals": ["취업", "복학"]}
+        assert client.put("/profile/u1", json=body).json()["profile"] == body
+        # 보낸 항목만 바꾸고, 빈 값은 지운다
+        after = client.put("/profile/u1", json={"region": "", "rank": "병장"}).json()["profile"]
+        assert after == {"service_type": "conscript", "goals": ["취업", "복학"], "rank": "병장"}
+        assert client.get("/profile/u1").json()["profile"] == after
+        assert client.put("/profile/u1", json={"age": 7}).status_code == 422
+        assert client.get("/profile/bad%20id").status_code == 422
+
+
+def test_profile_from_form_reaches_the_agent():
+    with make_client([Route(next="answer")]) as client:
+        client.put("/profile/u2", json={"service_type": "long_term", "desired_job": "시설관리"})
+        events = parse_sse(client.post("/chat", json={"message": "q", "user_id": "u2"}).text)
+    answer = next(d for e, d in events if e == "answer")
+    assert answer["profile"]["desired_job"] == "시설관리"
+
+
+# ---------- 전역 로드맵 ----------
+
+ROADMAP = {
+    "intro": "병사 로드맵",
+    "stages": [
+        {
+            "key": "right_after",
+            "title": "전역 직후",
+            "items": [
+                {"title": "예비군 편성 확인", "action": "확인하세요", "detail": "", "sources": []},
+                {"title": "적금 수령", "action": "받으세요", "detail": "", "sources": []},
+            ],
+        }
+    ],
+}
+
+
+def journey_client(planner=None) -> TestClient:
+    seen = []
+
     async def builder(profile):
-        return {"intro": f"{profile.service_type} 로드맵", "stages": []}
+        seen.append(profile)
+        return ROADMAP
 
-    components, _ = make_components([Route(next="answer")])
-    graph = build_graph(components, checkpointer=InMemorySaver())
-
-    @asynccontextmanager
-    async def factory():
-        yield graph
-
-    app = create_app(agent_factory=factory, db_url=temp_db(), roadmap_builder=builder)
-    with TestClient(app) as client:
-        ok = client.post("/roadmap", json={"service_type": "conscript", "region": "서울"})
-        assert ok.status_code == 200 and ok.json()["intro"] == "conscript 로드맵"
-        assert client.post("/roadmap", json={"service_type": "alien"}).status_code == 422
+    client = make_client(
+        [Route(next="regulation"), Route(next="answer")] * 3,
+        app_kwargs={"roadmap_builder": builder, "planner": planner},
+    )
+    client.seen_profiles = seen
+    return client
 
 
-def test_roadmap_without_agent_returns_503():
+def test_journey_generate_uses_stored_profile_once():
+    with journey_client() as client:
+        missing = client.post("/journey/u1/generate")
+        assert missing.status_code == 400 and "복무 형태" in missing.json()["detail"]
+
+        client.put(
+            "/profile/u1", json={"service_type": "conscript", "goals": ["취업"], "rank": "병장"}
+        )
+        first = client.post("/journey/u1/generate").json()
+        assert first["added"] == 2 and [i["title"] for i in first["items"]] == [
+            "예비군 편성 확인",
+            "적금 수령",
+        ]
+        assert client.post("/journey/u1/generate").json()["added"] == 0  # 같은 할 일은 한 번만
+        sent = client.seen_profiles[0]
+        assert sent.goals == ["취업"] and "계급=병장" in sent.notes
+
+
+def test_journey_item_done_and_delete_only_for_owner():
+    with journey_client() as client:
+        client.put("/profile/u1", json={"service_type": "conscript"})
+        item = client.post("/journey/u1/generate").json()["items"][0]
+
+        done = client.patch(f"/journey/u1/items/{item['id']}", json={"done": True}).json()
+        assert done["done"] is True and done["done_at"]
+        assert (
+            client.patch(f"/journey/u2/items/{item['id']}", json={"done": True}).status_code == 404
+        )
+        assert client.delete(f"/journey/u2/items/{item['id']}").status_code == 404
+        assert client.delete(f"/journey/u1/items/{item['id']}").status_code == 204
+        assert [i["title"] for i in client.get("/journey/u1").json()["items"]] == ["적금 수령"]
+
+
+def test_chat_puts_planned_items_on_journey():
+    calls = []
+
+    async def planner(**kwargs):
+        calls.append(kwargs)
+        return [
+            {"stage": "job", "title": "국민취업지원제도", "action": "고용24에서 신청하세요",
+             "detail": "", "sources": kwargs["sources"][:1]},
+        ]  # fmt: skip
+
+    with journey_client(planner) as client:
+        events = parse_sse(
+            client.post("/chat", json={"message": "취업 지원?", "user_id": "u1"}).text
+        )
+        names = [e for e, _ in events]
+        assert names.index("answer") < names.index("plan") < names.index("done")
+        plan = next(d for e, d in events if e == "plan")
+        assert plan["added"][0]["title"] == "국민취업지원제도"
+        assert plan["added"][0]["origin"] == "chat" and plan["added"][0]["question"] == "취업 지원?"
+
+        # 다음 답변에서는 이미 담긴 할 일을 알려 주고, 같은 할 일은 다시 담지 않는다
+        events = parse_sse(client.post("/chat", json={"message": "또", "user_id": "u1"}).text)
+        assert calls[1]["existing"] == ["국민취업지원제도"]
+        assert not any(e == "plan" for e, _ in events)
+        # user_id가 없으면 로드맵에 담지 않는다
+        parse_sse(client.post("/chat", json={"message": "익명"}).text)
+        assert len(calls) == 2
+
+
+def test_journey_generate_without_agent_returns_503():
     with no_agent_client() as client:
-        assert client.post("/roadmap", json={"service_type": "merit"}).status_code == 503
+        assert client.post("/journey/u1/generate").status_code == 503
 
 
 def test_feedback_rejects_unknown_rating():

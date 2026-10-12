@@ -9,13 +9,14 @@ import {
   GraduationCap,
   IdCard,
   Landmark,
-  Route,
   ShieldCheck,
   User,
+  UserRoundPen,
 } from "lucide-react";
 import { useState } from "react";
 
 import { Composer } from "./Composer";
+import { Mascot } from "./Doodle";
 
 const SERVICE_CHOICES = ["병사", "부사관", "장교", "보훈대상자"];
 
@@ -40,7 +41,13 @@ const TRUST = [
   { icon: User, title: "로그인 없이 사용", body: "복무 정보는 상담에만 쓰여요" },
 ];
 
-export function HomeView({ onAsk, onRoadmap }: { onAsk: (text: string) => void; onRoadmap: () => void }) {
+interface Props {
+  onAsk: (text: string) => void;
+  onRoadmap: () => void;
+  onProfile: () => void;
+}
+
+export function HomeView({ onAsk, onRoadmap, onProfile }: Props) {
   const [serviceType, setServiceType] = useState<string | null>(null);
 
   // 고른 복무 형태를 질문에 붙여 보낸다 (이미 말했으면 그대로).
@@ -93,20 +100,33 @@ export function HomeView({ onAsk, onRoadmap }: { onAsk: (text: string) => void; 
           />
         </section>
 
-        <button
-          type="button"
-          onClick={onRoadmap}
-          className="grid grid-cols-[44px_1fr_auto] items-center gap-3.5 rounded-2xl border border-line bg-soft px-4 py-4 text-left hover:border-accent md:px-5"
-        >
-          <span className="grid size-11 place-items-center rounded-xl bg-accent text-accent-ink">
-            <Route className="size-[22px]" strokeWidth={1.8} />
-          </span>
-          <span className="grid gap-0.5">
-            <b className="text-[15px]">질문하기 막막하다면, 전역 로드맵부터</b>
-            <span className="text-[13.5px] text-fg-2">복무 정보만 고르면 전역 직후부터 할 일을 순서대로 정리해 드려요</span>
-          </span>
-          <ArrowRight className="size-5 text-fg-3" />
-        </button>
+        <div className="grid gap-3 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={onRoadmap}
+            className="grid grid-cols-[48px_1fr] items-center gap-3 rounded-2xl border-[2.5px] border-[#1b1b1b] bg-paper px-4 py-3.5 text-left text-paper-ink shadow-[4px_4px_0_var(--ink)] transition-transform hover:-translate-y-0.5 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+          >
+            <Mascot rank="이병" size={48} />
+            <span className="grid gap-0.5">
+              <b className="font-fun text-[18px] leading-tight font-normal">내 전역 로드맵 🗺️</b>
+              <span className="text-[13px] opacity-80">물어볼수록 할 일이 쌓이고, 끝낼수록 계급이 올라감</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={onProfile}
+            className="grid grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-soft px-4 py-3.5 text-left hover:border-accent"
+          >
+            <span className="grid size-12 place-items-center rounded-xl bg-accent text-accent-ink">
+              <UserRoundPen className="size-[22px]" strokeWidth={1.8} />
+            </span>
+            <span className="grid gap-0.5">
+              <b className="text-[15px]">내 정보 자세히 적기</b>
+              <span className="text-[13px] text-fg-2">복무·지역·목표를 적어 두면 더 딱 맞게 찾아요</span>
+            </span>
+            <ArrowRight className="size-5 text-fg-3" />
+          </button>
+        </div>
 
         <section>
           <h2 className="mb-3 text-[15px] font-bold">전역자들이 많이 물어봐요</h2>

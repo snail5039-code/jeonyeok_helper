@@ -17,6 +17,35 @@ export interface Profile {
   age?: number;
   region?: string;
   merit_status?: string;
+  // '내 정보' 화면에서 채우는 자세한 정보
+  branch?: string;
+  rank?: string;
+  specialty?: string;
+  education?: string;
+  goals?: string[];
+  desired_job?: string;
+  certificates?: string;
+  housing?: string;
+  injury?: string;
+  memo?: string;
+}
+
+export type StageKey = "before" | "right_after" | "job" | "study" | "life" | "later";
+
+/** 전역 로드맵의 할 일 하나 (백엔드 journey_item) */
+export interface JourneyItem {
+  id: string;
+  stage: StageKey;
+  title: string;
+  action: string;
+  detail: string;
+  sources: Source[];
+  /** plan: 내 정보로 한 번에 만듦, chat: 대화에서 담김 */
+  origin: "plan" | "chat";
+  question: string;
+  done: boolean;
+  created_at: string | null;
+  done_at: string | null;
 }
 
 export type ChatEvent =
@@ -28,6 +57,8 @@ export type ChatEvent =
       event: "answer";
       data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[] };
     }
+  // 답변에서 뽑아 로드맵에 담은 할 일 (answer 다음에 온다)
+  | { event: "plan"; data: { added: JourneyItem[] } }
   | { event: "question"; data: { text: string; profile?: Profile } }
   | { event: "error"; data: { message: string } }
   | { event: "done"; data: Record<string, never> };
@@ -44,6 +75,8 @@ export interface Turn {
   followUps: string[];
   /** 사용자가 답변 도중 멈춤 */
   stopped?: boolean;
+  /** 이 답변에서 로드맵에 담긴 할 일 */
+  planned?: JourneyItem[];
 }
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {

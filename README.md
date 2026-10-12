@@ -5,11 +5,21 @@
 - **규정 Q&A**: 법령, 행정규칙, 법령해석례, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
 - **맞춤 혜택 찾기**: 복무 형태, 기간, 나이, 지역에 맞는 공공서비스 혜택 조회
 - **기관 연계**: 소관 기관, 신청 방법, 링크, 연락처 안내
-- **전역 로드맵**: 복무 정보를 한 번 고르면 전역 직후부터 취업·학업·연금까지 할 일을 시기별 체크리스트로 정리
+- **대화형 전역 로드맵**: 답변에 나온 할 일(신청·등록·확인)이 근거와 함께 채팅 옆 로드맵에 자동으로 담기고, 하나씩 끝내면
+  계급(이병 → 민간인)이 오르고 스티커를 받음. '내 정보'로 한 번에 채울 수도 있음
+- **내 정보**: 복무·지역·학력·주거·목표·희망 직무·자격증·메모를 자세히 적어 두면 답변과 로드맵 검색에 반영
 
 자세한 내용은 [기획서](docs/기획서.md), [개발 순서](docs/개발순서.md), [작업 기록](docs/작업기록.md)을 참고하세요.
 
 ## 화면
+
+| 채팅 + 로드맵 패널 | 내 로드맵 |
+|---|---|
+| ![채팅 옆 로드맵 패널](docs/screenshots/4_chat_panel.png) | ![내 로드맵](docs/screenshots/2_journey_top.png) |
+
+| 할 일 카드 | 내 정보 | 모바일 로드맵 |
+|---|---|---|
+| ![할 일 카드](docs/screenshots/3_journey_items.png) | ![내 정보](docs/screenshots/1_profile.png) | ![모바일 로드맵](docs/screenshots/5_mobile_journey.png) |
 
 | 첫 화면 | 답변 화면 |
 |---|---|
@@ -111,9 +121,13 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 
 | API | 설명 |
 |---|---|
-| `POST /chat` | `{message, thread_id?, user_id?}` → SSE (`thread`, `step`, `answer` / `question`, `error`, `done`) |
+| `POST /chat` | `{message, thread_id?, user_id?}` → SSE (`thread`, `step`, `delta`, `answer` / `question`, `plan`, `error`, `done`). `plan`은 답변에서 뽑아 로드맵에 담은 할 일 |
 | `GET /profile/{user_id}` | 저장된 사용자 프로필 |
-| `POST /roadmap` | `{service_type, region?, age?, service_years?}` → 시기별 할 일 목록 (할 일마다 근거 자료와 링크) |
+| `PUT /profile/{user_id}` | 내 정보 저장 (보낸 칸만 바꾸고, 빈 값은 지움) |
+| `GET /journey/{user_id}` | 로드맵 할 일 목록 (단계 순) |
+| `POST /journey/{user_id}/generate` | 내 정보로 할 일을 한 번에 모아 담기 → `{intro, added, items}` |
+| `PATCH /journey/{user_id}/items/{id}` | `{done}` 완료 체크 |
+| `DELETE /journey/{user_id}/items/{id}` | 할 일 빼기 |
 | `POST /feedback` | 답변 피드백 저장 `{rating: up/down, question, answer, comment?}` |
 | `GET /feedback/summary` | 피드백 수 (화면 프록시로는 열지 않음) |
 | `GET /health` | 상태, 에이전트 준비 여부, 키 설정 여부 |

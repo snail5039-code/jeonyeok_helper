@@ -73,7 +73,8 @@ WORKER_PROMPTS = {
     "프로필의 service_type과 region을 알면 search_benefits에 꼭 넣으세요. "
     "keywords를 비우면 전역·보훈 관련 혜택만 찾으므로, 질문이 특정 분야면 그 분야 단어를 "
     "keywords에 넣으세요 (예: 복학·등록금 → ['국가장학금', '학자금'], 집·월세 → ['주거', '월세'], "
-    "창업 → ['창업']). "
+    "창업 → ['창업']). 프로필에 전역 후 계획·희망 분야·자격증이 있으면 그에 맞는 단어도 "
+    "keywords와 search_youth_policies·search_jobs의 keyword에 넣으세요. "
     "대상이 맞지 않는 혜택은 빼세요. 의무복무 병사나 34세 이하 사용자에게는 "
     "search_youth_policies로 청년정책도 함께 찾으세요(지역·나이를 알면 넣을 것). "
     "채용공고나 일자리를 물으면 search_jobs로 "
@@ -164,7 +165,13 @@ VERIFY_PROMPT = ChatPromptTemplate.from_messages(
 
 
 def format_profile(profile: dict | None) -> str:
-    return ", ".join(f"{k}={v}" for k, v in (profile or {}).items()) or "(아직 모름)"
+    from jeonyeok_helper.agents.state import PROFILE_LABELS
+
+    def show(v) -> str:
+        return ", ".join(map(str, v)) if isinstance(v, list) else str(v)
+
+    parts = [f"{PROFILE_LABELS.get(k, k)}={show(v)}" for k, v in (profile or {}).items() if v]
+    return "; ".join(parts) or "(아직 모름)"
 
 
 def format_findings(findings: list[dict] | None) -> str:

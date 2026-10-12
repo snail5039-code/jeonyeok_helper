@@ -1,9 +1,10 @@
 "use client";
 
-import { BookOpen, Building2, ChevronDown, House, Menu, Moon, Plus, Route, Sun, UserRound, X } from "lucide-react";
+import { BookOpen, Building2, ChevronDown, House, Map, Menu, Moon, Plus, Sun, UserRound, UserRoundPen, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { SERVICE_TYPE_LABELS, type Profile } from "@/lib/types";
+import { levelOf, progress } from "@/lib/journey";
+import { SERVICE_TYPE_LABELS, type JourneyItem, type Profile } from "@/lib/types";
 
 import { LogoMark } from "./Logo";
 
@@ -62,22 +63,31 @@ function useDismissable() {
 }
 
 interface Props {
-  view: "home" | "chat" | "roadmap";
+  view: "home" | "chat" | "journey" | "profile";
   profile: Profile;
+  journey: JourneyItem[];
   demo: boolean;
   dark: boolean;
   onToggleTheme: () => void;
   onHome: () => void;
-  onRoadmap: () => void;
+  onJourney: () => void;
+  onProfile: () => void;
   onAsk: (text: string) => void;
 }
 
-export function TopNav({ view, profile, demo, dark, onToggleTheme, onHome, onRoadmap, onAsk }: Props) {
+export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHome, onJourney, onProfile, onAsk }: Props) {
   const [profileOpen, setProfileOpen, profileRef] = useDismissable();
   const [mobileOpen, setMobileOpen, mobileRef] = useDismissable();
 
   const navLink = "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-fg-2 hover:bg-sunken hover:text-fg";
   const iconButton = "grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg";
+
+  const p = progress(journey);
+  const rank = levelOf(p.percent).rank;
+  const pages = [
+    { key: "journey", icon: Map, label: "내 로드맵", onClick: onJourney },
+    { key: "profile", icon: UserRoundPen, label: "내 정보", onClick: onProfile },
+  ] as const;
 
   const go = (fn: () => void) => () => {
     setMobileOpen(false);
@@ -96,15 +106,23 @@ export function TopNav({ view, profile, demo, dark, onToggleTheme, onHome, onRoa
           <button type="button" onClick={onHome} className={`${navLink} ${view === "home" ? "bg-sunken text-fg" : ""}`}>
             <House className="size-4" strokeWidth={1.8} />홈
           </button>
-          <button
-            type="button"
-            onClick={onRoadmap}
-            aria-current={view === "roadmap" ? "page" : undefined}
-            className={`${navLink} ${view === "roadmap" ? "bg-sunken text-fg" : ""}`}
-          >
-            <Route className="size-4" strokeWidth={1.8} />
-            전역 로드맵
-          </button>
+          {pages.map(({ key, icon: Icon, label, onClick }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={onClick}
+              aria-current={view === key ? "page" : undefined}
+              className={`${navLink} ${view === key ? "bg-sunken text-fg" : ""}`}
+            >
+              <Icon className="size-4" strokeWidth={1.8} />
+              {label}
+              {key === "journey" && p.total > 0 && (
+                <span className="font-fun rounded-full border-[1.5px] border-[#1b1b1b] bg-paper px-1.5 text-[12px] leading-[18px] text-paper-ink">
+                  {rank} {p.done}/{p.total}
+                </span>
+              )}
+            </button>
+          ))}
           {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
             <button key={label} type="button" onClick={() => onAsk(ask)} className={navLink}>
               <Icon className="size-4" strokeWidth={1.8} />
@@ -136,9 +154,20 @@ export function TopNav({ view, profile, demo, dark, onToggleTheme, onHome, onRoa
             {profileOpen && (
               <div className="absolute right-0 mt-2 w-64 rounded-xl border border-line bg-bg p-4 shadow-card">
                 <div className="mb-3 flex items-center justify-between text-[13px] font-semibold">
-                  내 복무 정보 <span className="text-xs font-medium text-fg-3">대화하면 채워져요</span>
+                  내 복무 정보 <span className="text-xs font-medium text-fg-3">대화하거나 직접 적어요</span>
                 </div>
                 <ProfileDetails profile={profile} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    onProfile();
+                  }}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-strong py-2 text-[13px] font-semibold text-fg-2 hover:border-fg-3"
+                >
+                  <UserRoundPen className="size-4" />
+                  자세히 적기
+                </button>
               </div>
             )}
           </div>
@@ -172,10 +201,17 @@ export function TopNav({ view, profile, demo, dark, onToggleTheme, onHome, onRoa
             <button type="button" onClick={go(onHome)} className={navLink}>
               <House className="size-4" strokeWidth={1.8} />홈 · 새 질문
             </button>
-            <button type="button" onClick={go(onRoadmap)} className={navLink}>
-              <Route className="size-4" strokeWidth={1.8} />
-              전역 로드맵
-            </button>
+            {pages.map(({ key, icon: Icon, label, onClick }) => (
+              <button key={key} type="button" onClick={go(onClick)} className={navLink}>
+                <Icon className="size-4" strokeWidth={1.8} />
+                {label}
+                {key === "journey" && p.total > 0 && (
+                  <span className="text-[12px] text-fg-3">
+                    {rank} · {p.done}/{p.total}
+                  </span>
+                )}
+              </button>
+            ))}
             {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
               <button key={label} type="button" onClick={go(() => onAsk(ask))} className={navLink}>
                 <Icon className="size-4" strokeWidth={1.8} />

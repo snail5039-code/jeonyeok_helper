@@ -246,10 +246,12 @@ export function TurnView({
   turn,
   onAsk,
   onFeedback,
+  onOpenJourney,
 }: {
   turn: Turn;
   onAsk: (text: string) => void;
   onFeedback: FeedbackHandler;
+  onOpenJourney?: () => void;
 }) {
   return (
     <article id={turn.id} className="grid scroll-mt-6 gap-5 border-b border-line pb-8 last:border-b-0">
@@ -296,7 +298,9 @@ export function TurnView({
       {turn.status === "streaming" && (
         <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} streaming />
       )}
-      {turn.status === "answer" && <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} />}
+      {turn.status === "answer" && (
+        <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} onOpenJourney={onOpenJourney} />
+      )}
     </article>
   );
 }
@@ -306,11 +310,13 @@ function Answer({
   turn,
   onAsk,
   onFeedback,
+  onOpenJourney,
   streaming = false,
 }: {
   turn: Turn;
   onAsk: (text: string) => void;
   onFeedback: FeedbackHandler;
+  onOpenJourney?: () => void;
   streaming?: boolean;
 }) {
   const { lead, benefits, tail } = parseAnswer(turn.text);
@@ -321,11 +327,28 @@ function Answer({
       {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
       {streaming && <span className="stream-caret" aria-hidden />}
       {!streaming && !turn.stopped && turn.sources.length > 0 && (
-        // 넓은 화면은 오른쪽 목록에 보이므로 좁은 화면에서만 답변 아래에 둔다.
-        <div className="grid gap-2 xl:hidden">
-          <h3 className="text-sm font-bold">근거 자료</h3>
-          <SourceList sources={turn.sources} />
-        </div>
+        <details className="group grid gap-2 rounded-xl border border-line px-3.5 py-2.5">
+          <summary className="cursor-pointer list-none text-sm font-bold">
+            근거 자료 {turn.sources.length}개 <span className="font-medium text-fg-3 group-open:hidden">펼치기</span>
+          </summary>
+          <div className="mt-2">
+            <SourceList sources={turn.sources} />
+          </div>
+        </details>
+      )}
+      {!streaming && turn.planned && turn.planned.length > 0 && (
+        <button
+          type="button"
+          onClick={onOpenJourney}
+          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border-[2.5px] border-[#1b1b1b] bg-paper px-3.5 py-2.5 text-left text-paper-ink shadow-[3px_3px_0_var(--ink)]"
+        >
+          <span className="text-[22px]">🗺️</span>
+          <span className="grid min-w-0">
+            <b className="font-fun text-[16px] font-normal">로드맵에 {turn.planned.length}개 담았음!</b>
+            <span className="truncate text-[13px]">{turn.planned.map((p) => p.title).join(" · ")}</span>
+          </span>
+          <span className="text-[13px] font-bold whitespace-nowrap">보러 가기 →</span>
+        </button>
       )}
       {turn.stopped && (
         <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">

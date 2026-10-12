@@ -21,6 +21,7 @@
   --law: #5b5bd6;
   --law-soft: #efeffc;
   --shadow: 0 1px 2px rgb(25 31 40 / 0.04), 0 8px 24px rgb(25 31 40 / 0.06);
+  --ink: #1b1b1b; /* B급 그림의 굵은 테두리·그림자. 다크에서는 크림색으로 바꿔 윤곽이 보이게 */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -29,7 +30,7 @@
     --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
     --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
     --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
-    --shadow: none; color-scheme: dark;
+    --shadow: none; --ink: #e9dca6; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
@@ -37,7 +38,7 @@
   --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
   --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
   --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
-  --shadow: none; color-scheme: dark;
+  --shadow: none; --ink: #e9dca6; color-scheme: dark;
 }
 
 @theme inline {
@@ -56,8 +57,42 @@
   --color-warn-soft: var(--warn-soft);
   --color-law: var(--law);
   --color-law-soft: var(--law-soft);
+  --color-ink: var(--ink);
   --shadow-card: var(--shadow);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  /* B급 감성 제목·말풍선용 (본문은 계속 Pretendard) */
+  --font-fun: var(--font-jua), "Jua", "Pretendard Variable", Pretendard, sans-serif;
+  --color-paper: #fff4c9;
+  --color-paper-ink: #1b1b1b;
+  --animate-pop: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+  --animate-wobble: wobble 2.4s ease-in-out infinite;
+}
+
+/* 로드맵 화면: 할 일을 끝내면 스티커가 튀어나오고, 마스코트가 살짝 흔들린다 */
+@keyframes pop {
+  0% {
+    transform: scale(0.3) rotate(-20deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+@keyframes wobble {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-2px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-pop,
+  .animate-wobble {
+    animation: none;
+  }
 }
 
 html,

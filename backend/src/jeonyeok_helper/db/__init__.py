@@ -4,7 +4,7 @@
 이 DB는 서비스가 직접 쓰는 테이블(피드백 등)을 담는다.
 """
 
-from jeonyeok_helper.db.models import Base, Feedback
+from jeonyeok_helper.db.models import Base, Feedback, JourneyItem
 from jeonyeok_helper.db.session import Database
 
-__all__ = ["Base", "Database", "Feedback"]
+__all__ = ["Base", "Database", "Feedback", "JourneyItem"]

@@ -65,12 +65,26 @@ TOPICS_BY_TYPE = {
 STUDY_KEYWORDS = ["국가장학금", "학자금"]
 
 
+# '내 정보'의 전역 후 계획에 따라 더 찾아볼 주제
+TOPICS_BY_GOAL = {
+    "공무원": "제대군인 공무원 채용시험 응시연령 연장과 가점",
+    "창업": "제대군인 창업 지원과 창업 자금",
+    "복학": "복학 등록금 국가장학금 학자금 대출",
+    "진학": "제대군인 교육지원 대학 학비",
+    "귀농": "귀농 창업 지원 청년 농업인",
+    "취업": "제대군인 취업 지원 보훈특별고용 국민취업지원제도",
+}
+
+
 class RoadmapProfile(BaseModel):
     service_type: Literal["conscript", "short_term_officer", "long_term", "merit"]
     service_years: float | None = Field(default=None, ge=0, le=50)
     discharge_date: str | None = Field(default=None, max_length=20)
     age: int | None = Field(default=None, ge=15, le=100)
     region: str | None = Field(default=None, max_length=30)
+    goals: list[str] = Field(default_factory=list, max_length=8)
+    # 계급·특기·학력·자격증·메모 등 그 밖의 '내 정보'를 한 줄로 (정리 단계에서 참고)
+    notes: str = Field(default="", max_length=1500)
 
 
 class RoadmapItemDraft(BaseModel):
@@ -126,6 +140,10 @@ def _profile_text(p: RoadmapProfile) -> str:
         parts.append(f"{p.age}세")
     if p.region:
         parts.append(f"{p.region} 거주")
+    if p.goals:
+        parts.append(f"전역 후 계획: {', '.join(p.goals)}")
+    if p.notes:
+        parts.append(p.notes)
     return ", ".join(parts)
 
 
@@ -154,7 +172,8 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
 
     # 조회끼리 서로 기다릴 필요가 없어 한꺼번에 돌린다 (차례로 하면 약 28초).
     # 결과를 넣는 순서는 고정해서 자료 번호(E1, E2 …)가 매번 같게 한다.
-    topics = COMMON_TOPICS + TOPICS_BY_TYPE[profile.service_type]
+    goal_topics = [t for g, t in TOPICS_BY_GOAL.items() if any(g in goal for goal in profile.goals)]
+    topics = COMMON_TOPICS + TOPICS_BY_TYPE[profile.service_type] + goal_topics
     young = profile.age is None and profile.service_type in ("conscript", "short_term_officer")
     with ThreadPoolExecutor(max_workers=len(topics) + 2) as pool:
         laws = [

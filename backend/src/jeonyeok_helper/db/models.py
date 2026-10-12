@@ -6,9 +6,10 @@ uv run alembic revision --autogenerate -m "설명"
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -31,3 +32,26 @@ class Feedback(Base):
     comment: Mapped[str | None] = mapped_column(Text, default=None)
     thread_id: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
     user_id: Mapped[str | None] = mapped_column(String(64), default=None)
+
+
+class JourneyItem(Base):
+    """사용자의 전역 로드맵 할 일. 프로필로 한 번에 만들거나(plan), 대화하며 하나씩 쌓인다(chat).
+    같은 사용자에게 같은 제목의 할 일은 하나만 둔다."""
+
+    __tablename__ = "journey_item"
+    __table_args__ = (UniqueConstraint("user_id", "title", name="uq_journey_user_title"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    stage: Mapped[str] = mapped_column(String(16))  # before, right_after, job, study, life, later
+    title: Mapped[str] = mapped_column(String(120))
+    action: Mapped[str] = mapped_column(Text, default="")
+    detail: Mapped[str] = mapped_column(Text, default="")
+    sources: Mapped[list] = mapped_column(JSON, default=list)  # [{type, title, url}]
+    origin: Mapped[str] = mapped_column(String(8), default="chat")  # plan | chat
+    question: Mapped[str] = mapped_column(Text, default="")  # 대화에서 나왔으면 그 질문
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)

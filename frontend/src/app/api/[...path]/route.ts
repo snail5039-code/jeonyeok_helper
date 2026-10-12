@@ -6,7 +6,16 @@ import type { NextRequest } from "next/server";
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
 // 열어 둘 FastAPI 경로만 허용한다 (임의 주소로 넘기는 열린 프록시가 되지 않게).
-const ALLOWED = [/^health$/, /^chat$/, /^roadmap$/, /^feedback$/, /^profile\/[\w-]{1,64}$/];
+const ALLOWED = [
+  /^health$/,
+  /^chat$/,
+  /^feedback$/,
+  /^profile\/[\w-]{1,64}$/,
+  /^journey\/[\w-]{1,64}$/,
+  /^journey\/[\w-]{1,64}\/generate$/,
+  /^journey\/[\w-]{1,64}\/items\/[\w-]{1,64}$/,
+];
+const NO_BODY = new Set(["GET", "DELETE"]);
 
 async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
   const path = (await ctx.params).path.join("/");
@@ -19,7 +28,7 @@ async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
     upstream = await fetch(`${API_URL}/${path}`, {
       method: req.method,
       headers: { "Content-Type": req.headers.get("content-type") ?? "application/json" },
-      body: req.method === "GET" ? undefined : await req.text(),
+      body: NO_BODY.has(req.method) ? undefined : await req.text(),
       cache: "no-store",
     });
   } catch {
@@ -29,7 +38,8 @@ async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
     );
   }
 
-  return new Response(upstream.body, {
+  // 204는 본문을 가질 수 없다
+  return new Response(upstream.status === 204 ? null : upstream.body, {
     status: upstream.status,
     headers: {
       "Content-Type": upstream.headers.get("content-type") ?? "application/json",
@@ -39,4 +49,4 @@ async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
   });
 }
 
-export { proxy as GET, proxy as POST };
+export { proxy as DELETE, proxy as GET, proxy as PATCH, proxy as POST, proxy as PUT };

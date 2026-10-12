@@ -1,6 +1,6 @@
 // 데모 모드: 서버 에이전트가 준비되지 않았을 때(Gemini 키 없음) 화면을 확인하는 예시 응답.
 
-import type { ChatEvent, Profile, Source } from "./types";
+import type { ChatEvent, JourneyItem, Profile, Source } from "./types";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -38,6 +38,17 @@ const DEMO_TEXT = [
   "- 내용: 전역 후 예비군 편성과 훈련 일정 확인 [5]",
   "※ 데모 화면이에요. 실제 답변은 법령과 공공서비스 조회 결과로 만들어져요. 정확한 자격과 기한은 소관 기관에 꼭 확인하세요.",
 ].join("\n");
+
+// 답변에서 뽑은 할 일 (실제 서버는 planner가 근거와 함께 뽑는다). id가 같으면 다시 담기지 않는다.
+const planned = (id: string, stage: JourneyItem["stage"], title: string, action: string, source: Source): JourneyItem => ({
+  id: `demo-plan-${id}`, stage, title, action, detail: "", sources: [source], origin: "chat",
+  question: "", done: false, created_at: null, done_at: null,
+}); // prettier-ignore
+
+const DEMO_PLANNED = [
+  planned("work24", "job", "국민취업지원제도 신청", "고용24에서 온라인으로 신청", DEMO_SOURCES[2]),
+  planned("youth", "life", "서울 청년 정책 둘러보기", "온통청년에서 지역을 서울로 골라 확인", DEMO_SOURCES[3]),
+];
 
 const SERVICE_WORDS = /병장|병사|하사|중사|상사|소위|중위|대위|소령|간부|부사관|장교|복무|유공|보훈/;
 // 준비한 예시 답변(병사 전역자 혜택)과 관련 있는 질문인지
@@ -99,4 +110,5 @@ export async function* demoChat(message: string, knowsServiceType: boolean): Asy
       follow_ups: ["군복무 크레딧은 따로 신청해야 해요?", "서울 청년 월세 지원도 받을 수 있어요?"],
     },
   };
+  yield { event: "plan", data: { added: DEMO_PLANNED } };
 }

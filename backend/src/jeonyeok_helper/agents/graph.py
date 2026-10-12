@@ -73,8 +73,9 @@ def build_graph(
             "follow_ups": [],
             "draft": "",
         }
-        # 새 대화라도 같은 사용자면 장기 메모리의 프로필을 불러온다.
-        if store is not None and (uid := _user_id(config)) and not state.get("profile"):
+        # 같은 사용자면 장기 메모리의 프로필을 매 질문 불러온다 ('내 정보' 화면에서 고친 값이
+        # 대화 중에도 바로 반영되도록).
+        if store is not None and (uid := _user_id(config)):
             if item := await store.aget(PROFILE_NAMESPACE, uid):
                 update["profile"] = item.value
         return update

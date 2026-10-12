@@ -15,7 +15,7 @@ ServiceType = Literal["conscript", "short_term_officer", "long_term", "merit", "
 def merge_profile(old: dict | None, new: dict | None) -> dict:
     """새로 알게 된 값만 덮어쓴다 (None은 '모름'이므로 기존 값을 지우지 않는다)."""
     merged = dict(old or {})
-    merged.update({k: v for k, v in (new or {}).items() if v not in (None, "", "unknown")})
+    merged.update({k: v for k, v in (new or {}).items() if v not in (None, "", "unknown", [])})
     return merged
 
 
@@ -77,6 +77,39 @@ class Profile(BaseModel):
     age: int | None = None
     region: str | None = Field(default=None, description="거주 시·도 (예: 서울, 경기)")
     merit_status: str | None = Field(default=None, description="보훈 대상 여부와 종류")
+    # 아래는 '내 정보' 화면에서 주로 채우고, 대화에서 분명히 말했을 때만 추출한다
+    branch: str | None = Field(default=None, description="군 (육군, 해군, 공군, 해병대)")
+    rank: str | None = Field(default=None, description="전역(예정) 계급 (예: 병장, 중사, 대위)")
+    specialty: str | None = Field(default=None, description="군 특기·병과 (예: 운전, 정보통신)")
+    education: str | None = Field(default=None, description="학력·학업 상태 (예: 대학 휴학 중)")
+    goals: list[str] | None = Field(
+        default=None, description="전역 후 계획 (취업, 공무원, 창업, 복학·진학, 귀농 등)"
+    )
+    desired_job: str | None = Field(default=None, description="희망 직무·분야")
+    certificates: str | None = Field(default=None, description="가진 자격증")
+    housing: str | None = Field(default=None, description="주거 상황 (예: 무주택 자취)")
+    injury: str | None = Field(default=None, description="복무 중 부상·질병 여부")
+
+
+# 프롬프트에 넣을 때 쓰는 이름. 화면(내 정보)의 메모(memo)도 함께 넘긴다.
+PROFILE_LABELS = {
+    "service_type": "복무 형태",
+    "service_years": "복무 기간(년)",
+    "discharge_date": "전역일",
+    "age": "나이",
+    "region": "지역",
+    "merit_status": "보훈 대상",
+    "branch": "군",
+    "rank": "계급",
+    "specialty": "특기",
+    "education": "학력",
+    "goals": "전역 후 계획",
+    "desired_job": "희망 분야",
+    "certificates": "자격증",
+    "housing": "주거",
+    "injury": "복무 중 부상·질병",
+    "memo": "메모",
+}
 
 
 class Route(BaseModel):
