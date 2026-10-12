@@ -70,6 +70,7 @@ def build_graph(
             "evidence": None,
             "worker_calls": None,
             "also": [],
+            "follow_ups": [],
             "draft": "",
         }
         # 새 대화라도 같은 사용자면 장기 메모리의 프로필을 불러온다.
@@ -175,6 +176,7 @@ def build_graph(
 
     async def verify(state: AgentState):
         draft = state.get("draft", "")
+        follow_ups: list[str] = []
         try:
             checked: Verification = await c.verifier.ainvoke(
                 {
@@ -186,10 +188,14 @@ def build_graph(
             )
             # 문제가 없으면 초안을 그대로 쓴다. 다시 쓰게 하면 줄바꿈 같은 형식이 깨질 수 있다.
             answer = draft if checked.supported else (checked.answer or draft)
+            follow_ups = [q.strip() for q in checked.follow_ups if q.strip()][:3]
         except Exception:
             log.warning("근거 검증 실패, 초안을 그대로 씁니다.", exc_info=True)
             answer = draft
-        return {"messages": [AIMessage(answer, name="jeonyeok_helper")]}
+        return {
+            "messages": [AIMessage(answer, name="jeonyeok_helper")],
+            "follow_ups": follow_ups,
+        }
 
     g = StateGraph(AgentState)
     g.add_node("start", start)

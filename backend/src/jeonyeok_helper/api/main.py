@@ -9,7 +9,7 @@
 SSE 이벤트
     event: step      data: {"node": "regulation", "label": "관련 법령을 찾고 있어요"}
     event: delta     data: {"text": "..."}   # 답변 초안 조각 (이어 붙여서 바로 보여 준다)
-    event: answer    data: {"text": "...", "sources": [...], "profile": {...}}
+    event: answer    data: {"text": "...", "sources": [...], "profile": {...}, "follow_ups": [...]}
                      # 근거 검증을 마친 최종 답변. 초안과 다를 수 있으니 화면은 이것으로 바꾼다.
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
@@ -139,7 +139,14 @@ def create_app(
                 last = state["messages"][-1]
                 payload = {"text": last.text, "profile": state.get("profile", {})}
                 if state.get("draft"):
-                    yield _sse("answer", {**payload, "sources": state.get("sources", [])})
+                    yield _sse(
+                        "answer",
+                        {
+                            **payload,
+                            "sources": state.get("sources", []),
+                            "follow_ups": state.get("follow_ups", []),
+                        },
+                    )
                 else:  # respond를 거치지 않았다면 되묻기
                     yield _sse("question", payload)
             except Exception:

@@ -15,7 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
 from jeonyeok_helper.agents.graph import build_graph
-from jeonyeok_helper.agents.state import Profile, Route
+from jeonyeok_helper.agents.state import Profile, Route, Verification
 from jeonyeok_helper.api.main import create_app
 from jeonyeok_helper.db import Feedback
 
@@ -100,6 +100,19 @@ def test_chat_streams_draft_deltas_before_verified_answer():
     # 초안 조각이 먼저 오고, 검증을 마친 최종 답변이 뒤에 온다
     assert names.index("delta") < names.index("answer")
     assert next(d for e, d in events if e == "answer")["text"] == "최종 답변 [1]"
+
+
+def test_answer_carries_follow_up_questions():
+    verified = Verification(
+        supported=True, follow_ups=["신청은 어디서 해요?", "  ", "부산 혜택도 있어요?", "a", "b"]
+    )
+    with make_client([Route(next="answer")], verifier=verified) as client:
+        events = parse_sse(client.post("/chat", json={"message": "질문"}).text)
+
+    answer = next(d for e, d in events if e == "answer")
+    assert answer["text"] == "초안 답변 [1]"  # 문제가 없으면 초안 그대로
+    # 빈 질문은 빼고 3개까지
+    assert answer["follow_ups"] == ["신청은 어디서 해요?", "부산 혜택도 있어요?", "a"]
 
 
 def test_chat_sends_question_when_agent_asks_back():

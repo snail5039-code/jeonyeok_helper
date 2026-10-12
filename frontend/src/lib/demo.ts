@@ -63,5 +63,13 @@ export async function* demoChat(message: string, knowsServiceType: boolean): Asy
   }
   yield { event: "step", data: { label: "근거를 확인하고 있어요" } };
   await sleep(400);
-  yield { event: "answer", data: { text: DEMO_TEXT, sources: DEMO_SOURCES, profile: DEMO_PROFILE } };
+  yield {
+    event: "answer",
+    data: {
+      text: DEMO_TEXT,
+      sources: DEMO_SOURCES,
+      profile: DEMO_PROFILE,
+      follow_ups: ["군복무 크레딧은 따로 신청해야 해요?", "서울 청년 월세 지원도 받을 수 있어요?"],
+    },
+  };
 }

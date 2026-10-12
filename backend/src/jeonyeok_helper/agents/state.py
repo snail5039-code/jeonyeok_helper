@@ -57,6 +57,7 @@ class AgentState(TypedDict, total=False):
     also: list[str]  # next와 동시에 돌릴 워커
     instruction: str
     draft: str
+    follow_ups: list[str]  # 이어서 물어볼 질문 (답변마다 새로)
 
 
 class Profile(BaseModel):
@@ -97,3 +98,8 @@ class Verification(BaseModel):
     issues: list[str] = Field(default_factory=list, description="근거가 없거나 틀린 부분")
     # 문제가 없을 때 답변 전체를 다시 쓰게 하면 그만큼 시간이 든다(약 3초). 고칠 때만 채운다.
     answer: str = Field(default="", description="supported=false일 때만: 문제를 고친 최종 답변")
+    # 답변을 이미 읽는 단계라 따로 LLM을 부르지 않고 같이 만든다.
+    follow_ups: list[str] = Field(
+        default_factory=list,
+        description="사용자가 이어서 물어볼 만한 짧은 질문 2~3개 (사용자 말투, 30자 이내)",
+    )

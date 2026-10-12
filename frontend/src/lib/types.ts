@@ -24,7 +24,10 @@ export type ChatEvent =
   | { event: "step"; data: { node?: string; label: string } }
   // 답변 초안 조각. 이어 붙여 바로 보여 주고, 검증을 마친 answer가 오면 그것으로 바꾼다.
   | { event: "delta"; data: { text: string } }
-  | { event: "answer"; data: { text: string; sources: Source[]; profile: Profile } }
+  | {
+      event: "answer";
+      data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[] };
+    }
   | { event: "question"; data: { text: string; profile?: Profile } }
   | { event: "error"; data: { message: string } }
   | { event: "done"; data: Record<string, never> };
@@ -37,6 +40,10 @@ export interface Turn {
   text: string;
   sources: Source[];
   profile: Profile;
+  /** 이어서 물어볼 만한 질문 (최종 답변과 함께 온다) */
+  followUps: string[];
+  /** 사용자가 답변 도중 멈춤 */
+  stopped?: boolean;
 }
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {

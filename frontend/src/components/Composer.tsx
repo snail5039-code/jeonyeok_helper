@@ -1,11 +1,14 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 interface Props {
   placeholder: string;
   disabled?: boolean;
+  /** 답변을 받는 중: 보내기 대신 멈춤 버튼을 보여 준다 (onStop이 있을 때) */
+  busy?: boolean;
+  onStop?: () => void;
   rows?: number;
   onSubmit: (text: string) => void;
   /** 입력창 아래쪽 줄(첫 화면의 복무 형태 버튼 등) */
@@ -14,7 +17,18 @@ interface Props {
   id: string;
 }
 
-export function Composer({ placeholder, disabled, rows = 1, onSubmit, footer, compact, id }: Props) {
+export function Composer({
+  placeholder,
+  disabled: disabledProp,
+  busy,
+  onStop,
+  rows = 1,
+  onSubmit,
+  footer,
+  compact,
+  id,
+}: Props) {
+  const disabled = disabledProp || busy;
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
@@ -33,16 +47,27 @@ export function Composer({ placeholder, disabled, rows = 1, onSubmit, footer, co
     requestAnimationFrame(grow);
   };
 
-  const sendButton = (
-    <button
-      type="submit"
-      disabled={disabled}
-      aria-label="질문 보내기"
-      className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-ink disabled:opacity-50"
-    >
-      <ArrowUp className="size-[18px]" strokeWidth={2.2} />
-    </button>
-  );
+  const sendButton =
+    busy && onStop ? (
+      <button
+        type="button"
+        onClick={onStop}
+        aria-label="답변 멈추기"
+        title="답변 멈추기"
+        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-fg text-bg"
+      >
+        <Square className="size-[13px]" fill="currentColor" strokeWidth={0} />
+      </button>
+    ) : (
+      <button
+        type="submit"
+        disabled={disabled}
+        aria-label="질문 보내기"
+        className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-ink disabled:opacity-50"
+      >
+        <ArrowUp className="size-[18px]" strokeWidth={2.2} />
+      </button>
+    );
 
   return (
     <form

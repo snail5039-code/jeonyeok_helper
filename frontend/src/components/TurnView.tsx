@@ -1,6 +1,15 @@
 "use client";
 
-import { Check, ChevronRight, CircleHelp, Copy, ShieldCheck, ThumbsDown, ThumbsUp } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  CircleHelp,
+  Copy,
+  CornerDownRight,
+  ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
+} from "lucide-react";
 import { useState } from "react";
 
 import { parseAnswer } from "@/lib/answer";
@@ -70,11 +79,13 @@ function Process({ turn }: { turn: Turn }) {
     >
       <ShieldCheck className="size-[18px] shrink-0 text-accent" strokeWidth={1.8} />
       <span>
-        {turn.status === "streaming"
-          ? "답변을 쓰고 있어요. 근거 확인이 끝나면 출처가 붙어요"
-          : live
-            ? "답변을 준비하고 있어요"
-            : summary(turn.sources, turn.steps.length)}
+        {turn.stopped
+          ? "답변을 멈췄어요"
+          : turn.status === "streaming"
+            ? "답변을 쓰고 있어요. 근거 확인이 끝나면 출처가 붙어요"
+            : live
+              ? "답변을 준비하고 있어요"
+              : summary(turn.sources, turn.steps.length)}
       </span>
       {!live && turn.steps.length > 0 && (
         <button
@@ -282,8 +293,10 @@ export function TurnView({
         </div>
       )}
 
-      {turn.status === "streaming" && <Answer turn={turn} onFeedback={onFeedback} streaming />}
-      {turn.status === "answer" && <Answer turn={turn} onFeedback={onFeedback} />}
+      {turn.status === "streaming" && (
+        <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} streaming />
+      )}
+      {turn.status === "answer" && <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} />}
     </article>
   );
 }
@@ -291,10 +304,12 @@ export function TurnView({
 /** streaming: 초안이 들어오는 중. 근거 검증 전이라 출처·피드백은 최종 답변에서만 보인다. */
 function Answer({
   turn,
+  onAsk,
   onFeedback,
   streaming = false,
 }: {
   turn: Turn;
+  onAsk: (text: string) => void;
   onFeedback: FeedbackHandler;
   streaming?: boolean;
 }) {
@@ -305,14 +320,38 @@ function Answer({
       {benefits.length > 0 && <BenefitList benefits={benefits} sources={turn.sources} />}
       {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
       {streaming && <span className="stream-caret" aria-hidden />}
-      {!streaming && turn.sources.length > 0 && (
+      {!streaming && !turn.stopped && turn.sources.length > 0 && (
         // 넓은 화면은 오른쪽 목록에 보이므로 좁은 화면에서만 답변 아래에 둔다.
         <div className="grid gap-2 xl:hidden">
           <h3 className="text-sm font-bold">근거 자료</h3>
           <SourceList sources={turn.sources} />
         </div>
       )}
-      {!streaming && <Feedback turn={turn} onFeedback={onFeedback} />}
+      {turn.stopped && (
+        <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
+          <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />
+          답변을 멈췄어요. 근거 확인 전의 초안이라 정확하지 않을 수 있어요. 필요하면 다시 물어봐 주세요.
+        </p>
+      )}
+      {!streaming && !turn.stopped && <Feedback turn={turn} onFeedback={onFeedback} />}
+      {!streaming && turn.followUps.length > 0 && (
+        <div className="grid gap-2">
+          <h3 className="text-sm font-bold">이어서 물어보기</h3>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="이어서 물어볼 질문">
+            {turn.followUps.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => onAsk(q)}
+                className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-line-strong bg-bg px-3 py-1 text-left text-[13px] font-medium text-fg-2 hover:border-accent hover:text-accent"
+              >
+                <CornerDownRight className="size-[14px] shrink-0" strokeWidth={1.8} />
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

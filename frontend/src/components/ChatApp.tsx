@@ -54,6 +54,7 @@ export function ChatApp() {
   const [ready, setReady] = useState(false);
   const threadId = useRef<string | null>(null);
   const userId = useRef("");
+  const abort = useRef<AbortController | null>(null);
   const { dark, toggle } = useTheme();
 
   const updateTurn = (id: string, patch: (t: Turn) => Partial<Turn>) =>
@@ -66,7 +67,12 @@ export function ChatApp() {
       if (busy) return;
       setBusy(true);
       const id = `turn-${Date.now()}`;
-      setTurns((all) => [...all, { id, question, status: "loading", steps: [], text: "", sources: [], profile: {} }]);
+      const controller = new AbortController();
+      abort.current = controller;
+      setTurns((all) => [
+        ...all,
+        { id, question, status: "loading", steps: [], text: "", sources: [], profile: {}, followUps: [] },
+      ]);
       requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: "start" }));
 
       const handle = (e: ChatEvent) => {
@@ -81,7 +87,13 @@ export function ChatApp() {
             updateTurn(id, (t) => ({ status: "streaming", text: t.text + e.data.text }));
             break;
           case "answer":
-            updateTurn(id, () => ({ status: "answer", text: e.data.text, sources: e.data.sources ?? [], profile: e.data.profile ?? {} }));
+            updateTurn(id, () => ({
+              status: "answer",
+              text: e.data.text,
+              sources: e.data.sources ?? [],
+              profile: e.data.profile ?? {},
+              followUps: e.data.follow_ups ?? [],
+            }));
             mergeProfile(e.data.profile);
             break;
           case "question":
@@ -94,17 +106,35 @@ export function ChatApp() {
         }
       };
 
+      // 멈추면 그때까지 써진 초안은 남기고(근거 확인 전이라는 표시와 함께), 없으면 멈췄다고만 알린다.
+      const stopped = () =>
+        updateTurn(id, (t) =>
+          t.text
+            ? { status: "answer", stopped: true, sources: [], followUps: [] }
+            : { status: "error", text: "질문을 멈췄어요." },
+        );
+
       try {
         const events = demo
           ? demoChat(question, Boolean(profile.service_type))
-          : streamChat({ message: question, thread_id: threadId.current, user_id: userId.current });
-        for await (const e of events) handle(e);
+          : streamChat(
+              { message: question, thread_id: threadId.current, user_id: userId.current },
+              controller.signal,
+            );
+        for await (const e of events) {
+          if (controller.signal.aborted) break;
+          handle(e);
+        }
+        if (controller.signal.aborted) stopped();
       } catch (err) {
-        updateTurn(id, () => ({
-          status: "error",
-          text: err instanceof Error ? err.message : "연결이 끊겼어요. 잠시 후 다시 시도해 주세요.",
-        }));
+        if (controller.signal.aborted) stopped();
+        else
+          updateTurn(id, () => ({
+            status: "error",
+            text: err instanceof Error ? err.message : "연결이 끊겼어요. 잠시 후 다시 시도해 주세요.",
+          }));
       } finally {
+        abort.current = null;
         setBusy(false);
       }
     },
@@ -204,7 +234,14 @@ export function ChatApp() {
           </div>
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent to-bg to-40% px-3 pt-4 pb-[calc(12px+env(safe-area-inset-bottom,0px))] lg:px-8 lg:pb-[calc(20px+env(safe-area-inset-bottom,0px))]">
             <div className="mx-auto max-w-[1056px]">
-              <Composer id="chat-input" compact placeholder="이어서 물어보세요" disabled={busy} onSubmit={ask} />
+              <Composer
+                id="chat-input"
+                compact
+                placeholder="이어서 물어보세요"
+                busy={busy}
+                onStop={() => abort.current?.abort()}
+                onSubmit={ask}
+              />
             </div>
           </div>
         </div>
