@@ -1,6 +1,18 @@
 "use client";
 
-import { BookOpen, Briefcase, Building2, Check, GraduationCap, IdCard, Landmark, ShieldCheck, User } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  Briefcase,
+  Building2,
+  Check,
+  GraduationCap,
+  IdCard,
+  Landmark,
+  Route,
+  ShieldCheck,
+  User,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Composer } from "./Composer";
@@ -28,7 +40,7 @@ const TRUST = [
   { icon: User, title: "로그인 없이 사용", body: "복무 정보는 상담에만 쓰여요" },
 ];
 
-export function HomeView({ onAsk }: { onAsk: (text: string) => void }) {
+export function HomeView({ onAsk, onRoadmap }: { onAsk: (text: string) => void; onRoadmap: () => void }) {
   const [serviceType, setServiceType] = useState<string | null>(null);
 
   // 고른 복무 형태를 질문에 붙여 보낸다 (이미 말했으면 그대로).
@@ -80,6 +92,21 @@ export function HomeView({ onAsk }: { onAsk: (text: string) => void }) {
             }
           />
         </section>
+
+        <button
+          type="button"
+          onClick={onRoadmap}
+          className="grid grid-cols-[44px_1fr_auto] items-center gap-3.5 rounded-2xl border border-line bg-soft px-4 py-4 text-left hover:border-accent md:px-5"
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-accent text-accent-ink">
+            <Route className="size-[22px]" strokeWidth={1.8} />
+          </span>
+          <span className="grid gap-0.5">
+            <b className="text-[15px]">질문하기 막막하다면, 전역 로드맵부터</b>
+            <span className="text-[13.5px] text-fg-2">복무 정보만 고르면 전역 직후부터 할 일을 순서대로 정리해 드려요</span>
+          </span>
+          <ArrowRight className="size-5 text-fg-3" />
+        </button>
 
         <section>
           <h2 className="mb-3 text-[15px] font-bold">전역자들이 많이 물어봐요</h2>

@@ -168,6 +168,29 @@ def test_feedback_is_saved_and_counted():
             assert (saved.rating, saved.comment) == ("down", "금액이 없어요")
 
 
+def test_roadmap_endpoint_validates_profile_and_returns_stages():
+    async def builder(profile):
+        return {"intro": f"{profile.service_type} 로드맵", "stages": []}
+
+    components, _ = make_components([Route(next="answer")])
+    graph = build_graph(components, checkpointer=InMemorySaver())
+
+    @asynccontextmanager
+    async def factory():
+        yield graph
+
+    app = create_app(agent_factory=factory, db_url=temp_db(), roadmap_builder=builder)
+    with TestClient(app) as client:
+        ok = client.post("/roadmap", json={"service_type": "conscript", "region": "서울"})
+        assert ok.status_code == 200 and ok.json()["intro"] == "conscript 로드맵"
+        assert client.post("/roadmap", json={"service_type": "alien"}).status_code == 422
+
+
+def test_roadmap_without_agent_returns_503():
+    with no_agent_client() as client:
+        assert client.post("/roadmap", json={"service_type": "merit"}).status_code == 503
+
+
 def test_feedback_rejects_unknown_rating():
     with make_client([Route(next="answer")]) as client:
         body = {"rating": "meh", "question": "q", "answer": "a"}

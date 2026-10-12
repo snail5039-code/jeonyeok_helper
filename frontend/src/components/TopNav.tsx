@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Building2, ChevronDown, Gift, House, Menu, Moon, Plus, Sun, UserRound, X } from "lucide-react";
+import { BookOpen, Building2, ChevronDown, House, Menu, Moon, Plus, Route, Sun, UserRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { SERVICE_TYPE_LABELS, type Profile } from "@/lib/types";
@@ -8,7 +8,6 @@ import { SERVICE_TYPE_LABELS, type Profile } from "@/lib/types";
 import { LogoMark } from "./Logo";
 
 const SHORTCUTS = [
-  { icon: Gift, label: "내 혜택", ask: "지금 제 상황에서 받을 수 있는 혜택을 모두 알려주세요" },
   { icon: BookOpen, label: "규정 찾기", ask: "전역자 지원과 관련된 주요 법령을 알려주세요" },
   { icon: Building2, label: "기관 안내", ask: "전역 후 혜택을 신청하거나 문의할 수 있는 기관을 알려주세요" },
 ];
@@ -63,16 +62,17 @@ function useDismissable() {
 }
 
 interface Props {
-  isHome: boolean;
+  view: "home" | "chat" | "roadmap";
   profile: Profile;
   demo: boolean;
   dark: boolean;
   onToggleTheme: () => void;
   onHome: () => void;
+  onRoadmap: () => void;
   onAsk: (text: string) => void;
 }
 
-export function TopNav({ isHome, profile, demo, dark, onToggleTheme, onHome, onAsk }: Props) {
+export function TopNav({ view, profile, demo, dark, onToggleTheme, onHome, onRoadmap, onAsk }: Props) {
   const [profileOpen, setProfileOpen, profileRef] = useDismissable();
   const [mobileOpen, setMobileOpen, mobileRef] = useDismissable();
 
@@ -93,8 +93,17 @@ export function TopNav({ isHome, profile, demo, dark, onToggleTheme, onHome, onA
         </button>
 
         <nav className="hidden items-center gap-0.5 md:flex" aria-label="메뉴">
-          <button type="button" onClick={onHome} className={`${navLink} ${isHome ? "bg-sunken text-fg" : ""}`}>
+          <button type="button" onClick={onHome} className={`${navLink} ${view === "home" ? "bg-sunken text-fg" : ""}`}>
             <House className="size-4" strokeWidth={1.8} />홈
+          </button>
+          <button
+            type="button"
+            onClick={onRoadmap}
+            aria-current={view === "roadmap" ? "page" : undefined}
+            className={`${navLink} ${view === "roadmap" ? "bg-sunken text-fg" : ""}`}
+          >
+            <Route className="size-4" strokeWidth={1.8} />
+            전역 로드맵
           </button>
           {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
             <button key={label} type="button" onClick={() => onAsk(ask)} className={navLink}>
@@ -162,6 +171,10 @@ export function TopNav({ isHome, profile, demo, dark, onToggleTheme, onHome, onA
           <nav className="grid gap-0.5" aria-label="메뉴">
             <button type="button" onClick={go(onHome)} className={navLink}>
               <House className="size-4" strokeWidth={1.8} />홈 · 새 질문
+            </button>
+            <button type="button" onClick={go(onRoadmap)} className={navLink}>
+              <Route className="size-4" strokeWidth={1.8} />
+              전역 로드맵
             </button>
             {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
               <button key={label} type="button" onClick={go(() => onAsk(ask))} className={navLink}>

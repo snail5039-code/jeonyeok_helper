@@ -5,6 +5,7 @@
 - **규정 Q&A**: 법령, 행정규칙, 법령해석례, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
 - **맞춤 혜택 찾기**: 복무 형태, 기간, 나이, 지역에 맞는 공공서비스 혜택 조회
 - **기관 연계**: 소관 기관, 신청 방법, 링크, 연락처 안내
+- **전역 로드맵**: 복무 정보를 한 번 고르면 전역 직후부터 취업·학업·연금까지 할 일을 시기별 체크리스트로 정리
 
 자세한 내용은 [기획서](docs/기획서.md), [개발 순서](docs/개발순서.md), [작업 기록](docs/작업기록.md)을 참고하세요.
 
@@ -109,6 +110,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 |---|---|
 | `POST /chat` | `{message, thread_id?, user_id?}` → SSE (`thread`, `step`, `answer` / `question`, `error`, `done`) |
 | `GET /profile/{user_id}` | 저장된 사용자 프로필 |
+| `POST /roadmap` | `{service_type, region?, age?, service_years?}` → 시기별 할 일 목록 (할 일마다 근거 자료와 링크) |
 | `POST /feedback` | 답변 피드백 저장 `{rating: up/down, question, answer, comment?}` |
 | `GET /feedback/summary` | 피드백 수 (화면 프록시로는 열지 않음) |
 | `GET /health` | 상태, 에이전트 준비 여부, 키 설정 여부 |

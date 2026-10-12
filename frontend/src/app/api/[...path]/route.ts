@@ -6,7 +6,7 @@ import type { NextRequest } from "next/server";
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
 // 열어 둘 FastAPI 경로만 허용한다 (임의 주소로 넘기는 열린 프록시가 되지 않게).
-const ALLOWED = [/^health$/, /^chat$/, /^feedback$/, /^profile\/[\w-]{1,64}$/];
+const ALLOWED = [/^health$/, /^chat$/, /^roadmap$/, /^feedback$/, /^profile\/[\w-]{1,64}$/];
 
 async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
   const path = (await ctx.params).path.join("/");

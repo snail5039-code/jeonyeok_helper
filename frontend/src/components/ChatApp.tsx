@@ -10,6 +10,7 @@ import type { ChatEvent, Profile, Turn } from "@/lib/types";
 
 import { Composer } from "./Composer";
 import { HomeView } from "./HomeView";
+import { RoadmapView } from "./RoadmapView";
 import { SourceList } from "./SourceList";
 import { TopNav } from "./TopNav";
 import { TurnView } from "./TurnView";
@@ -52,6 +53,7 @@ export function ChatApp() {
   const [demo, setDemo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [roadmapOpen, setRoadmapOpen] = useState(false);
   const threadId = useRef<string | null>(null);
   const userId = useRef("");
   const abort = useRef<AbortController | null>(null);
@@ -65,6 +67,7 @@ export function ChatApp() {
   const ask = useCallback(
     async (question: string) => {
       if (busy) return;
+      setRoadmapOpen(false);
       setBusy(true);
       const id = `turn-${Date.now()}`;
       const controller = new AbortController();
@@ -187,27 +190,32 @@ export function ChatApp() {
   }, [ready, ask]);
 
   const goHome = () => {
+    setRoadmapOpen(false);
     setTurns([]);
     threadId.current = null;
   };
 
   const isHome = turns.length === 0;
+  const view = roadmapOpen ? "roadmap" : isHome ? "home" : "chat";
   const latest = [...turns].reverse().find((t) => t.status === "answer");
 
   return (
     <div className="flex h-full flex-col">
       <TopNav
-        isHome={isHome}
+        view={view}
         profile={profile}
         demo={demo}
         dark={dark}
         onToggleTheme={toggle}
         onHome={goHome}
+        onRoadmap={() => setRoadmapOpen(true)}
         onAsk={ask}
       />
 
-      {isHome ? (
-        <HomeView onAsk={ask} />
+      {roadmapOpen ? (
+        <RoadmapView profile={profile} demo={demo} onAsk={ask} />
+      ) : isHome ? (
+        <HomeView onAsk={ask} onRoadmap={() => setRoadmapOpen(true)} />
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">

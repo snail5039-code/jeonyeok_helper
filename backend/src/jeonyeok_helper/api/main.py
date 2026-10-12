@@ -3,6 +3,7 @@
 - GET  /health            : 상태와 키 설정 여부
 - POST /chat              : 질문 → SSE 스트리밍 (진행 단계, 최종 답변)
 - GET  /profile/{user_id} : 저장된 사용자 프로필
+- POST /roadmap           : 프로필로 전역 로드맵(시기별 할 일) 만들기
 - POST /feedback          : 답변 피드백(도움이 됐어요/아쉬워요) 저장
 - GET  /feedback/summary  : 피드백 수
 
@@ -19,7 +20,7 @@ SSE 이벤트
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from typing import Literal
 
@@ -32,6 +33,7 @@ from sqlalchemy import func, select
 
 from jeonyeok_helper import __version__
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
+from jeonyeok_helper.agents.roadmap import RoadmapProfile
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
 
@@ -68,19 +70,46 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _default_factory() -> AbstractAsyncContextManager[CompiledStateGraph]:
-    from jeonyeok_helper.agents.runtime import open_agent
+RoadmapBuilder = Callable[[RoadmapProfile], Awaitable[dict]]
 
-    return open_agent()
+
+def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
+    """채팅 에이전트와 로드맵이 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
+    from jeonyeok_helper.agents.roadmap import build_roadmap, make_organizer
+    from jeonyeok_helper.agents.runtime import open_agent
+    from jeonyeok_helper.benefits.mcp_server import Services
+
+    services = Services()
+    organizer = None
+
+    async def roadmap(profile: RoadmapProfile) -> dict:
+        nonlocal organizer
+        if organizer is None:
+            from jeonyeok_helper.llm import get_chat_model
+
+            s = get_settings()
+            organizer = make_organizer(
+                get_chat_model(temperature=0.1, thinking_budget=s.gemini_thinking_budget)
+            )
+        return await build_roadmap(services, organizer, profile)
+
+    return (lambda: open_agent(services=services)), roadmap
 
 
 def create_app(
-    agent_factory: AgentFactory = _default_factory, db_url: str | None = None
+    agent_factory: AgentFactory | None = None,
+    db_url: str | None = None,
+    roadmap_builder: RoadmapBuilder | None = None,
 ) -> FastAPI:
+    if agent_factory is None:
+        agent_factory, default_roadmap = _default_runtime()
+        roadmap_builder = roadmap_builder or default_roadmap
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.db = Database(db_url or get_settings().app_db_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
+        app.state.roadmap = roadmap_builder
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -160,6 +189,19 @@ def create_app(
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.post("/roadmap")
+    async def roadmap(profile: RoadmapProfile, request: Request) -> dict:
+        """프로필 하나로 시기별 할 일 목록(전역 로드맵)을 한 번에 만든다."""
+        if request.app.state.agent is None or request.app.state.roadmap is None:
+            raise HTTPException(503, request.app.state.agent_error or "로드맵을 만들 수 없어요")
+        try:
+            return await request.app.state.roadmap(profile)
+        except Exception:
+            log.exception("로드맵 생성 실패")
+            raise HTTPException(
+                500, "로드맵을 만들지 못했어요. 잠시 후 다시 시도해 주세요."
+            ) from None
 
     @app.post("/feedback", status_code=201)
     def feedback(req: FeedbackRequest, request: Request) -> dict:
