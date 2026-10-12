@@ -95,6 +95,12 @@ export function useJourney(userId: string, demo: boolean, ready: boolean) {
     [update],
   );
 
+  /** 서버가 바꾼 할 일 하나를 반영한다 (채팅의 '했어요' 버튼 등). */
+  const applyItem = useCallback(
+    (item: JourneyItem) => update((all) => all.map((i) => (i.id === item.id ? item : i))),
+    [update],
+  );
+
   /** '내 정보'로 로드맵을 한 번에 채운다. 새로 담긴 개수를 돌려준다. */
   const generate = useCallback(async (): Promise<number> => {
     setGenerating(true);
@@ -116,7 +122,7 @@ export function useJourney(userId: string, demo: boolean, ready: boolean) {
     }
   }, [demo, update, userId]);
 
-  return { items, fresh, generating, error, setError, toggle, remove, addPlanned, generate };
+  return { items, fresh, generating, error, setError, toggle, remove, addPlanned, applyItem, generate };
 }
 
 export type Journey = ReturnType<typeof useJourney>;

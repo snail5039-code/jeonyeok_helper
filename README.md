@@ -5,21 +5,34 @@
 - **규정 Q&A**: 법령, 행정규칙, 법령해석례, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
 - **맞춤 혜택 찾기**: 복무 형태, 기간, 나이, 지역에 맞는 공공서비스 혜택 조회
 - **기관 연계**: 소관 기관, 신청 방법, 링크, 연락처 안내
-- **대화형 전역 로드맵**: 답변에 나온 할 일(신청·등록·확인)이 근거와 함께 채팅 옆 로드맵에 자동으로 담기고, 하나씩 끝내면
-  계급(이병 → 민간인)이 오르고 스티커를 받음. '내 정보'로 한 번에 채울 수도 있음
+- **길잡이 대화**: 길잡이 '전역이'가 먼저 말을 걸고 복무 형태 → 지역 → 전역일을 버튼으로 하나씩 물어 로드맵을 만든 뒤,
+  다음 할 일을 하나씩 권한다 ([했어요] [어떻게 해요?] [나중에]). 자료가 필요한 질문만 RAG로 찾아 답하고,
+  긴 답변은 '자세히 보기'로 접어 두고 위에 "지금 이것부터" 한마디를 보여 준다
+- **전역 로드맵**: 답변에서 길잡이가 제안한 할 일 중 고른 것을 담고, 끝낸 개수로 계급(이병 → 병장)이 오른다.
+  단계마다 ⭐핵심 할 일을 다 끝내면 민간인(완주). 근거 자료에 신청 기한이 있으면 전역일 기준 D-day로 보여 준다
 - **내 정보**: 복무·지역·학력·주거·목표·희망 직무·자격증·메모를 자세히 적어 두면 답변과 로드맵 검색에 반영
 
 자세한 내용은 [기획서](docs/기획서.md), [개발 순서](docs/개발순서.md), [작업 기록](docs/작업기록.md)을 참고하세요.
 
 ## 화면
 
-| 채팅 + 로드맵 패널 | 내 로드맵 |
+| 처음 온 사람: 전역이가 먼저 묻기 | 버튼으로 답하면 로드맵 완성 |
 |---|---|
-| ![채팅 옆 로드맵 패널](docs/screenshots/4_chat_panel.png) | ![내 로드맵](docs/screenshots/2_journey_top.png) |
+| ![첫 방문](docs/screenshots/guide_1_first_visit.png) | ![로드맵 완성](docs/screenshots/guide_2_roadmap_built.png) |
 
-| 할 일 카드 | 내 정보 | 모바일 로드맵 |
+| "어떻게 해요?" → 한마디 + 자세히 보기 | "했어요" → 계급 오르고 다음 할 일 |
+|---|---|
+| ![신청 방법](docs/screenshots/guide_3_how_to.png) | ![했어요](docs/screenshots/guide_4_done_next.png) |
+
+| 다시 왔을 때 (D-day) | 내 로드맵 | 다크 모드 |
 |---|---|---|
-| ![할 일 카드](docs/screenshots/3_journey_items.png) | ![내 정보](docs/screenshots/1_profile.png) | ![모바일 로드맵](docs/screenshots/5_mobile_journey.png) |
+| ![다시 왔을 때](docs/screenshots/guide_5_returning.png) | ![내 로드맵](docs/screenshots/2_journey_top.png) | ![다크 모드](docs/screenshots/guide_7_dark.png) |
+
+| 모바일 | 할 일 카드 | 내 정보 |
+|---|---|---|
+| ![모바일](docs/screenshots/guide_6_mobile.png) | ![할 일 카드](docs/screenshots/3_journey_items.png) | ![내 정보](docs/screenshots/1_profile.png) |
+
+<details><summary>예전 화면 (검색형 답변)</summary>
 
 | 첫 화면 | 답변 화면 |
 |---|---|
@@ -29,7 +42,9 @@
 |---|---|---|
 | ![모바일 답변 화면](docs/screenshots/answer-mobile.jpg) | ![모바일 메뉴](docs/screenshots/menu-mobile.jpg) | ![다크 모드 답변 화면](docs/screenshots/answer-dark.png) |
 
-> 데모 모드 화면입니다. 백엔드에 Gemini 키가 없으면 자동으로 데모 모드로 열려 예시 응답을 보여줍니다. `?q=질문` 주소로 들어오면 바로 질문합니다.
+</details>
+
+> 예전 화면은 데모 모드입니다. 백엔드에 Gemini 키가 없으면 자동으로 데모 모드로 열려 예시 응답을 보여줍니다. `?q=질문` 주소로 들어오면 바로 질문합니다.
 
 ## 구조
 
@@ -121,11 +136,12 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 
 | API | 설명 |
 |---|---|
-| `POST /chat` | `{message, thread_id?, user_id?}` → SSE (`thread`, `step`, `delta`, `answer` / `question`, `plan`, `error`, `done`). `plan`은 답변에서 뽑아 로드맵에 담은 할 일 |
+| `POST /chat` | `{message, thread_id?, user_id?, action?}` → SSE (`thread`, `step`, `delta`, `answer`, `guide`, `journey`, `question`, `error`, `done`). `guide`는 길잡이 한마디·버튼·할 일 제안, `action`은 버튼 동작(`done`·`later`) |
 | `GET /profile/{user_id}` | 저장된 사용자 프로필 |
 | `PUT /profile/{user_id}` | 내 정보 저장 (보낸 칸만 바꾸고, 빈 값은 지움) |
 | `GET /journey/{user_id}` | 로드맵 할 일 목록 (단계 순) |
 | `POST /journey/{user_id}/generate` | 내 정보로 할 일을 한 번에 모아 담기 → `{intro, added, items}` |
+| `POST /journey/{user_id}/items` | 길잡이가 제안한 할 일 중 고른 것 담기 `{items, question}` |
 | `PATCH /journey/{user_id}/items/{id}` | `{done}` 완료 체크 |
 | `DELETE /journey/{user_id}/items/{id}` | 할 일 빼기 |
 | `POST /feedback` | 답변 피드백 저장 `{rating: up/down, question, answer, comment?}` |
@@ -163,10 +179,16 @@ API 키가 없거나 호출이 실패하면 오류 대신 정부24, 온통청년
 ### 에이전트 흐름
 
 ```
-start → profile(복무 정보 추출) → supervisor ─┬→ regulation / benefit / institution → supervisor
-                                              ├→ ask_user (정보가 부족하면 되묻기)
-                                              └→ respond(답변 초안) → verify(근거 검증)
+start → profile(복무 정보 추출) → coach(길잡이) ─┬→ talk: 인사·진행 보고·정보 알려 주기 → 바로 짧게 답 (검색 없음)
+                                                └→ supervisor ─┬→ regulation / benefit / institution → supervisor
+                                                               ├→ ask_user (정보가 부족하면 되묻기)
+                                                               └→ respond → verify(근거 검증) → guide(한마디·할 일 제안)
 ```
+
+- 버튼은 LLM이 아니라 규칙으로 만든다: 모르는 정보가 있으면 고르는 버튼, 없으면 다음 할 일 버튼
+- 다음 할 일: 안 끝낸 것 중 ⭐핵심 → 기한 빠른 것 → 단계 순 (`agents/guide.py`의 `next_item`)
+- 복무 형태·지역·전역일을 다 알면 첫 로드맵을 자동으로 만들고 첫 할 일을 권한다
+- 할 일의 신청 기한은 근거 자료에 그 문구가 실제로 있을 때만 남긴다 (`journey.ground_deadline`)
 
 ## 테스트
 

@@ -94,8 +94,17 @@ def grade(
     sources: list[dict],
     profile: dict,
     tools: list[str] | None = None,
+    talked: bool = False,
 ) -> list[Check]:
     checks: list[Check] = []
+    # 길잡이: 인사·자기 정보·진행 보고는 검색 없이 바로(talk), 그 밖의 질문은 자료를 찾아 답한다
+    if "should_talk" in case:
+        want = case["should_talk"]
+        checks.append(
+            Check(
+                "길잡이 대화" if want else "자료 찾기", talked == want, "talk" if talked else "검색"
+            )
+        )
     if (words := case.get("tools_any")) and not asked:
         hit = next((w for w in words if w in (tools or [])), None)
         checks.append(Check("도구 사용", hit is not None, hit or f"쓴 도구: {tools or '없음'}"))
@@ -144,9 +153,10 @@ async def run_case(agent, case: dict) -> CaseResult:
     sources = state.get("sources", [])
     profile = state.get("profile", {})
     tools = tools_used(state.get("evidence", []))
+    talked = (state.get("guide") or {}).get("mode") == "talk"
     return CaseResult(
         case["id"], case["category"], case["question"], answer, asked, sources, profile, seconds,
-        grade(case, answer, asked, sources, profile, tools), tools=tools,
+        grade(case, answer, asked, sources, profile, tools, talked), tools=tools,
     )  # fmt: skip
 
 

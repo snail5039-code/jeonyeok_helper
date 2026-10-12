@@ -249,4 +249,20 @@ questions:
   - id: g03
     category: general
     question: 안녕하세요
-    should_ask: false
+    # 길잡이는 인사에 바로 답하며 복무 형태부터 묻는다 (검색하지 않음)
+    should_ask: true
+    should_talk: true
+  - id: g04
+    category: general
+    question: 의무복무 병사로 전역했어요
+    should_talk: true
+    profile: {service_type: conscript}
+  - id: g05
+    category: general
+    question: 서울 살아요
+    should_talk: true
+    profile: {region: 서울}
+  - id: g06
+    category: general
+    question: 고마워요!
+    should_talk: true

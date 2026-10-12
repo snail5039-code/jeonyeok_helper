@@ -13,6 +13,7 @@ const ALLOWED = [
   /^profile\/[\w-]{1,64}$/,
   /^journey\/[\w-]{1,64}$/,
   /^journey\/[\w-]{1,64}\/generate$/,
+  /^journey\/[\w-]{1,64}\/items$/,
   /^journey\/[\w-]{1,64}\/items\/[\w-]{1,64}$/,
 ];
 const NO_BODY = new Set(["GET", "DELETE"]);

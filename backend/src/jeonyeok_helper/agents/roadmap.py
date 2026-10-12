@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date
 from typing import Any, Literal
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -92,6 +93,9 @@ class RoadmapItemDraft(BaseModel):
     action: str = Field(description="사용자가 할 일을 한 문장으로 (예: '고용24에서 온라인 신청')")
     detail: str = Field(default="", description="대상·내용을 자료에 있는 대로 한두 문장")
     source_ids: list[str] = Field(description="근거로 쓴 자료 번호 (예: ['E3']). 반드시 하나 이상")
+    core: bool = Field(default=False, description="놓치면 손해이거나 기한이 있는 핵심 할 일")
+    deadline: str = Field(default="", description="자료에 적힌 신청 기한 문구 그대로")
+    due_months: int | None = Field(default=None, description="전역일 기준 기한(개월)")
 
 
 class RoadmapStageDraft(BaseModel):
@@ -112,16 +116,22 @@ ROADMAP_PROMPT = ChatPromptTemplate.from_messages(
             "내용만으로 사용자의 전역 로드맵을 만드세요.\n"
             "- 단계: before(전역 전), right_after(전역 직후), job(취업·창업), study(학업), "
             "life(주거·생활), later(나중에 챙길 것). 해당하는 할 일이 없는 단계는 빼세요.\n"
+            "- 오늘은 {today}입니다. 사용자가 이미 전역했으면 before(전역 전) 단계와 복무 중에만 "
+            "할 수 있는 일(복무 중 적금 가입, 군 원격강좌 등)은 빼세요.\n"
             "- 할 일마다 근거 자료 번호(source_ids)를 반드시 넣고, 자료에 없는 혜택·금액·기한은 "
             "쓰지 마세요.\n"
             "- 사용자의 복무 형태·나이·지역에 맞지 않는 항목은 빼세요 (예: 다른 지역 혜택, "
             "장기복무자 전용 혜택을 병사에게).\n"
             "- 단계마다 중요한 순서로 최대 4개, 전체 12개 이내. 같은 제도는 한 번만.\n"
+            "- core: 단계마다 1~2개, 놓치면 손해이거나 기한이 있는 핵심 할 일만 true. "
+            "사용자는 핵심 할 일을 다 끝내면 로드맵을 완주한 것으로 봅니다.\n"
+            "- deadline: 자료에 적힌 신청 기한 문구를 그대로 (예: '전역 후 3년 이내'), 없으면 "
+            "빈 칸. due_months: 그 기한이 전역일 기준이면 개월 수 (3년 이내 → 36), 아니면 비움.\n"
             "- 말투는 짧고 쉽게: '~하세요', '~할 수 있어요'.",
         ),
         ("human", "사용자: {profile}\n\n자료:\n{evidence}"),
     ]
-)
+).partial(today=lambda: date.today().isoformat())
 
 
 def _profile_text(p: RoadmapProfile) -> str:
@@ -232,6 +242,8 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
 
 def assemble(draft: RoadmapDraft, evidence: list[dict]) -> dict:
     """LLM 초안에서 근거가 확인되는 할 일만 남기고, 링크·출처는 모은 자료에서 붙인다."""
+    from jeonyeok_helper.journey import ground_deadline
+
     by_id = {e["id"]: e for e in evidence}
     stages, used = [], set()
     for key in STAGE_TITLES:  # 단계 순서는 고정
@@ -242,6 +254,10 @@ def assemble(draft: RoadmapDraft, evidence: list[dict]) -> dict:
                 if not refs or item.title in used:
                     continue  # 근거 없는 할 일, 중복은 뺀다
                 used.add(item.title)
+                # 기한은 근거 자료에 그 문구가 실제로 있을 때만 (지어낸 기한 방지)
+                deadline, due = ground_deadline(
+                    item.deadline, item.due_months, [r["text"] for r in refs]
+                )
                 items.append(
                     {
                         "id": f"{key}:{item.title}",
@@ -251,6 +267,9 @@ def assemble(draft: RoadmapDraft, evidence: list[dict]) -> dict:
                         "sources": [
                             {"type": r["kind"], "title": r["title"], "url": r["url"]} for r in refs
                         ],
+                        "core": item.core,
+                        "deadline": deadline,
+                        "due_months": due,
                     }
                 )
         if items:

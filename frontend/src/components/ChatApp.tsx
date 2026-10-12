@@ -4,10 +4,10 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 
 import { demoChat } from "@/lib/demo";
 import { sendFeedback, type Rating } from "@/lib/feedback";
-import { saveProfile } from "@/lib/journey";
+import { addItems, levelOf, saveProfile } from "@/lib/journey";
 import { streamChat } from "@/lib/sse";
 import { getUserId, readStorage, writeStorage } from "@/lib/storage";
-import type { ChatEvent, Profile, Turn } from "@/lib/types";
+import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Suggestion, Turn } from "@/lib/types";
 
 import { Composer } from "./Composer";
 import { HomeView } from "./HomeView";
@@ -61,7 +61,8 @@ export function ChatApp() {
   const abort = useRef<AbortController | null>(null);
   const { dark, toggle } = useTheme();
   const journey = useJourney(userId, demo, ready);
-  const { addPlanned } = journey;
+  const { addPlanned, applyItem, toggle: toggleItem } = journey;
+  const rank = levelOf(journey.items).rank;
 
   const updateTurn = (id: string, patch: (t: Turn) => Partial<Turn>) =>
     setTurns((all) => all.map((t) => (t.id === id ? { ...t, ...patch(t) } : t)));
@@ -69,7 +70,7 @@ export function ChatApp() {
   const mergeProfile = (p?: Profile) => p && setProfile((old) => ({ ...old, ...p }));
 
   const ask = useCallback(
-    async (question: string) => {
+    async (question: string, action?: ChatAction) => {
       if (busy) return;
       setPage("chat");
       setBusy(true);
@@ -103,9 +104,19 @@ export function ChatApp() {
             }));
             mergeProfile(e.data.profile);
             break;
-          case "plan":
-            updateTurn(id, () => ({ planned: e.data.added }));
-            addPlanned(e.data.added);
+          case "guide": {
+            const g: Guide = e.data;
+            mergeProfile(g.profile);
+            updateTurn(id, (t) => {
+              // 한 대화에서 길잡이가 두 번 말하면(예: 로드맵 완성 안내) 이어서 보여 준다
+              if (t.guide) return { moreGuides: [...(t.moreGuides ?? []), g] };
+              return g.mode === "talk" ? { status: "talk", text: g.say, guide: g } : { guide: g };
+            });
+            break;
+          }
+          case "journey":
+            if (e.data.added.length) addPlanned(e.data.added);
+            if (e.data.done) applyItem(e.data.done);
             break;
           case "question":
             updateTurn(id, () => ({ status: "question", text: e.data.text }));
@@ -127,8 +138,8 @@ export function ChatApp() {
 
       try {
         const events = demo
-          ? demoChat(question, Boolean(profile.service_type))
-          : streamChat({ message: question, thread_id: threadId.current, user_id: userId }, controller.signal);
+          ? demoChat(question, Boolean(profile.service_type), action)
+          : streamChat({ message: question, thread_id: threadId.current, user_id: userId, action }, controller.signal);
         for await (const e of events) {
           if (controller.signal.aborted) break;
           handle(e);
@@ -146,7 +157,44 @@ export function ChatApp() {
         setBusy(false);
       }
     },
-    [busy, demo, profile.service_type, userId, addPlanned],
+    [busy, demo, profile.service_type, userId, addPlanned, applyItem],
+  );
+
+  const openJourney = () => setPage("journey");
+
+  /** 길잡이 버튼: 화면 열기, 또는 버튼 말을 보내며 동작(했어요·나중에)을 함께 보낸다 */
+  const reply = useCallback(
+    (r: QuickReply) => {
+      if (r.open) return setPage(r.open);
+      if (demo && r.action?.type === "done") {
+        const item = journey.items.find((i) => i.id === r.action!.item_id);
+        if (item && !item.done) void toggleItem(item);
+      }
+      if (r.message) void ask(r.message, r.action);
+    },
+    [ask, demo, journey.items, toggleItem],
+  );
+
+  /** 길잡이가 제안한 할 일 중 고른 것을 로드맵에 담고, 새로 담긴 개수를 돌려준다 */
+  const addSuggest = useCallback(
+    async (turn: Turn, picked: Suggestion[]) => {
+      const known = new Set(journey.items.map((i) => i.title));
+      const fresh = picked.filter((s) => !known.has(s.title));
+      const added: JourneyItem[] = demo
+        ? fresh.map((s) => ({
+            ...s,
+            id: `demo:${s.title}`,
+            origin: "chat",
+            question: turn.question,
+            done: false,
+            created_at: null,
+            done_at: null,
+          }))
+        : await addItems(userId, fresh, turn.question);
+      addPlanned(added);
+      return added.length;
+    },
+    [addPlanned, demo, journey.items, userId],
   );
 
   const feedback = useCallback(
@@ -218,8 +266,6 @@ export function ChatApp() {
     setTurns([]);
     threadId.current = null;
   };
-  const openJourney = () => setPage("journey");
-
   const isHome = turns.length === 0;
   const view = page === "chat" ? (isHome ? "home" : "chat") : page;
 
@@ -252,7 +298,16 @@ export function ChatApp() {
           }}
         />
       ) : isHome ? (
-        <HomeView onAsk={ask} onRoadmap={openJourney} onProfile={() => setPage("profile")} />
+        <HomeView
+          profile={profile}
+          items={journey.items}
+          rank={rank}
+          ready={ready}
+          onAsk={ask}
+          onReply={reply}
+          onRoadmap={openJourney}
+          onProfile={() => setPage("profile")}
+        />
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
@@ -261,8 +316,17 @@ export function ChatApp() {
                 <div className="sticky top-0 z-10 -mx-1 flex justify-end bg-gradient-to-b from-bg via-bg to-transparent px-1 pb-2 xl:hidden">
                   <JourneyChip journey={journey} onOpen={openJourney} />
                 </div>
-                {turns.map((t) => (
-                  <TurnView key={t.id} turn={t} onAsk={ask} onFeedback={feedback} onOpenJourney={openJourney} />
+                {turns.map((t, i) => (
+                  <TurnView
+                    key={t.id}
+                    turn={t}
+                    rank={rank}
+                    latest={i === turns.length - 1 && !busy}
+                    onAsk={ask}
+                    onReply={reply}
+                    onAddSuggest={addSuggest}
+                    onFeedback={feedback}
+                  />
                 ))}
               </div>
               <div className="hidden xl:block">
@@ -275,7 +339,7 @@ export function ChatApp() {
               <Composer
                 id="chat-input"
                 compact
-                placeholder="이어서 물어보세요 (답변의 할 일은 로드맵에 자동으로 담겨요)"
+                placeholder="전역이에게 이어서 말해 보세요"
                 busy={busy}
                 onStop={() => abort.current?.abort()}
                 onSubmit={ask}

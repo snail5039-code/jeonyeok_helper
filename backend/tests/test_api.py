@@ -15,6 +15,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.store.memory import InMemoryStore
 
 from jeonyeok_helper.agents.graph import build_graph
+from jeonyeok_helper.agents.guide import CoachDecision, GuideDraft, PlanItemDraft
 from jeonyeok_helper.agents.state import Profile, Route, Verification
 from jeonyeok_helper.api.main import create_app
 from jeonyeok_helper.db import Feedback
@@ -73,7 +74,7 @@ def test_chat_streams_steps_then_answer_with_sources():
     names = [e for e, _ in events]
     assert names[0] == "thread" and names[-1] == "done"
     steps = [d["node"] for e, d in events if e == "step"]
-    assert steps == ["profile", "regulation", "respond", "verify"]
+    assert steps == ["profile", "regulation", "respond", "verify", "guide"]
     answer = next(d for e, d in events if e == "answer")
     assert answer["text"] == "최종 답변 [1]"
     assert answer["sources"][0]["title"] == "국민연금법 제18조"
@@ -208,7 +209,7 @@ ROADMAP = {
 }
 
 
-def journey_client(planner=None) -> TestClient:
+def journey_client(**kwargs) -> TestClient:
     seen = []
 
     async def builder(profile):
@@ -217,7 +218,8 @@ def journey_client(planner=None) -> TestClient:
 
     client = make_client(
         [Route(next="regulation"), Route(next="answer")] * 3,
-        app_kwargs={"roadmap_builder": builder, "planner": planner},
+        app_kwargs={"roadmap_builder": builder},
+        **kwargs,
     )
     client.seen_profiles = seen
     return client
@@ -256,33 +258,110 @@ def test_journey_item_done_and_delete_only_for_owner():
         assert [i["title"] for i in client.get("/journey/u1").json()["items"]] == ["적금 수령"]
 
 
-def test_chat_puts_planned_items_on_journey():
-    calls = []
+# ---------- 길잡이 ----------
 
-    async def planner(**kwargs):
-        calls.append(kwargs)
-        return [
-            {"stage": "job", "title": "국민취업지원제도", "action": "고용24에서 신청하세요",
-             "detail": "", "sources": kwargs["sources"][:1]},
-        ]  # fmt: skip
+TALK = CoachDecision(mode="talk", say="좋아요! 다음 할 일 알려 드릴게요.")
+FULL_PROFILE = {"service_type": "conscript", "region": "서울", "discharge_date": "2026-03"}
 
-    with journey_client(planner) as client:
+
+def test_research_answer_comes_with_guide_suggestions_that_user_picks():
+    draft = GuideDraft(
+        say="국민취업지원제도부터 신청하세요.",
+        items=[
+            PlanItemDraft(stage="job", title="국민취업지원제도", action="신청하세요", sources=[1],
+                          core=True, deadline="지어낸 기한", due_months=12),
+            PlanItemDraft(stage="job", title="근거 없음", action="x", sources=[]),
+        ],
+    )  # fmt: skip
+    with journey_client(coach=[CoachDecision(mode="research")], guide=[draft]) as client:
         events = parse_sse(
             client.post("/chat", json={"message": "취업 지원?", "user_id": "u1"}).text
         )
         names = [e for e, _ in events]
-        assert names.index("answer") < names.index("plan") < names.index("done")
-        plan = next(d for e, d in events if e == "plan")
-        assert plan["added"][0]["title"] == "국민취업지원제도"
-        assert plan["added"][0]["origin"] == "chat" and plan["added"][0]["question"] == "취업 지원?"
+        assert names.index("answer") < names.index("guide") < names.index("done")
+        guide = next(d for e, d in events if e == "guide")
+        # 복무 형태를 모르면 길잡이 말 끝에 묻는 말을 붙인다
+        assert guide["mode"] == "research"
+        assert guide["say"] == "국민취업지원제도부터 신청하세요. 어떻게 복무했어요?"
+        # 근거 출처가 있는 것만, 답변에 없는 기한은 지운다
+        [item] = guide["suggest"]
+        assert item["title"] == "국민취업지원제도" and item["core"] is True
+        assert (item["deadline"], item["due_months"]) == ("", None)
+        assert item["sources"][0]["title"] == "국민연금법 제18조"
+        # 복무 형태를 모르니 고르는 버튼이 함께 온다
+        assert guide["ask"] == "service_type" and len(guide["quick_replies"]) == 4
+        # 제안은 저장하지 않고, 사용자가 고른 것만 담는다
+        assert client.get("/journey/u1").json()["items"] == []
+        added = client.post("/journey/u1/items", json={"items": [item], "question": "취업 지원?"})
+        assert added.status_code == 201
+        assert added.json()["added"][0]["origin"] == "chat"
+        again = client.post("/journey/u1/items", json={"items": [item]}).json()
+        assert again["added"] == []  # 같은 제목은 한 번만
+        assert client.post("/journey/u1/items", json={"items": []}).status_code == 422
 
-        # 다음 답변에서는 이미 담긴 할 일을 알려 주고, 같은 할 일은 다시 담지 않는다
-        events = parse_sse(client.post("/chat", json={"message": "또", "user_id": "u1"}).text)
-        assert calls[1]["existing"] == ["국민취업지원제도"]
-        assert not any(e == "plan" for e, _ in events)
-        # user_id가 없으면 로드맵에 담지 않는다
-        parse_sse(client.post("/chat", json={"message": "익명"}).text)
-        assert len(calls) == 2
+
+def test_talk_reply_skips_search_and_asks_missing_field_with_buttons():
+    with make_client([Route(next="regulation")], coach=[TALK]) as client:
+        events = parse_sse(client.post("/chat", json={"message": "안녕", "user_id": "u1"}).text)
+    names = [e for e, _ in events]
+    assert "answer" not in names and "question" not in names
+    assert [d["node"] for e, d in events if e == "step"] == ["profile"]  # 검색 없음
+    guide = next(d for e, d in events if e == "guide")
+    assert guide["mode"] == "talk" and guide["say"] == f"{TALK.say} 어떻게 복무했어요?"
+    assert guide["ask"] == "service_type" and guide["step"] is None
+    assert guide["quick_replies"][0]["message"] == "의무복무 병사로 전역했어요"
+
+
+def test_onboarding_complete_builds_first_roadmap_and_suggests_first_step():
+    with journey_client(coach=[TALK]) as client:
+        client.put("/profile/u1", json=FULL_PROFILE)
+        events = parse_sse(
+            client.post("/chat", json={"message": "작년에 전역했어요", "user_id": "u1"}).text
+        )
+        added = next(d for e, d in events if e == "journey")["added"]
+        assert [i["title"] for i in added] == ["예비군 편성 확인", "적금 수령"]
+        last_guide = [d for e, d in events if e == "guide"][-1]
+        assert last_guide["step"]["title"] == "예비군 편성 확인"
+        assert "로드맵 완성" in last_guide["say"]
+        # 로드맵이 이미 있으면 다시 만들지 않는다
+        client.post("/chat", json={"message": "또", "user_id": "u1"})
+        assert len(client.seen_profiles) == 1
+
+
+def test_done_button_marks_item_and_coach_moves_to_next():
+    with journey_client(coach=[TALK]) as client:
+        client.put("/profile/u1", json=FULL_PROFILE)
+        first, second = client.post("/journey/u1/generate").json()["items"]
+        events = parse_sse(
+            client.post(
+                "/chat",
+                json={"message": "했어요", "user_id": "u1",
+                      "action": {"type": "done", "item_id": first["id"]}},
+            ).text
+        )  # fmt: skip
+        done = next(d for e, d in events if e == "journey")["done"]
+        assert done["id"] == first["id"] and done["done"] is True
+        guide = next(d for e, d in events if e == "guide")
+        assert guide["step"]["id"] == second["id"]
+        # 길잡이 말에 다음 할 일이 없으면 덧붙여서 대화가 끊기지 않게 한다
+        assert f"다음은 '{second['title']}' 차례예요." in guide["say"]
+        assert guide["quick_replies"][0]["action"] == {"type": "done", "item_id": second["id"]}
+
+
+def test_later_button_skips_item_in_this_conversation():
+    with journey_client(coach=[TALK]) as client:
+        client.put("/profile/u1", json=FULL_PROFILE)
+        first, second = client.post("/journey/u1/generate").json()["items"]
+        events = parse_sse(
+            client.post(
+                "/chat",
+                json={"message": "나중에", "user_id": "u1",
+                      "action": {"type": "later", "item_id": first["id"]}},
+            ).text
+        )  # fmt: skip
+        guide = next(d for e, d in events if e == "guide")
+        assert guide["step"]["id"] == second["id"]
+        assert client.get("/journey/u1").json()["items"][0]["done"] is False
 
 
 def test_journey_generate_without_agent_returns_503():

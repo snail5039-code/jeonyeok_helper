@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ExternalLink, MessageCircleQuestion, Sparkles, X } from "lucide-react";
+import { AlarmClock, Check, ExternalLink, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
 
-import { STAGES, currentStage, levelOf, progress } from "@/lib/journey";
+import { STAGES, currentStage, daysLeft, ddayLabel, dueDate, levelOf, progress, stageDone } from "@/lib/journey";
 import type { JourneyItem, Source } from "@/lib/types";
 
 import { Bubble, Mascot } from "./Doodle";
@@ -12,7 +12,7 @@ const SOURCE_LABEL: Record<Source["type"], string> = { regulation: "법령", ben
 /** 마스코트 + 계급 + 진행률. 노란 종이 위에 그려서 다크 모드에서도 그림이 잘 보인다. */
 export function JourneyHero({ items, compact = false }: { items: JourneyItem[]; compact?: boolean }) {
   const p = progress(items);
-  const level = levelOf(p.percent);
+  const level = levelOf(items);
   const empty = !items.length;
   return (
     <section
@@ -30,21 +30,23 @@ export function JourneyHero({ items, compact = false }: { items: JourneyItem[]; 
           {empty ? "할 일이 아직 없음. 물어보면 내가 적어 둘게!" : level.line}
         </Bubble>
         <div className="grid gap-1.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="font-fun text-[20px] leading-none">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+            <span className="font-fun text-[20px] leading-none whitespace-nowrap">
               {level.rank}
               {level.next > 0 && !empty && (
-                <span className="ml-1.5 font-sans text-[12px] font-semibold opacity-70">다음 계급까지 {level.next}%</span>
+                <span className="ml-1.5 font-sans text-[12px] font-semibold opacity-70">
+                  {compact ? `+${level.next}개면 진급` : `다음 계급까지 ${level.next}개`}
+                </span>
               )}
             </span>
-            <span className="text-[13px] font-bold tabular-nums">
-              {p.done}/{p.total} · {p.percent}%
+            <span className="text-[13px] font-bold whitespace-nowrap tabular-nums">
+              {compact ? `⭐ ${p.coreDone}/${p.coreTotal}` : `⭐ 핵심 ${p.coreDone}/${p.coreTotal} · 전체 ${p.done}/${p.total}`}
             </span>
           </div>
           <div
             className="h-3.5 overflow-hidden rounded-full border-2 border-[#1b1b1b] bg-white"
             role="progressbar"
-            aria-label="전역 로드맵 달성률"
+            aria-label="핵심 할 일 달성률"
             aria-valuenow={p.percent}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -79,7 +81,7 @@ export function StageTrack({
       <span aria-hidden className="absolute top-[38px] right-5 left-5 border-t-[3px] border-dashed border-line-strong" />
       {stages.map((s) => {
         const list = items.filter((i) => i.stage === s.key);
-        const done = list.every((i) => i.done);
+        const done = stageDone(list);
         const current = s.key === now && !done;
         const isSelected = selected === s.key;
         return (
@@ -118,10 +120,30 @@ export function StageTrack({
   );
 }
 
+/** 신청 기한: 전역일을 알면 D-day, 모르면 문구만 */
+export function DeadlineChip({ item, dischargeDate }: { item: JourneyItem; dischargeDate?: string }) {
+  if (!item.deadline) return null;
+  const due = dueDate(item, dischargeDate);
+  const days = due ? daysLeft(due) : null;
+  const urgent = days !== null && days <= 60;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-bold ${
+        urgent ? "bg-warn-soft text-warn" : "bg-sunken text-fg-2"
+      }`}
+    >
+      <AlarmClock className="size-3.5" />
+      {item.deadline}
+      {days !== null && !item.done && <span className="tabular-nums">· {ddayLabel(days)}</span>}
+    </span>
+  );
+}
+
 export function ItemCard({
   item,
   fresh = false,
   compact = false,
+  dischargeDate,
   onToggle,
   onAsk,
   onRemove,
@@ -129,6 +151,7 @@ export function ItemCard({
   item: JourneyItem;
   fresh?: boolean;
   compact?: boolean;
+  dischargeDate?: string;
   onToggle: (item: JourneyItem) => void;
   onAsk: (question: string) => void;
   onRemove?: (item: JourneyItem) => void;
@@ -152,7 +175,16 @@ export function ItemCard({
       </button>
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1">
         <div className="flex items-start gap-2">
-          <span className={`min-w-0 flex-1 text-[15px] font-bold ${item.done ? "text-fg-3 line-through" : ""}`}>{item.title}</span>
+          <span className={`min-w-0 flex-1 text-[15px] font-bold ${item.done ? "text-fg-3 line-through" : ""}`}>
+            {item.core && (
+              <Star
+                aria-label="핵심"
+                className="mr-1 mb-0.5 inline size-4 fill-[#ffc531] text-[#d99a00]"
+                strokeWidth={2}
+              />
+            )}
+            {item.title}
+          </span>
           {fresh && (
             <span className="font-fun inline-flex shrink-0 items-center gap-0.5 rounded-full bg-accent px-2 text-[12px] leading-[20px] text-accent-ink">
               <Sparkles className="size-3" />방금 담김
@@ -170,6 +202,11 @@ export function ItemCard({
           )}
         </div>
         {!item.done && <div className="text-[14px] font-semibold text-accent">{item.action}</div>}
+        {item.deadline && (
+          <div>
+            <DeadlineChip item={item} dischargeDate={dischargeDate} />
+          </div>
+        )}
         {!compact && item.detail && <p className="text-[13.5px] leading-relaxed text-fg-2">{item.detail}</p>}
         {!compact && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">

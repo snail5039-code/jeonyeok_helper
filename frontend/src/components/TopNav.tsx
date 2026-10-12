@@ -83,7 +83,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
   const iconButton = "grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg";
 
   const p = progress(journey);
-  const rank = levelOf(p.percent).rank;
+  const rank = levelOf(journey).rank;
   const pages = [
     { key: "journey", icon: Map, label: "내 로드맵", onClick: onJourney },
     { key: "profile", icon: UserRoundPen, label: "내 정보", onClick: onProfile },
@@ -118,7 +118,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
               {label}
               {key === "journey" && p.total > 0 && (
                 <span className="font-fun rounded-full border-[1.5px] border-[#1b1b1b] bg-paper px-1.5 text-[12px] leading-[18px] text-paper-ink">
-                  {rank} {p.done}/{p.total}
+                  {rank} ⭐{p.coreDone}/{p.coreTotal}
                 </span>
               )}
             </button>
@@ -207,7 +207,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
                 {label}
                 {key === "journey" && p.total > 0 && (
                   <span className="text-[12px] text-fg-3">
-                    {rank} · {p.done}/{p.total}
+                    {rank} · 핵심 {p.coreDone}/{p.coreTotal}
                   </span>
                 )}
               </button>

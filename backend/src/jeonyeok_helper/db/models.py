@@ -50,6 +50,11 @@ class JourneyItem(Base):
     sources: Mapped[list] = mapped_column(JSON, default=list)  # [{type, title, url}]
     origin: Mapped[str] = mapped_column(String(8), default="chat")  # plan | chat
     question: Mapped[str] = mapped_column(Text, default="")  # 대화에서 나왔으면 그 질문
+    # 핵심 할 일: 단계마다 이것만 끝내면 그 단계 완료 (놓치면 손해이거나 기한이 있는 것)
+    core: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 근거 자료에 적힌 신청 기한 문구 그대로 (예: '전역 후 3년 이내')와 전역일 기준 개월 수
+    deadline: Mapped[str] = mapped_column(String(60), default="")
+    due_months: Mapped[int | None] = mapped_column(Integer, default=None)
     done: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)

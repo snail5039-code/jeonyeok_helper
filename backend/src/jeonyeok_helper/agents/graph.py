@@ -1,8 +1,12 @@
 """LangGraph 슈퍼바이저 그래프.
 
-start → profile → supervisor ─┬→ regulation / benefit / institution → supervisor (반복·동시)
-                              ├→ ask_user → END            (정보가 부족하면 되묻기)
-                              └→ respond → verify → END    (답변 초안 → 근거 검증)
+start → profile → coach ─┬→ END  (talk: 인사·진행 보고·다음 할 일, 검색 없이 짧게)
+                         └→ supervisor ─┬→ regulation / benefit / institution → supervisor
+                                        ├→ ask_user → END   (정보가 부족하면 되묻기)
+                                        └→ respond → verify → guide → END
+                                           (답변 → 근거 검증 → 길잡이 한마디·할 일 제안)
+
+coach·guide는 사용자를 로드맵을 따라 안내하는 길잡이 (agents/guide.py). 없으면 검색 답변만 한다.
 
 각 단계의 LLM 호출은 Components로 주입받는다. 그래프는 흐름만 책임진다.
 """
@@ -20,6 +24,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 
+from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.prompts import (
     format_evidence,
     format_findings,
@@ -48,10 +53,21 @@ class Components:
     workers: dict[str, Runnable]  # {messages, instruction, profile} → {summary, sources}
     responder: Runnable  # {messages, profile, findings, sources} → str
     verifier: Runnable  # {draft, findings, sources} → Verification
+    coach: Runnable | None = None  # {messages, profile, missing, journey} → CoachDecision
+    guide: Runnable | None = None  # {question, answer, sources, ...} → GuideDraft
 
 
 def _user_id(config: RunnableConfig) -> str | None:
     return (config.get("configurable") or {}).get("user_id")
+
+
+def _journey(config: RunnableConfig) -> list[dict]:
+    """API가 넘겨 준 사용자의 로드맵 할 일 목록 (그래프는 DB를 모른다)."""
+    return (config.get("configurable") or {}).get("journey") or []
+
+
+def _last_question(state: AgentState) -> str:
+    return next((m.text for m in reversed(state["messages"]) if m.type == "human"), "")
 
 
 def build_graph(
@@ -72,6 +88,7 @@ def build_graph(
             "also": [],
             "follow_ups": [],
             "draft": "",
+            "guide": {},
         }
         # 같은 사용자면 장기 메모리의 프로필을 매 질문 불러온다 ('내 정보' 화면에서 고친 값이
         # 대화 중에도 바로 반영되도록).
@@ -81,6 +98,10 @@ def build_graph(
         return update
 
     async def profile(state: AgentState, config: RunnableConfig, *, store: BaseStore | None = None):
+        # 버튼(했어요·나중에)으로 보낸 말에는 복무 정보가 없다. 할 일 이름의 '제대군인' 같은 말을
+        # 복무 형태로 잘못 읽지 않도록 추출하지 않는다.
+        if (config.get("configurable") or {}).get("action"):
+            return {}
         try:
             extracted: Profile = await c.profile_extractor.ainvoke(
                 {"messages": state["messages"], "profile": format_profile(state.get("profile"))}
@@ -92,6 +113,53 @@ def build_graph(
         if store is not None and (uid := _user_id(config)):
             await store.aput(PROFILE_NAMESPACE, uid, merge_profile(state.get("profile"), new))
         return {"profile": new}
+
+    async def coach(state: AgentState, config: RunnableConfig):
+        """이번 메시지를 검색 없이 말로 답할지(talk), 자료를 찾아 답할지(research) 정한다."""
+        # 버튼 동작(했어요·나중에)이 아닌데 신청 방법·자격 등을 물으면 바로 자료를 찾는다
+        action = (config.get("configurable") or {}).get("action")
+        if c.coach is None or (not action and guide_rules.needs_research(_last_question(state))):
+            return {"guide": {"mode": "research"}}
+        items = _journey(config)
+        missing = guide_rules.missing_field(state.get("profile"))
+        nxt = guide_rules.next_item(items, state.get("skipped"))
+        try:
+            decision = await c.coach.ainvoke(
+                {
+                    "messages": state["messages"],
+                    "profile": format_profile(state.get("profile")),
+                    "missing": guide_rules.FIELD_LABELS.get(missing, "(없음)"),
+                    "journey": guide_rules.format_journey(items, nxt),
+                }
+            )
+        except Exception:
+            log.warning("길잡이 판단 실패, 자료를 찾아 답합니다.", exc_info=True)
+            return {"guide": {"mode": "research"}}
+        if decision.mode != "talk" or not decision.say.strip():
+            return {"guide": {"mode": "research"}}
+        say = guide_rules.with_question(decision.say, missing)
+        # 길잡이는 늘 다음 걸음을 이끈다: 물을 것이 없으면 다음 할 일을 버튼과 함께 권한다
+        step = nxt if (nxt and not missing) else None
+        if step:
+            say = guide_rules.with_next_step(say, step)
+        # 버튼은 규칙으로: 빠진 정보가 있으면 그걸 고르는 버튼, 아니면 다음 할 일 버튼
+        if missing:
+            replies = guide_rules.ask_replies(missing)
+        elif step:
+            replies = guide_rules.step_replies(step)
+        else:
+            replies = []
+        return {
+            "messages": [AIMessage(say, name="jeonyeok_helper")],
+            "guide": {
+                "mode": "talk",
+                "say": say,
+                "ask": missing,
+                "step": step,
+                "quick_replies": replies,
+                "suggest": [],
+            },
+        }
 
     async def supervisor(state: AgentState):
         calls = state.get("worker_calls", 0)
@@ -198,9 +266,47 @@ def build_graph(
             "follow_ups": follow_ups,
         }
 
+    async def guide(state: AgentState, config: RunnableConfig):
+        """답변 위에 보일 한마디와 로드맵에 담을 할 일 제안. 실패해도 답변은 그대로."""
+        missing = guide_rules.missing_field(state.get("profile"))
+        out = {
+            "mode": "research",
+            "say": "",
+            "ask": missing,
+            "step": None,
+            "quick_replies": guide_rules.ask_replies(missing) if missing else [],
+            "suggest": [],
+        }
+        if c.guide is None:
+            return {"guide": out}
+        sources = state.get("sources") or []
+        answer = state["messages"][-1].text
+        existing = [i["title"] for i in _journey(config)]
+        try:
+            draft = await c.guide.ainvoke(
+                {
+                    "question": _last_question(state),
+                    "answer": answer,
+                    "sources": format_sources(sources),
+                    "profile": format_profile(state.get("profile")),
+                    "missing": guide_rules.FIELD_LABELS.get(missing, "(없음)"),
+                    "existing": ", ".join(existing) or "(없음)",
+                }
+            )
+        except Exception:
+            log.warning("길잡이 한마디 실패", exc_info=True)
+            return {"guide": out}
+        out["say"] = guide_rules.with_question(draft.say, missing) if draft.say.strip() else ""
+        if sources:
+            out["suggest"] = guide_rules.pick_items(
+                draft, answer=answer, sources=sources, existing=existing
+            )
+        return {"guide": out}
+
     g = StateGraph(AgentState)
     g.add_node("start", start)
     g.add_node("profile", profile)
+    g.add_node("coach", coach)
     g.add_node("supervisor", supervisor)
     for name in WORKERS:
         if name in c.workers:
@@ -209,10 +315,16 @@ def build_graph(
     g.add_node("ask_user", ask_user)
     g.add_node("respond", respond)
     g.add_node("verify", verify)
+    g.add_node("guide", guide)
 
     g.add_edge(START, "start")
     g.add_edge("start", "profile")
-    g.add_edge("profile", "supervisor")
+    g.add_edge("profile", "coach")
+    g.add_conditional_edges(
+        "coach",
+        lambda s: END if s.get("guide", {}).get("mode") == "talk" else "supervisor",
+        [END, "supervisor"],
+    )
 
     def after_supervisor(s: AgentState) -> str | list[str]:
         if s["next"] == "answer":
@@ -224,6 +336,7 @@ def build_graph(
     g.add_conditional_edges("supervisor", after_supervisor, [*c.workers, "ask_user", "respond"])
     g.add_edge("ask_user", END)
     g.add_edge("respond", "verify")
-    g.add_edge("verify", END)
+    g.add_edge("verify", "guide")
+    g.add_edge("guide", END)
 
     return g.compile(checkpointer=checkpointer, store=store)

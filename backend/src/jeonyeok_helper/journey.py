@@ -4,10 +4,14 @@
 - plan: '내 정보'로 한 번에 만든 로드맵 (agents/roadmap.py)
 - chat: 대화 답변에서 뽑은 할 일 (agents/planner.py)
 같은 사용자에게 같은 제목의 할 일은 하나만 둔다.
+
+신청 기한은 LLM이 지어내기 쉬워서, 근거 글에 그 문구가 실제로 있을 때만 남긴다(ground_deadline).
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -16,6 +20,22 @@ from jeonyeok_helper.agents.roadmap import STAGE_TITLES
 from jeonyeok_helper.db import Database, JourneyItem
 
 STAGE_ORDER = {key: i for i, key in enumerate(STAGE_TITLES)}
+DUE_MONTHS_RANGE = range(-24, 121)  # 전역 2년 전 ~ 10년 후
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def ground_deadline(
+    deadline: str, due_months: int | None, texts: Iterable[str]
+) -> tuple[str, int | None]:
+    """기한 문구가 근거 글에 그대로 있으면 (문구, 개월 수), 없으면 ('', None).
+    개월 수는 문구가 확인될 때만, 말이 되는 범위일 때만 남긴다."""
+    phrase = deadline.strip()[:60]
+    if not phrase or _squash(phrase) not in _squash(" ".join(texts)):
+        return "", None
+    return phrase, due_months if due_months in DUE_MONTHS_RANGE else None
 
 
 def to_dict(item: JourneyItem) -> dict:
@@ -28,6 +48,9 @@ def to_dict(item: JourneyItem) -> dict:
         "sources": item.sources or [],
         "origin": item.origin,
         "question": item.question,
+        "core": item.core,
+        "deadline": item.deadline,
+        "due_months": item.due_months,
         "done": item.done,
         "created_at": item.created_at.isoformat() if item.created_at else None,
         "done_at": item.done_at.isoformat() if item.done_at else None,
@@ -64,6 +87,9 @@ def add_items(
                 sources=it.get("sources", []),
                 origin=origin,
                 question=question[:500],
+                core=bool(it.get("core")),
+                deadline=it.get("deadline", "")[:60],
+                due_months=it.get("due_months"),
             )
             session.add(row)
             session.flush()
@@ -100,6 +126,9 @@ def roadmap_to_items(roadmap: dict) -> list[dict]:
             "action": it["action"],
             "detail": it["detail"],
             "sources": it["sources"],
+            "core": it.get("core", False),
+            "deadline": it.get("deadline", ""),
+            "due_months": it.get("due_months"),
         }
         for stage in roadmap.get("stages", [])
         for it in stage["items"]

@@ -1,5 +1,5 @@
 import { postJson } from "./api";
-import type { ChatEvent } from "./types";
+import type { ChatAction, ChatEvent } from "./types";
 
 /** SSE 텍스트 버퍼에서 완성된 이벤트를 꺼낸다. 덜 받은 마지막 조각은 rest로 남긴다. */
 export function parseSse(buffer: string): { events: ChatEvent[]; rest: string } {
@@ -18,6 +18,7 @@ export interface ChatRequest {
   message: string;
   thread_id: string | null;
   user_id: string;
+  action?: ChatAction;
 }
 
 /** /api/chat 에 질문을 보내고 SSE 이벤트를 하나씩 돌려준다. */

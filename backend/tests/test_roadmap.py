@@ -107,6 +107,32 @@ def test_assemble_keeps_only_grounded_items_in_stage_order():
     ]
 
 
+def test_assemble_keeps_core_and_only_deadlines_found_in_the_item_sources():
+    evidence = [
+        {"id": "E1", "kind": "benefit", "title": "제대군인 취업지원", "url": "",
+         "text": "전역 후 3년 이내 제대군인지원센터에 신청"},
+        {"id": "E2", "kind": "benefit", "title": "청년 월세", "url": "", "text": "월 20만 원"},
+    ]  # fmt: skip
+    draft = RoadmapDraft(
+        intro="",
+        stages=[
+            RoadmapStageDraft(
+                key="job",
+                items=[
+                    RoadmapItemDraft(title="취업지원 신청", action="신청", source_ids=["E1"],
+                                     core=True, deadline="전역 후 3년 이내", due_months=36),
+                    RoadmapItemDraft(title="청년 월세", action="신청", source_ids=["E2"],
+                                     deadline="전역 후 3년 이내", due_months=36),
+                ],
+            )
+        ],
+    )  # fmt: skip
+    first, second = assemble(draft, evidence)["stages"][0]["items"]
+    assert (first["core"], first["deadline"], first["due_months"]) == (True, "전역 후 3년 이내", 36)
+    # 다른 자료에 있는 기한을 가져다 붙이지 않는다
+    assert (second["core"], second["deadline"], second["due_months"]) == (False, "", None)
+
+
 def test_build_roadmap_passes_profile_and_evidence_to_organizer():
     seen = {}
 

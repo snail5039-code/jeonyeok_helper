@@ -25,7 +25,9 @@ class Recorder:
         return RunnableLambda(self)
 
 
-def make_components(routes, *, profile=None, worker_out=None, verifier=None, workers=None):
+def make_components(
+    routes, *, profile=None, worker_out=None, verifier=None, workers=None, coach=None, guide=None
+):
     rec = {
         "profile": Recorder([profile or Profile()]),
         "router": Recorder(routes),
@@ -43,6 +45,9 @@ def make_components(routes, *, profile=None, worker_out=None, verifier=None, wor
         "verifier": Recorder(
             [verifier or Verification(supported=False, issues=["수정"], answer="최종 답변 [1]")]
         ),
+        # 길잡이는 주면 쓴다 (없으면 검색 답변만 하는 예전 흐름)
+        "coach": Recorder(coach) if coach else None,
+        "guide": Recorder(guide) if guide else None,
     }
     components = Components(
         profile_extractor=rec["profile"].runnable,
@@ -51,5 +56,7 @@ def make_components(routes, *, profile=None, worker_out=None, verifier=None, wor
         or {name: rec["worker"].runnable for name in ("regulation", "benefit", "institution")},
         responder=rec["responder"].runnable,
         verifier=rec["verifier"].runnable,
+        coach=rec["coach"].runnable if coach else None,
+        guide=rec["guide"].runnable if guide else None,
     )
     return components, rec

@@ -1,11 +1,12 @@
 """FastAPI 서버 (API 전용, 화면은 frontend/의 Next.js가 담당).
 
 - GET  /health                          : 상태와 키 설정 여부
-- POST /chat                            : 질문 → SSE (진행 단계, 최종 답변, 로드맵에 담은 할 일)
+- POST /chat                            : 질문 → SSE (진행 단계, 답변, 길잡이 한마디·버튼)
 - GET  /profile/{user_id}               : 저장된 사용자 프로필 ('내 정보' + 대화에서 알아낸 것)
 - PUT  /profile/{user_id}               : '내 정보' 화면에서 고친 프로필 저장
 - GET  /journey/{user_id}               : 전역 로드맵 할 일 목록
 - POST /journey/{user_id}/generate      : 프로필로 로드맵을 한 번에 채우기
+- POST /journey/{user_id}/items         : 길잡이가 제안한 할 일 중 고른 것 담기
 - PATCH  /journey/{user_id}/items/{id}  : 할 일 완료/취소
 - DELETE /journey/{user_id}/items/{id}  : 할 일 빼기
 - POST /feedback                        : 답변 피드백(도움이 됐어요/아쉬워요) 저장
@@ -16,7 +17,12 @@ SSE 이벤트
     event: delta     data: {"text": "..."}   # 답변 초안 조각 (이어 붙여서 바로 보여 준다)
     event: answer    data: {"text": "...", "sources": [...], "profile": {...}, "follow_ups": [...]}
                      # 근거 검증을 마친 최종 답변. 초안과 다를 수 있으니 화면은 이것으로 바꾼다.
-    event: plan      data: {"added": [할 일, ...]}   # 답변에서 뽑아 로드맵에 담은 할 일
+    event: guide     data: {"mode": "talk"|"research", "say": "...", "quick_replies": [...],
+                            "suggest": [할 일 제안], "ask": 빠진 정보, "step": 권한 할 일,
+                            "profile": {...}}
+                     # talk: 검색 없이 길잡이가 바로 한 말 (answer 없이 이것만 온다)
+                     # research: answer 뒤에 오는 한마디와 로드맵에 담을 할 일 제안
+    event: journey   data: {"added": [할 일, ...], "done": 할 일?}   # 서버가 로드맵을 바꿨을 때
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
     event: done      data: {}
@@ -38,6 +44,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from jeonyeok_helper import __version__, journey
+from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
@@ -53,20 +60,27 @@ STEP_LABELS = {
     "institution": "신청 기관을 찾고 있어요",
     "respond": "답변을 정리하고 있어요",
     "verify": "근거를 확인하고 있어요",
+    "guide": "다음에 할 일을 고르고 있어요",
 }
 
 AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
 RoadmapBuilder = Callable[[RoadmapProfile], Awaitable[dict]]
-# 답변에서 할 일 뽑기: (question, answer, sources, profile, existing) → [할 일]
-Planner = Callable[..., Awaitable[list[dict]]]
 
 UserId = Annotated[str, Path(pattern=r"^[\w-]{1,64}$")]
+
+
+class ChatAction(BaseModel):
+    """길잡이 버튼이 함께 보내는 동작: 할 일 완료(done), 이번 대화에서 미루기(later)."""
+
+    type: Literal["done", "later"]
+    item_id: str = Field(pattern=r"^[\w-]{1,64}$")
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     thread_id: str | None = None
     user_id: str | None = Field(default=None, pattern=r"^[\w-]{1,64}$")
+    action: ChatAction | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -103,6 +117,28 @@ class DoneUpdate(BaseModel):
     done: bool
 
 
+class SourceRef(BaseModel):
+    type: Literal["regulation", "benefit", "institution"]
+    title: str = Field(max_length=300)
+    url: str = Field(default="", max_length=1000)
+
+
+class NewItem(BaseModel):
+    stage: Literal["before", "right_after", "job", "study", "life", "later"]
+    title: str = Field(min_length=1, max_length=120)
+    action: str = Field(default="", max_length=300)
+    detail: str = Field(default="", max_length=600)
+    sources: list[SourceRef] = Field(default_factory=list, max_length=6)
+    core: bool = False
+    deadline: str = Field(default="", max_length=60)
+    due_months: int | None = Field(default=None, ge=-24, le=120)
+
+
+class AddItems(BaseModel):
+    items: list[NewItem] = Field(min_length=1, max_length=5)
+    question: str = Field(default="", max_length=500)
+
+
 # 로드맵 정리 단계에 '내 정보'로 넘길 항목 (복무 형태·지역 등은 RoadmapProfile 필드로 따로 간다)
 _NOTE_KEYS = ("branch", "rank", "specialty", "education", "desired_job", "certificates",
               "housing", "injury", "merit_status", "memo")  # fmt: skip
@@ -125,9 +161,8 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder, Planner]:
-    """채팅 에이전트·로드맵·플래너가 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
-    from jeonyeok_helper.agents.planner import make_planner, plan_from_answer
+def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
+    """채팅 에이전트와 로드맵이 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
     from jeonyeok_helper.agents.roadmap import build_roadmap, make_organizer
     from jeonyeok_helper.agents.runtime import open_agent
     from jeonyeok_helper.benefits.mcp_server import Services
@@ -142,33 +177,23 @@ def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder, Planner]:
             chains["organizer"] = make_organizer(get_answer_model())
         return await build_roadmap(services, chains["organizer"], profile)
 
-    async def plan(**kwargs) -> list[dict]:
-        if "planner" not in chains:
-            from jeonyeok_helper.llm import get_fast_chat_model
-
-            chains["planner"] = make_planner(get_fast_chat_model())
-        return await plan_from_answer(chains["planner"], **kwargs)
-
-    return (lambda: open_agent(services=services)), roadmap, plan
+    return (lambda: open_agent(services=services)), roadmap
 
 
 def create_app(
     agent_factory: AgentFactory | None = None,
     db_url: str | None = None,
     roadmap_builder: RoadmapBuilder | None = None,
-    planner: Planner | None = None,
 ) -> FastAPI:
     if agent_factory is None:
-        agent_factory, default_roadmap, default_planner = _default_runtime()
+        agent_factory, default_roadmap = _default_runtime()
         roadmap_builder = roadmap_builder or default_roadmap
-        planner = planner or default_planner
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
         app.state.roadmap = roadmap_builder
-        app.state.planner = planner
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -208,29 +233,40 @@ def create_app(
             },
         }
 
-    async def plan_events(req: ChatRequest, state: dict, db: Database) -> AsyncIterator[str]:
-        """답변에서 할 일을 뽑아 로드맵에 담고 plan 이벤트로 알린다. 실패해도 답변은 그대로."""
-        if not (req.user_id and planner and state.get("sources")):
+    async def first_roadmap(request: Request, user_id: str, profile: dict) -> AsyncIterator[str]:
+        """처음 쓰는 사람이 복무 형태·지역·전역일을 다 알려 주면 로드맵을 만들고
+        첫 할 일을 권한다."""
+        if request.app.state.roadmap is None:
             return
+        yield _sse("step", {"node": "roadmap", "label": "내 전역 로드맵을 만들고 있어요"})
         try:
-            existing = [
-                i["title"] for i in await asyncio.to_thread(journey.list_items, db, req.user_id)
-            ]
-            items = await planner(
-                question=req.message,
-                answer=state["messages"][-1].text,
-                sources=state.get("sources", []),
-                profile=format_profile(state.get("profile")),
-                existing=existing,
-            )
-            added = await asyncio.to_thread(
-                journey.add_items, db, req.user_id, items, "chat", req.message
-            )
+            roadmap = await request.app.state.roadmap(roadmap_profile(profile))
         except Exception:
-            log.warning("답변에서 할 일 뽑기 실패", exc_info=True)
+            log.exception("첫 로드맵 생성 실패")
             return
-        if added:
-            yield _sse("plan", {"added": added})
+        db: Database = request.app.state.db
+        added = await asyncio.to_thread(
+            journey.add_items, db, user_id, journey.roadmap_to_items(roadmap), "plan"
+        )
+        if not added:
+            return
+        yield _sse("journey", {"added": added})
+        first = guide_rules.next_item(added)
+        say = f"로드맵 완성! 할 일 {len(added)}개를 담았어요. 🗺️"
+        if first:
+            say += f" 첫 번째는 '{first['title']}'이에요. {first['action']}"
+        yield _sse(
+            "guide",
+            {
+                "mode": "talk",
+                "say": say,
+                "ask": None,
+                "step": first,
+                "quick_replies": guide_rules.step_replies(first) if first else [],
+                "suggest": [],
+                "profile": profile,
+            },
+        )
 
     @app.post("/chat")
     async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
@@ -239,16 +275,57 @@ def create_app(
 
         thread_id = req.thread_id or str(uuid.uuid4())
         config = {"configurable": {"thread_id": thread_id}}
+        inputs: dict = {"messages": [("user", req.message)]}
+        done_item = None
+        items: list[dict] = []
         if req.user_id:
             config["configurable"]["user_id"] = req.user_id
+            # 버튼 동작을 먼저 반영해야 길잡이가 '다음 할 일'을 제대로 고른다
+            if req.action:
+                config["configurable"]["action"] = req.action.type
+            if req.action and req.action.type == "done":
+                done_item = await asyncio.to_thread(
+                    journey.set_done, db, req.user_id, req.action.item_id, True
+                )
+            elif req.action and req.action.type == "later":
+                inputs["skipped"] = [req.action.item_id]
+            items = await asyncio.to_thread(journey.list_items, db, req.user_id)
+            config["configurable"]["journey"] = items
 
         async def events() -> AsyncIterator[str]:
             yield _sse("thread", {"thread_id": thread_id})
+            if done_item:
+                yield _sse("journey", {"added": [], "done": done_item})
+            # 답변·길잡이는 해당 단계가 끝난 직후의 전체 상태(values)로 보낸다
+            pending: set[str] = set()
+            state: dict = {}
+            sent: set[str] = set()
+
+            def flush(values: dict) -> list[str]:
+                out = []
+                if "answer" in pending and values.get("draft"):
+                    out.append(
+                        _sse(
+                            "answer",
+                            {
+                                "text": values["messages"][-1].text,
+                                "profile": values.get("profile", {}),
+                                "sources": values.get("sources", []),
+                                "follow_ups": values.get("follow_ups", []),
+                            },
+                        )
+                    )
+                    sent.add("answer")
+                if "guide" in pending and (g := values.get("guide")) and g.get("mode"):
+                    if g["mode"] == "talk" or "answer" in sent:
+                        out.append(_sse("guide", {**g, "profile": values.get("profile", {})}))
+                        sent.add("guide")
+                pending.clear()
+                return out
+
             try:
                 async for mode, chunk in agent.astream(
-                    {"messages": [("user", req.message)]},
-                    config,
-                    stream_mode=["updates", "messages"],
+                    inputs, config, stream_mode=["updates", "messages", "values"]
                 ):
                     if mode == "messages":
                         # 답변 초안을 만들어지는 대로 보낸다 (다른 노드의 LLM 출력은 제외)
@@ -256,26 +333,32 @@ def create_app(
                         if meta.get("langgraph_node") == "respond" and (text := token.text):
                             yield _sse("delta", {"text": text})
                         continue
+                    if mode == "values":
+                        state = chunk
+                        for event in flush(chunk):
+                            yield event
+                        continue
                     for node in chunk:
                         if label := STEP_LABELS.get(node):
                             yield _sse("step", {"node": node, "label": label})
-                state = (await agent.aget_state(config)).values
-                last = state["messages"][-1]
-                payload = {"text": last.text, "profile": state.get("profile", {})}
-                if state.get("draft"):
+                        if node == "verify":
+                            pending.add("answer")
+                        elif node in ("guide", "coach"):
+                            pending.add("guide")
+                state = (await agent.aget_state(config)).values or state
+                pending.update({"answer", "guide"} - sent)
+                for event in flush(state):
+                    yield event
+                talked = state.get("guide", {}).get("mode") == "talk"
+                if not state.get("draft") and not talked:  # respond를 거치지 않았다면 되묻기
                     yield _sse(
-                        "answer",
-                        {
-                            **payload,
-                            "sources": state.get("sources", []),
-                            "follow_ups": state.get("follow_ups", []),
-                        },
+                        "question",
+                        {"text": state["messages"][-1].text, "profile": state.get("profile", {})},
                     )
-                    # 답변을 먼저 보여 준 뒤 로드맵에 담을 할 일을 뽑는다 (약 2초)
-                    async for event in plan_events(req, state, db):
+                profile = state.get("profile", {})
+                if req.user_id and not items and not guide_rules.missing_field(profile):
+                    async for event in first_roadmap(request, req.user_id, profile):
                         yield event
-                else:  # respond를 거치지 않았다면 되묻기
-                    yield _sse("question", payload)
             except Exception:
                 log.exception("대화 처리 실패")
                 message = "답변 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요."
@@ -354,6 +437,13 @@ def create_app(
             "added": len(added),
             "items": journey.list_items(db, user_id),
         }
+
+    @app.post("/journey/{user_id}/items", status_code=201)
+    def add_journey_items(user_id: UserId, body: AddItems, request: Request) -> dict:
+        """길잡이가 제안한 할 일 중 사용자가 고른 것을 담는다 (이미 있는 제목은 건너뜀)."""
+        items = [i.model_dump() for i in body.items]
+        added = journey.add_items(request.app.state.db, user_id, items, "chat", body.question)
+        return {"added": added}
 
     @app.patch("/journey/{user_id}/items/{item_id}")
     def update_journey_item(

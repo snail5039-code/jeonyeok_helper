@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import operator
 from typing import Annotated, Literal, TypedDict
 
 from langchain_core.messages import AnyMessage
@@ -48,6 +49,7 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
     # 대화가 이어지는 동안 유지 (+ user_id가 있으면 장기 메모리에도 저장)
     profile: Annotated[dict, merge_profile]
+    skipped: Annotated[list[str], operator.add]  # 이 대화에서 '나중에' 한 할 일 id
     # 아래는 질문(턴)마다 초기화
     findings: Annotated[list[dict], add_or_reset]  # 워커별 요약 {worker, summary}
     sources: Annotated[list[dict], add_unique_or_reset]  # 출처 {type, title, url}
@@ -58,6 +60,8 @@ class AgentState(TypedDict, total=False):
     instruction: str
     draft: str
     follow_ups: list[str]  # 이어서 물어볼 질문 (답변마다 새로)
+    # 길잡이 출력 {mode: talk|research, say, quick_replies, suggest, ask} (agents/guide.py)
+    guide: dict
 
 
 class Profile(BaseModel):

@@ -5,7 +5,6 @@ import {
   BookOpen,
   Briefcase,
   Building2,
-  Check,
   GraduationCap,
   IdCard,
   Landmark,
@@ -13,12 +12,13 @@ import {
   User,
   UserRoundPen,
 } from "lucide-react";
-import { useState } from "react";
+
+import { greeting } from "@/lib/guide";
+import type { JourneyItem, Profile, QuickReply } from "@/lib/types";
 
 import { Composer } from "./Composer";
+import { GuideBubble, QuickReplies, Say } from "./Guide";
 import { Mascot } from "./Doodle";
-
-const SERVICE_CHOICES = ["병사", "부사관", "장교", "보훈대상자"];
 
 const POPULAR = [
   { icon: Landmark, q: "군복무 크레딧은 따로 신청해야 하나요?", tag: "연금" },
@@ -42,61 +42,41 @@ const TRUST = [
 ];
 
 interface Props {
+  profile: Profile;
+  items: JourneyItem[];
+  rank: string;
+  ready: boolean;
   onAsk: (text: string) => void;
+  onReply: (reply: QuickReply) => void;
   onRoadmap: () => void;
   onProfile: () => void;
 }
 
-export function HomeView({ onAsk, onRoadmap, onProfile }: Props) {
-  const [serviceType, setServiceType] = useState<string | null>(null);
-
-  // 고른 복무 형태를 질문에 붙여 보낸다 (이미 말했으면 그대로).
-  const askWithType = (text: string) =>
-    onAsk(serviceType && !text.includes(serviceType) ? `${text} (복무 형태: ${serviceType})` : text);
+export function HomeView({ profile, items, rank, ready, onAsk, onReply, onRoadmap, onProfile }: Props) {
+  // 길잡이가 먼저 말을 건다: 처음이면 복무 형태부터, 로드맵이 있으면 다음 할 일
+  const { say, replies } = greeting(profile, items);
 
   return (
     <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto grid max-w-[760px] gap-8 px-4 pt-7 pb-8 md:gap-10 md:px-6 md:pt-[72px] md:pb-12">
-        <section className="grid gap-3.5">
+      <div className="mx-auto grid max-w-[760px] gap-8 px-4 pt-7 pb-8 md:gap-10 md:px-6 md:pt-14 md:pb-12">
+        <section className="grid gap-4">
           <span className="inline-flex items-center gap-1.5 justify-self-start rounded-full bg-accent-soft px-2.5 py-1 text-[12.5px] font-semibold text-accent">
             <ShieldCheck className="size-[15px]" strokeWidth={1.8} />
-            법령 원문과 정부24 혜택 정보로 답해요
+            법령 원문과 정부24 혜택 정보로 길을 안내해요
           </span>
-          <h1 className="text-[26px] leading-[1.3] font-bold tracking-[-0.035em] text-balance md:text-[34px]">
-            전역 후 챙길 혜택,
-            <br />
-            상황만 말해 주세요
-          </h1>
-          <p className="text-base text-fg-2">
-            복무 형태와 사는 곳을 알려주시면 받을 수 있는 혜택과 근거 조문, 신청할 곳까지 찾아드려요.
-          </p>
+          {ready ? (
+            <GuideBubble rank={rank} big>
+              <Say big>{say}</Say>
+              <QuickReplies replies={replies} onReply={onReply} />
+            </GuideBubble>
+          ) : (
+            <div className="h-[120px]" aria-hidden />
+          )}
           <Composer
             id="home-input"
             rows={2}
-            placeholder="예) 작년에 병장으로 만기 전역했고 서울 살아요. 받을 수 있는 혜택 있어요?"
-            onSubmit={askWithType}
-            footer={
-              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="복무 형태">
-                <span className="mr-0.5 text-[12.5px] text-fg-3">복무 형태</span>
-                {SERVICE_CHOICES.map((t) => {
-                  const on = serviceType === t;
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      aria-pressed={on}
-                      onClick={() => setServiceType(on ? null : t)}
-                      className={`inline-flex h-[30px] items-center gap-1.5 rounded-full border px-[11px] text-[13px] font-medium ${
-                        on ? "border-accent bg-accent-soft text-accent" : "border-line-strong bg-bg text-fg-2"
-                      }`}
-                    >
-                      {on && <Check className="size-[14px]" strokeWidth={2.2} />}
-                      {t}
-                    </button>
-                  );
-                })}
-              </div>
-            }
+            placeholder="아무거나 물어봐도 돼요. 예) 작년에 병장으로 전역했고 서울 살아요. 뭐부터 해요?"
+            onSubmit={onAsk}
           />
         </section>
 
@@ -135,7 +115,7 @@ export function HomeView({ onAsk, onRoadmap, onProfile }: Props) {
               <button
                 key={q}
                 type="button"
-                onClick={() => askWithType(q)}
+                onClick={() => onAsk(q)}
                 className="grid grid-cols-[36px_1fr] items-start gap-3 rounded-xl border border-line bg-bg px-4 py-3.5 text-left hover:border-line-strong hover:bg-soft"
               >
                 <span className="grid size-9 place-items-center rounded-[10px] bg-sunken text-fg-2">

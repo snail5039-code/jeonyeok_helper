@@ -38,7 +38,7 @@ export function JourneyPanel({ journey, profile, onAsk, onOpen }: Props) {
             </h3>
             <ul className="grid gap-2">
               {list.slice(0, 4).map((item) => (
-                <ItemCard key={item.id} item={item} fresh={fresh.has(item.id)} compact onToggle={toggle} onAsk={onAsk} />
+                <ItemCard dischargeDate={profile.discharge_date} key={item.id} item={item} fresh={fresh.has(item.id)} compact onToggle={toggle} onAsk={onAsk} />
               ))}
             </ul>
           </section>
@@ -70,7 +70,7 @@ export function JourneyChip({ journey, onOpen }: { journey: Journey; onOpen: () 
       onClick={onOpen}
       className="font-fun inline-flex h-9 items-center gap-2 rounded-full border-2 border-[#1b1b1b] bg-paper px-3 text-[14px] text-paper-ink shadow-[2px_2px_0_var(--ink)]"
     >
-      🪖 {levelOf(p.percent).rank} · {p.done}/{p.total}
+      🪖 {levelOf(journey.items).rank} · ⭐{p.coreDone}/{p.coreTotal}
       {freshCount > 0 && <span className="rounded-full bg-accent px-1.5 text-[12px] text-accent-ink">+{freshCount}</span>}
       <ArrowRight className="size-3.5" />
     </button>

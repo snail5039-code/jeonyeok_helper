@@ -1,6 +1,7 @@
 // 데모 모드: 서버 에이전트가 준비되지 않았을 때(Gemini 키 없음) 화면을 확인하는 예시 응답.
 
-import type { ChatEvent, JourneyItem, Profile, Source } from "./types";
+import { SERVICE_REPLIES } from "./guide";
+import type { ChatAction, ChatEvent, Guide, Profile, QuickReply, Source, Suggestion } from "./types";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -39,16 +40,18 @@ const DEMO_TEXT = [
   "※ 데모 화면이에요. 실제 답변은 법령과 공공서비스 조회 결과로 만들어져요. 정확한 자격과 기한은 소관 기관에 꼭 확인하세요.",
 ].join("\n");
 
-// 답변에서 뽑은 할 일 (실제 서버는 planner가 근거와 함께 뽑는다). id가 같으면 다시 담기지 않는다.
-const planned = (id: string, stage: JourneyItem["stage"], title: string, action: string, source: Source): JourneyItem => ({
-  id: `demo-plan-${id}`, stage, title, action, detail: "", sources: [source], origin: "chat",
-  question: "", done: false, created_at: null, done_at: null,
-}); // prettier-ignore
+// 답변에서 뽑은 할 일 제안 (실제 서버는 길잡이가 근거와 함께 뽑는다)
+const DEMO_SUGGEST: Suggestion[] = [
+  { stage: "job", title: "국민취업지원제도 신청", action: "고용24에서 온라인으로 신청하세요", detail: "",
+    sources: [DEMO_SOURCES[2]], core: true, deadline: "", due_months: null },
+  { stage: "life", title: "서울 청년 정책 둘러보기", action: "온통청년에서 지역을 서울로 골라 확인하세요", detail: "",
+    sources: [DEMO_SOURCES[3]], core: false, deadline: "", due_months: null },
+]; // prettier-ignore
 
-const DEMO_PLANNED = [
-  planned("work24", "job", "국민취업지원제도 신청", "고용24에서 온라인으로 신청", DEMO_SOURCES[2]),
-  planned("youth", "life", "서울 청년 정책 둘러보기", "온통청년에서 지역을 서울로 골라 확인", DEMO_SOURCES[3]),
-];
+const talk = (say: string, quick_replies: QuickReply[] = [], ask: Guide["ask"] = null): ChatEvent => ({
+  event: "guide",
+  data: { mode: "talk", say, quick_replies, suggest: [], ask, step: null },
+});
 
 const SERVICE_WORDS = /병장|병사|하사|중사|상사|소위|중위|대위|소령|간부|부사관|장교|복무|유공|보훈/;
 // 준비한 예시 답변(병사 전역자 혜택)과 관련 있는 질문인지
@@ -63,30 +66,30 @@ export function demoReply(message: string, knowsServiceType: boolean): "answer" 
   return "answer";
 }
 
-export async function* demoChat(message: string, knowsServiceType: boolean): AsyncGenerator<ChatEvent> {
+export async function* demoChat(
+  message: string,
+  knowsServiceType: boolean,
+  action?: ChatAction,
+): AsyncGenerator<ChatEvent> {
   yield { event: "step", data: { label: "복무 정보를 정리하고 있어요" } };
   await sleep(500);
+  if (action?.type === "done") {
+    yield talk("좋아요, 하나 해치웠다! 🎖️ 로드맵에서 다음 할 일을 확인해 봐요.", [
+      { label: "🗺️ 로드맵 보기", open: "journey" },
+    ]);
+    return;
+  }
   const reply = demoReply(message, knowsServiceType);
   if (reply === "notice") {
-    yield {
-      event: "answer",
-      data: {
-        text:
-          "지금은 데모 모드라 미리 준비한 예시 답변만 보여 드릴 수 있어요. " +
-          "실제 서버가 연결되면 질문마다 법령과 공공서비스 정보를 찾아 답해요. " +
-          "아래 예시 질문으로 화면을 둘러보세요.",
-        sources: [],
-        profile: {},
-        follow_ups: DEMO_EXAMPLES,
-      },
-    };
+    yield talk(
+      "지금은 데모 모드라 미리 준비한 예시만 보여 드릴 수 있어요. 실제 서버가 연결되면 질문마다 법령과 " +
+        "공공서비스 정보를 찾아 길을 안내해요. 아래 예시로 둘러보세요.",
+      DEMO_EXAMPLES.map((q) => ({ label: q, message: q })),
+    );
     return;
   }
   if (reply === "ask") {
-    yield {
-      event: "question",
-      data: { text: "혜택이 복무 형태에 따라 많이 달라요. 어떻게 전역하셨나요? 사는 지역도 알려주시면 더 정확해요." },
-    };
+    yield talk("혜택이 복무 형태에 따라 많이 달라요. 어떻게 복무했어요?", SERVICE_REPLIES, "service_type");
     return;
   }
   for (const label of ["관련 법령을 찾고 있어요", "받을 수 있는 혜택을 조회하고 있어요", "신청 기관을 찾고 있어요"]) {
@@ -110,5 +113,15 @@ export async function* demoChat(message: string, knowsServiceType: boolean): Asy
       follow_ups: ["군복무 크레딧은 따로 신청해야 해요?", "서울 청년 월세 지원도 받을 수 있어요?"],
     },
   };
-  yield { event: "plan", data: { added: DEMO_PLANNED } };
+  yield {
+    event: "guide",
+    data: {
+      mode: "research",
+      say: "국민취업지원제도부터 신청해 봐요. 고용24에서 바로 돼요! 나머지는 아래에 정리해 뒀어요.",
+      quick_replies: [],
+      suggest: DEMO_SUGGEST,
+      ask: null,
+      step: null,
+    },
+  };
 }

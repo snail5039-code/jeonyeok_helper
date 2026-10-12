@@ -6,6 +6,7 @@ import {
   CircleHelp,
   Copy,
   CornerDownRight,
+  FileText,
   ShieldCheck,
   ThumbsDown,
   ThumbsUp,
@@ -14,14 +15,23 @@ import { useState } from "react";
 
 import { parseAnswer } from "@/lib/answer";
 import type { Rating } from "@/lib/feedback";
-import { SERVICE_TYPE_LABELS, type Profile, type Source, type Turn } from "@/lib/types";
+import { SERVICE_REPLIES } from "@/lib/guide";
+import {
+  SERVICE_TYPE_LABELS,
+  type Guide,
+  type Profile,
+  type QuickReply,
+  type Source,
+  type Suggestion,
+  type Turn,
+} from "@/lib/types";
 
 import { BenefitList } from "./BenefitList";
+import { GuideBubble, QuickReplies, Say, SuggestBox, UserBubble } from "./Guide";
 import { InlineText } from "./InlineText";
 import { SourceList } from "./SourceList";
 
 const CHIP = "inline-flex h-[26px] items-center rounded-full border px-2.5 text-[12.5px] font-medium";
-const ASK_BACK = ["병사로 전역했어요", "부사관으로 전역했어요", "장교로 전역했어요", "보훈대상자예요"];
 
 function AppliedProfile({ profile }: { profile: Profile }) {
   const chips: string[] = [];
@@ -242,50 +252,45 @@ function Feedback({ turn, onFeedback }: { turn: Turn; onFeedback: FeedbackHandle
   );
 }
 
+export interface TurnHandlers {
+  onAsk: (text: string) => void;
+  onReply: (reply: QuickReply) => void;
+  onAddSuggest: (turn: Turn, items: Suggestion[]) => Promise<number>;
+  onFeedback: FeedbackHandler;
+}
+
+/** 대화 한 번: 사용자 말풍선 → 길잡이(전역이) 말풍선. 검색 답변은 '자세히 보기'로 접어 둔다. */
 export function TurnView({
   turn,
+  rank,
+  latest,
   onAsk,
+  onReply,
+  onAddSuggest,
   onFeedback,
-  onOpenJourney,
-}: {
-  turn: Turn;
-  onAsk: (text: string) => void;
-  onFeedback: FeedbackHandler;
-  onOpenJourney?: () => void;
-}) {
+}: { turn: Turn; rank: string; latest: boolean } & TurnHandlers) {
+  const live = turn.status === "loading" || turn.status === "streaming";
+  const guides = [turn.guide, ...(turn.moreGuides ?? [])].filter((g): g is Guide => Boolean(g));
+  const lastGuide = guides.at(-1);
+  const research = turn.status === "answer" || turn.status === "streaming" || (turn.status === "loading" && !turn.guide);
+  // 길잡이가 바로 답하는(talk) 경우엔 '복무 정보 정리' 다음 단계가 없다
+  const searching = turn.status !== "loading" || turn.steps.length > 1;
+
   return (
-    <article id={turn.id} className="grid scroll-mt-6 gap-5 border-b border-line pb-8 last:border-b-0">
-      <h1 className="text-[21px] leading-[1.4] font-bold tracking-[-0.03em] text-balance md:text-[26px]">{turn.question}</h1>
+    <article id={turn.id} className="grid scroll-mt-6 gap-4 pb-2">
+      <UserBubble text={turn.question} />
 
-      {turn.status === "answer" && <AppliedProfile profile={turn.profile} />}
-      {(turn.status === "loading" || turn.status === "streaming" || turn.status === "answer") && (
-        <Process turn={turn} />
-      )}
-
-      {turn.status === "loading" && (
-        <div className="grid gap-2.5">
-          <div className="skeleton-line" />
-          <div className="skeleton-line w-[85%]" />
-          <div className="skeleton-line w-[60%]" />
-        </div>
+      {turn.status === "talk" && (
+        <GuideBubble rank={rank}>
+          <Say>{turn.text}</Say>
+        </GuideBubble>
       )}
 
       {turn.status === "question" && (
-        <>
-          <p className="text-base leading-[1.8]">{turn.text}</p>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="복무 형태 고르기">
-            {ASK_BACK.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onAsk(t)}
-                className="inline-flex h-[30px] items-center rounded-full border border-line-strong bg-bg px-3 text-[13px] font-medium text-fg-2 hover:border-accent hover:text-accent"
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </>
+        <GuideBubble rank={rank}>
+          <Say>{turn.text}</Say>
+          <QuickReplies replies={SERVICE_REPLIES} disabled={!latest} onReply={onReply} />
+        </GuideBubble>
       )}
 
       {turn.status === "error" && (
@@ -295,28 +300,108 @@ export function TurnView({
         </div>
       )}
 
-      {turn.status === "streaming" && (
-        <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} streaming />
+      {research && (
+        <GuideBubble rank={rank} busy={live}>
+          <Say>
+            {turn.guide?.say ? (
+              turn.guide.say
+            ) : live ? (
+              <span className="inline-flex items-center gap-2">
+                {searching ? "자료 뒤지는 중… 잠깐만요" : "음… 잠깐만요"} <span className="step-dot" />
+              </span>
+            ) : (
+              <>정리해 왔어요. 아래에서 자세히 볼 수 있어요.</>
+            )}
+          </Say>
+          {searching && <AnswerDetails turn={turn} onAsk={onAsk} onFeedback={onFeedback} />}
+          {turn.guide && turn.guide.suggest.length > 0 && (
+            <SuggestBox suggest={turn.guide.suggest} onAdd={(items) => onAddSuggest(turn, items)} />
+          )}
+        </GuideBubble>
       )}
-      {turn.status === "answer" && (
-        <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} onOpenJourney={onOpenJourney} />
+
+      {/* 같은 대화에서 이어진 길잡이 말 (예: 로드맵 완성 안내) */}
+      {turn.moreGuides?.map((g, i) => (
+        <GuideBubble key={i} rank={rank}>
+          <Say>{g.say}</Say>
+        </GuideBubble>
+      ))}
+
+      {lastGuide && (
+        <div className="pl-[58px]">
+          <QuickReplies replies={lastGuide.quick_replies} disabled={!latest} onReply={onReply} />
+        </div>
+      )}
+      {!live && turn.followUps.length > 0 && latest && (
+        <div className="flex flex-wrap gap-1.5 pl-[58px]" role="group" aria-label="이어서 물어볼 질문">
+          {turn.followUps.map((q) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => onAsk(q)}
+              className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-line-strong bg-bg px-3 py-1 text-left text-[13px] font-medium text-fg-2 hover:border-accent hover:text-accent"
+            >
+              <CornerDownRight className="size-[14px] shrink-0" strokeWidth={1.8} />
+              {q}
+            </button>
+          ))}
+        </div>
       )}
     </article>
+  );
+}
+
+/** 검색 답변 전체. 쓰는 동안은 펼쳐 두고, 길잡이 한마디가 오면 접는다 (사용자가 열면 그대로). */
+function AnswerDetails({ turn, onAsk, onFeedback }: { turn: Turn; onAsk: (text: string) => void; onFeedback: FeedbackHandler }) {
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? !turn.guide?.say;
+  const benefits = parseAnswer(turn.text).benefits.length;
+  const streaming = turn.status === "streaming";
+  return (
+    <details
+      open={open}
+      onToggle={(e) => {
+        const now = (e.currentTarget as HTMLDetailsElement).open;
+        if (now !== open) setUserOpen(now);
+      }}
+      className="group rounded-2xl border border-line bg-bg"
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[14px] font-bold">
+        <FileText className="size-4 text-fg-3" strokeWidth={1.8} />
+        자세히 보기
+        <span className="font-medium text-fg-3">
+          {[benefits ? `혜택 ${benefits}개` : "", turn.sources.length ? `근거 ${turn.sources.length}개` : ""]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+        <ChevronRight className="ml-auto size-4 text-fg-3 transition-transform group-open:rotate-90" />
+      </summary>
+      <div className="grid gap-4 border-t border-line px-4 pt-4 pb-4">
+        {turn.status === "answer" && <AppliedProfile profile={turn.profile} />}
+        <Process turn={turn} />
+        {turn.status === "loading" ? (
+          <div className="grid gap-2.5">
+            <div className="skeleton-line" />
+            <div className="skeleton-line w-[85%]" />
+            <div className="skeleton-line w-[60%]" />
+          </div>
+        ) : (
+          <Answer turn={turn} onAsk={onAsk} onFeedback={onFeedback} streaming={streaming} />
+        )}
+      </div>
+    </details>
   );
 }
 
 /** streaming: 초안이 들어오는 중. 근거 검증 전이라 출처·피드백은 최종 답변에서만 보인다. */
 function Answer({
   turn,
-  onAsk,
   onFeedback,
-  onOpenJourney,
   streaming = false,
 }: {
   turn: Turn;
   onAsk: (text: string) => void;
   onFeedback: FeedbackHandler;
-  onOpenJourney?: () => void;
   streaming?: boolean;
 }) {
   const { lead, benefits, tail } = parseAnswer(turn.text);
@@ -336,20 +421,6 @@ function Answer({
           </div>
         </details>
       )}
-      {!streaming && turn.planned && turn.planned.length > 0 && (
-        <button
-          type="button"
-          onClick={onOpenJourney}
-          className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border-[2.5px] border-[#1b1b1b] bg-paper px-3.5 py-2.5 text-left text-paper-ink shadow-[3px_3px_0_var(--ink)]"
-        >
-          <span className="text-[22px]">🗺️</span>
-          <span className="grid min-w-0">
-            <b className="font-fun text-[16px] font-normal">로드맵에 {turn.planned.length}개 담았음!</b>
-            <span className="truncate text-[13px]">{turn.planned.map((p) => p.title).join(" · ")}</span>
-          </span>
-          <span className="text-[13px] font-bold whitespace-nowrap">보러 가기 →</span>
-        </button>
-      )}
       {turn.stopped && (
         <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
           <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />
@@ -357,24 +428,6 @@ function Answer({
         </p>
       )}
       {!streaming && !turn.stopped && <Feedback turn={turn} onFeedback={onFeedback} />}
-      {!streaming && turn.followUps.length > 0 && (
-        <div className="grid gap-2">
-          <h3 className="text-sm font-bold">이어서 물어보기</h3>
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="이어서 물어볼 질문">
-            {turn.followUps.map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => onAsk(q)}
-                className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-line-strong bg-bg px-3 py-1 text-left text-[13px] font-medium text-fg-2 hover:border-accent hover:text-accent"
-              >
-                <CornerDownRight className="size-[14px] shrink-0" strokeWidth={1.8} />
-                {q}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

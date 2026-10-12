@@ -26,18 +26,20 @@ KNOWN_KEYS = {
     "tools_any",
     "profile",
     "should_ask",
+    "should_talk",
 }
 
 
 def test_question_set_is_valid():
     questions = load_questions()
-    assert len(questions) == 41
-    assert len({q["id"] for q in questions}) == 41
+    assert len(questions) == 44
+    assert len({q["id"] for q in questions}) == 44
     for q in questions:
         assert set(q) <= KNOWN_KEYS, q["id"]
         assert q["category"] in CATEGORY_NAMES
         # 채점할 거리가 하나 이상 있어야 한다.
-        assert {"sources_any", "answer_any", "tools_any", "profile", "should_ask"} & set(q), q["id"]
+        checks = {"sources_any", "answer_any", "tools_any", "profile", "should_ask", "should_talk"}
+        assert checks & set(q), q["id"]
     # 유형마다 고르게 들어 있다.
     counts = {c: sum(q["category"] == c for q in questions) for c in CATEGORY_NAMES}
     assert min(counts.values()) >= 3
@@ -170,3 +172,9 @@ def test_retrieval_eval_runs_with_fake_retriever():
     ]
     s = summarize_retrieval(run_retrieval_eval(Fake(), cases))["overall"]
     assert s["hit"] == 0.5 and s["mrr"] == 0.5
+
+
+def test_grade_checks_whether_guide_talked_or_searched():
+    case = {"should_talk": True}
+    assert grade(case, answer="안녕!", asked=True, sources=[], profile={}, talked=True)[0].passed
+    assert not grade(case, answer="", asked=False, sources=[], profile={}, talked=False)[0].passed

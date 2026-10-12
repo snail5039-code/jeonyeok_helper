@@ -25,6 +25,7 @@ from langgraph.store.sqlite import AsyncSqliteStore
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from jeonyeok_helper.agents.graph import Components, build_graph
+from jeonyeok_helper.agents.guide import make_coach, make_guide
 from jeonyeok_helper.agents.prompts import (
     PROFILE_PROMPT,
     RESPOND_PROMPT,
@@ -58,6 +59,8 @@ def build_components(
         workers=workers,
         responder=RESPOND_PROMPT | llm | StrOutputParser(),
         verifier=VERIFY_PROMPT | fast.with_structured_output(Verification),
+        coach=make_coach(fast),
+        guide=make_guide(fast),
     )
 
 

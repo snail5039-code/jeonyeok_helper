@@ -86,7 +86,7 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
                   </h2>
                   <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
                     {list.map((item) => (
-                      <ItemCard
+                      <ItemCard dischargeDate={profile.discharge_date}
                         key={item.id}
                         item={item}
                         fresh={fresh.has(item.id)}

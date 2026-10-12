@@ -43,9 +43,48 @@ export interface JourneyItem {
   /** plan: 내 정보로 한 번에 만듦, chat: 대화에서 담김 */
   origin: "plan" | "chat";
   question: string;
+  /** 핵심 할 일: 단계마다 이것만 끝내면 그 단계 완료 */
+  core: boolean;
+  /** 근거 자료에 적힌 신청 기한 문구 (예: '전역 후 3년 이내') */
+  deadline: string;
+  /** 전역일 기준 기한(개월). 전역일을 알면 D-day로 보여 준다 */
+  due_months: number | null;
   done: boolean;
   created_at: string | null;
   done_at: string | null;
+}
+
+/** 길잡이가 제안한 할 일 (사용자가 고르면 로드맵에 담긴다) */
+export type Suggestion = Pick<
+  JourneyItem,
+  "stage" | "title" | "action" | "detail" | "sources" | "core" | "deadline" | "due_months"
+>;
+
+/** 길잡이 빠른 답 버튼. 누르면 message를 사용자 말로 보내고, action이 있으면 함께 보낸다 */
+export interface QuickReply {
+  label: string;
+  message?: string;
+  action?: ChatAction;
+  /** 메시지 대신 화면을 연다 (화면에서만 쓰는 버튼) */
+  open?: "journey" | "profile";
+}
+
+export interface ChatAction {
+  type: "done" | "later";
+  item_id: string;
+}
+
+/** 길잡이 출력. talk: 검색 없이 바로 한 말, research: 검색 답변 위의 한마디 */
+export interface Guide {
+  mode: "talk" | "research";
+  say: string;
+  quick_replies: QuickReply[];
+  suggest: Suggestion[];
+  /** 아직 모르는 정보 (복무 형태 → 지역 → 전역일 순으로 묻는다) */
+  ask: "service_type" | "region" | "discharge_date" | null;
+  /** 지금 권한 다음 할 일 */
+  step: JourneyItem | null;
+  profile?: Profile;
 }
 
 export type ChatEvent =
@@ -57,8 +96,10 @@ export type ChatEvent =
       event: "answer";
       data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[] };
     }
-  // 답변에서 뽑아 로드맵에 담은 할 일 (answer 다음에 온다)
-  | { event: "plan"; data: { added: JourneyItem[] } }
+  // 길잡이: talk면 answer 없이 이것만, research면 answer 다음에 온다
+  | { event: "guide"; data: Guide }
+  // 서버가 로드맵을 바꿨을 때 (첫 로드맵 생성, '했어요' 버튼)
+  | { event: "journey"; data: { added: JourneyItem[]; done?: JourneyItem } }
   | { event: "question"; data: { text: string; profile?: Profile } }
   | { event: "error"; data: { message: string } }
   | { event: "done"; data: Record<string, never> };
@@ -66,7 +107,8 @@ export type ChatEvent =
 export interface Turn {
   id: string;
   question: string;
-  status: "loading" | "streaming" | "answer" | "question" | "error";
+  /** talk: 길잡이가 검색 없이 바로 답함 */
+  status: "loading" | "streaming" | "answer" | "talk" | "question" | "error";
   steps: string[];
   text: string;
   sources: Source[];
@@ -75,8 +117,10 @@ export interface Turn {
   followUps: string[];
   /** 사용자가 답변 도중 멈춤 */
   stopped?: boolean;
-  /** 이 답변에서 로드맵에 담긴 할 일 */
-  planned?: JourneyItem[];
+  /** 길잡이의 한마디·버튼·할 일 제안 */
+  guide?: Guide;
+  /** 같은 대화에서 이어진 길잡이 말 (예: 첫 로드맵 완성 안내) */
+  moreGuides?: Guide[];
 }
 
 export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
