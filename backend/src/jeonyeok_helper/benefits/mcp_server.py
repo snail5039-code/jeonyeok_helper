@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -126,6 +127,26 @@ class Services:
         return self._get("directory", self.directory_factory)
 
 
+# 5년 이상 복무자 전용 혜택. 병사·단기 간부에게 안내하면 틀린 안내가 된다.
+_LONG_TERM_ONLY = re.compile(r"중\s?[.·ㆍ]?\s?장기|장기\s?복무")
+# 보훈대상자(국가유공자·보훈가족 등) 전용 혜택. 이름에 있으면 보훈대상자가 아닌 사람에게는 빼고,
+# 이름에 '제대군인'이 같이 있으면(제대군인도 대상) 남긴다.
+_MERIT_ONLY = re.compile(
+    r"보훈\s?(가족|대상자|명예|수당|급여)|국가유공자|참전|독립유공자|고엽제|유족"
+)
+
+
+def fits_service_type(benefit: Any, service_type: str | None) -> bool:
+    """대상이 사용자 복무 형태와 다른 혜택이면 False. 모르면 모두 통과."""
+    if service_type is None or service_type == "merit":
+        return True
+    if service_type in ("conscript", "short_term_officer") and _LONG_TERM_ONLY.search(
+        f"{benefit.name} {benefit.target}"
+    ):
+        return False
+    return not (_MERIT_ONLY.search(benefit.name) and "제대군인" not in benefit.name)
+
+
 def threaded(fn: Callable[..., dict]) -> Callable[..., Any]:
     """도구 본문(HTTP 호출, 벡터 검색, LLM 호출)은 동기 코드라 이벤트 루프를 막는다.
     스레드에서 돌려야 동시에 실행된 워커들(규정 + 혜택)이 서로를 기다리지 않는다."""
@@ -187,17 +208,23 @@ def create_server(services: Services | None = None) -> FastMCP:
     @server.tool()
     @threaded
     def search_benefits(
-        keywords: list[str] | None = None, region: str | None = None, limit: int = 10
+        keywords: list[str] | None = None,
+        region: str | None = None,
+        limit: int = 10,
+        service_type: str | None = None,
     ) -> dict:
         """정부24 공공서비스(혜택)에서 전역자 관련 혜택을 찾는다.
 
         keywords를 비우면 제대군인, 전역, 장병, 군복무, 국가유공자, 보훈으로 검색한다.
         region(예: '서울', '경기도')을 주면 다른 지역 지자체 혜택은 뺀다.
+        service_type(conscript, short_term_officer, long_term, merit)을 주면 대상이
+        다른 혜택(예: 병사에게 중·장기복무 전용)은 뺀다.
         """
         try:
-            benefits = svc.gov24.search(keywords=keywords, region=region, limit=limit)
+            benefits = svc.gov24.search(keywords=keywords, region=region, limit=limit * 2)
         except BenefitApiError as e:
             return {"benefits": [], "error": str(e), "fallback": fallback(" ".join(keywords or []))}
+        benefits = [b for b in benefits if fits_service_type(b, service_type)][:limit]
 
         results = []
         for b in benefits:

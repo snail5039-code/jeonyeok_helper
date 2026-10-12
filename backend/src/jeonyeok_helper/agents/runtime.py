@@ -85,8 +85,13 @@ async def open_agent(
     *,
     fast_llm: BaseChatModel | None = None,
     state_db: Path | None | object = _DEFAULT,
+    services=None,
 ) -> AsyncIterator[CompiledStateGraph]:
-    """state_db를 생략하면 설정의 SQLite 파일, None을 주면 메모리(평가·테스트용)."""
+    """state_db를 생략하면 설정의 SQLite 파일, None을 주면 메모리(평가·테스트용).
+
+    services(benefits.mcp_server.Services)를 주면 MCP 도구가 그 캐시를 같이 쓴다
+    (로드맵처럼 도구 데이터를 직접 쓰는 기능과 정책 목록 등을 두 번 받지 않도록).
+    """
     from jeonyeok_helper.benefits.mcp_server import create_server
     from jeonyeok_helper.config import get_settings
 
@@ -94,11 +99,12 @@ async def open_agent(
     if llm is None:
         from jeonyeok_helper.llm import get_chat_model, get_fast_chat_model
 
-        llm = get_chat_model(temperature=0.2, thinking_budget=settings.gemini_thinking_budget)
+        # 같은 질문에 같은 혜택이 나오도록 온도 0 (일관성 점검에서 넓은 질문의 항목이 흔들렸음)
+        llm = get_chat_model(temperature=0, thinking_budget=settings.gemini_thinking_budget)
         fast_llm = fast_llm or get_fast_chat_model()
     db = settings.state_db if state_db is _DEFAULT else state_db
 
-    server = create_server()
+    server = create_server(services)
     async with (
         create_connected_server_and_client_session(server._mcp_server) as session,
         _memory(db) as (checkpointer, store),

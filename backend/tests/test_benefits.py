@@ -19,7 +19,7 @@ from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import InstitutionDirectory
 from jeonyeok_helper.benefits.jobs import BASE_URL as JOBS_URL
 from jeonyeok_helper.benefits.jobs import VnetJobClient
-from jeonyeok_helper.benefits.mcp_server import Services, create_server
+from jeonyeok_helper.benefits.mcp_server import Services, create_server, fits_service_type
 from jeonyeok_helper.benefits.offices import VeteransOffice, find_offices, load_offices
 from jeonyeok_helper.benefits.stores import BASE_URL as STORES_URL
 from jeonyeok_helper.benefits.stores import StoreClient
@@ -457,3 +457,23 @@ def test_find_offices_by_region(region, expected):
         VeteransOffice(name="전남동부", regions=["전남광주통합특별시 순천시"]),
     ]
     assert [o.name for o in find_offices(offices, region)] == expected
+
+
+@pytest.mark.parametrize(
+    "name, target, service_type, expected",
+    [
+        ("중.장기복무 전역예정군인 전직교육서비스", "", "conscript", False),
+        ("전직지원금", "중장기복무 제대군인", "short_term_officer", False),
+        ("장기복무 제대군인 대부", "", "conscript", False),
+        ("중.장기복무 전역예정군인 전직교육서비스", "", "long_term", True),
+        ("전역예정장병 취업활동지원", "전역 예정 장병", "conscript", True),
+        ("중.장기복무 전역예정군인 전직교육서비스", "", None, True),  # 모르면 그대로
+        ("보훈가족 심리재활서비스 지원", "", "conscript", False),  # 보훈대상자 전용
+        ("국가유공자 차량취득세 감면", "", "long_term", False),
+        ("국가유공자 차량취득세 감면", "", "merit", True),
+        ("제대군인 및 국가유공자 취업지원", "", "conscript", True),  # 제대군인도 대상
+    ],
+)
+def test_benefits_for_other_service_types_are_dropped(name, target, service_type, expected):
+    benefit = Benefit(service_id="1", name=name, target=target)
+    assert fits_service_type(benefit, service_type) is expected
