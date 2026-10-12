@@ -1,6 +1,5 @@
 """환경변수(.env) 기반 설정."""
 
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -13,15 +12,6 @@ DATA_DIR = PROJECT_ROOT / "data"
 
 # 라이브러리가 os.environ에서 직접 읽는 값도 .env에서 불러온다.
 load_dotenv(PROJECT_ROOT / ".env")
-
-
-def default_chroma_dir(data_dir: Path = DATA_DIR, windows: bool = os.name == "nt") -> Path:
-    """Windows에서 경로에 한글이 있으면 Chroma가 검색 인덱스(HNSW) 파일을 쓰지 못해
-    다음 실행에서 'Error loading hnsw index'가 난다. 그때는 영문 경로(LOCALAPPDATA)에 둔다."""
-    local = os.environ.get("LOCALAPPDATA")
-    if windows and not str(data_dir).isascii() and local:
-        return Path(local) / "jeonyeok_helper" / "chroma"
-    return data_dir / "chroma"
 
 
 class Settings(BaseSettings):
@@ -49,16 +39,16 @@ class Settings(BaseSettings):
     # 온통청년(youthcenter.go.kr) 청년정책 OPEN API 인증키 — 마이페이지 > OPEN API에서 신청
     youthcenter_api_key: str = ""
 
+    # PostgreSQL(pgvector): 규정 검색 벡터와 서비스 테이블(피드백). 로컬은 docker compose up -d db
+    database_url: str = "postgresql+psycopg://jeonyeok:jeonyeok@localhost:5432/jeonyeok"
+
     # RAG
-    chroma_dir: Path = default_chroma_dir()
-    chroma_collection: str = "regulations"
+    vector_collection: str = "regulations"
     raw_docs_dir: Path = DATA_DIR / "raw"
     retrieval_k: int = 6
 
     # 대화 기록과 사용자 프로필을 저장하는 SQLite 파일 (서버를 재시작해도 유지)
     state_db: Path = DATA_DIR / "state.sqlite"
-    # 서비스 테이블(피드백 등). SQLAlchemy URL이라 Postgres 등으로 바꿀 수 있다.
-    app_db_url: str = f"sqlite:///{(DATA_DIR / 'app.sqlite').as_posix()}"
 
     # 슈퍼바이저가 한 질문에서 워커를 호출할 수 있는 최대 횟수 (무한 루프 방지)
     max_worker_calls: int = 4

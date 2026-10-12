@@ -18,7 +18,7 @@ def _url() -> str:
         return url
     from jeonyeok_helper.config import get_settings
 
-    return get_settings().app_db_url
+    return get_settings().database_url
 
 
 def _run(connection) -> None:

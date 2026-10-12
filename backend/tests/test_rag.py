@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -50,13 +51,34 @@ def test_load_directory_skips_unsupported(tmp_path: Path):
     assert len(skipped) == 1 and "b.hwp" in skipped[0]
 
 
-# ---------- 벡터 저장소 ----------
+# ---------- 벡터 저장소 (pgvector) ----------
+# 로컬: docker compose up -d db / CI: pgvector 서비스. DB가 없으면 건너뛴다.
 
 
-def test_store_upsert_does_not_duplicate(tmp_path: Path):
+@pytest.fixture
+def pg_store():
+    import uuid
+
+    from sqlalchemy import create_engine, text
+
+    url = os.environ.get("TEST_DATABASE_URL") or config.get_settings().database_url
+    try:
+        with create_engine(url).connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        pytest.skip("PostgreSQL(pgvector)에 연결할 수 없음 (docker compose up -d db)")
+    # 테스트마다 다른 컬렉션을 쓰고 지운다 (실제 수집 자료와 섞이지 않게)
     store = RegulationStore(
-        embeddings=DeterministicFakeEmbedding(size=32), persist_dir=tmp_path, collection="test-col"
+        embeddings=DeterministicFakeEmbedding(size=32),
+        url=url,
+        collection=f"test-{uuid.uuid4().hex[:8]}",
     )
+    yield store
+    store.db.delete_collection()
+
+
+def test_store_upsert_does_not_duplicate(pg_store):
+    store = pg_store
     docs = [doc("law:1:제1조", "목적"), doc("law:1:제2조", "정의")]
 
     store.upsert(docs, batch_size=1)
@@ -69,14 +91,12 @@ def test_store_upsert_does_not_duplicate(tmp_path: Path):
     }
 
 
-def test_store_searches_only_users_local_ordinances(tmp_path: Path):
+def test_store_searches_only_users_local_ordinances(pg_store):
     def ordin(doc_id: str, sido: str, sigungu: str) -> Document:
         meta = {"doc_id": doc_id, "source_type": "ordinance", "sido": sido, "sigungu": sigungu}
         return Document(page_content=doc_id, metadata=meta)
 
-    store = RegulationStore(
-        embeddings=DeterministicFakeEmbedding(size=32), persist_dir=tmp_path, collection="test-col"
-    )
+    store = pg_store
     law = doc("law:1:제1조")
     law.metadata["source_type"] = "law"
     store.upsert(
@@ -96,19 +116,20 @@ def test_store_searches_only_users_local_ordinances(tmp_path: Path):
     assert found("경기 포천") == {"law:1:제1조", "포천", "경기도"}  # 시군구 + 시도 조례
     assert found("경기도") == {"law:1:제1조", "포천", "가평", "경기도"}
     assert found("부산광역시") == {"law:1:제1조", "부산"}
+    # 2026 통합특별시: '전남'으로 물어도 '전남광주통합'으로 저장된 조례를 찾는다
+    store.upsert([ordin("나주", "전남광주통합", "나주")])
+    assert "나주" in found("전남")
 
 
-def test_chroma_dir_avoids_non_ascii_path_on_windows(monkeypatch):
-    monkeypatch.setenv("LOCALAPPDATA", "C:/Users/me/AppData/Local")
+def test_store_replace_source_drops_only_stale_chunks(pg_store):
+    def chunk(i: int) -> Document:
+        return Document(
+            page_content=f"조각 {i}", metadata={"doc_id": f"file:x:{i}", "source": "안내서.pdf"}
+        )
 
-    assert config.default_chroma_dir(Path("C:/전역/data"), windows=True) == Path(
-        "C:/Users/me/AppData/Local/jeonyeok_helper/chroma"
-    )
-    assert config.default_chroma_dir(Path("C:/app/data"), windows=True) == Path(
-        "C:/app/data/chroma"
-    )
-    # Docker·Linux는 그대로
-    assert config.default_chroma_dir(Path("/전역/data"), windows=False) == Path("/전역/data/chroma")
+    pg_store.upsert([chunk(i) for i in range(5)] + [doc("law:1:제1조")])
+    pg_store.replace_source("안내서.pdf", [chunk(i) for i in range(3)])  # 조각 수가 줄었다
+    assert pg_store.count() == 4  # 새 조각 3개 + 다른 파일의 문서 1개
 
 
 # ---------- 검색기 ----------

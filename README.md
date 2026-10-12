@@ -36,10 +36,10 @@
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
 | LLM | Gemini |
 | 에이전트 | LangChain, LangGraph |
-| 평가 | 답변 평가 40문항 + 규정 검색 골든셋 64문항 (`jeonyeok-eval`, `--retrieval`) |
+| 평가 | 답변 평가 41문항 + 규정 검색 골든셋 69문항 (`jeonyeok-eval`, `--retrieval`) |
 | 도구 연동 | MCP |
-| RAG | Chroma, HyDE, Re-ranking |
-| 서버 | FastAPI (SSE), SQLite (대화 기록·프로필), SQLAlchemy 2.0 + Alembic (피드백) |
+| RAG | PostgreSQL + pgvector, HyDE, Re-ranking |
+| 서버 | FastAPI (SSE), PostgreSQL (벡터 검색·피드백, SQLAlchemy 2.0 + Alembic), SQLite (대화 기록·프로필) |
 | 배포 | Docker Compose, GitHub Actions |
 
 ## 폴더
@@ -73,9 +73,10 @@ docker compose up --build              # http://localhost:3000
 
 ### 개발 모드
 
-백엔드 ([uv](https://docs.astral.sh/uv/) 필요):
+백엔드 ([uv](https://docs.astral.sh/uv/), Docker 필요):
 
 ```bash
+docker compose up -d db    # PostgreSQL(pgvector), localhost:5432
 cd backend
 uv sync
 cp .env.example .env

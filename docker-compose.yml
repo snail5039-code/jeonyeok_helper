@@ -1,4 +1,5 @@
 # 실행:            docker compose up --build        → http://localhost:3000
+# DB만 (로컬 개발): docker compose up -d db          → localhost:5432
 # 법령 수집:        docker compose run --rm api jeonyeok-rag laws
 # 보훈부 자료 수집:  backend/data/raw/에 파일을 넣고 docker compose run --rm api jeonyeok-rag files
 # 평가:            docker compose run --rm api jeonyeok-eval
@@ -8,16 +9,38 @@
 name: jeonyeok_helper
 
 services:
+  # 벡터 검색(pgvector)과 서비스 테이블(피드백)을 함께 둔다. AWS에서는 RDS PostgreSQL로 바꾼다.
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: jeonyeok
+      POSTGRES_PASSWORD: jeonyeok # 로컬 개발용. 배포 때는 비밀값으로 바꾼다
+      POSTGRES_DB: jeonyeok
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jeonyeok -d jeonyeok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   api:
     build: ./backend
     image: jeonyeok_helper-api:latest
     env_file:
       - path: ./backend/.env
         required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://jeonyeok:jeonyeok@db:5432/jeonyeok
     volumes:
-      - ./backend/data/chroma:/app/data/chroma # 벡터 DB (수집한 법령·문서)
       - ./backend/data/raw:/app/data/raw:ro # 국가보훈부 자료 원본
       - state:/app/data/state # 대화 기록, 사용자 프로필
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   web:
@@ -34,3 +57,4 @@ services:
 
 volumes:
   state:
+  pgdata:

@@ -104,7 +104,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.db = Database(db_url or get_settings().app_db_url)
+        app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
         app.state.roadmap = roadmap_builder
         async with AsyncExitStack() as stack:

@@ -30,10 +30,8 @@ description: 전역도우미에 검색 자료를 추가한다 — 사용자가 �
    - 글자가 있어도 **겹쳐 뽑히는** PDF가 있다 (굵은 글씨를 두 번 찍은 인쇄용: '급급지지 ((445511KKmm').
      이런 파일은 Gemini로 옮겨 적지 않는다: 옮겨 적기가 쪽의 절반을 빠뜨리거나 표 줄을 끝없이
      반복했다(전역간부안내서 236쪽 중 90쪽). 로더가 `undouble`로 겹친 글자를 되돌린다.
-   - 이미 넣은 파일을 다시 넣을 때는 `store.replace_source(파일명, docs)`를 쓴다. 조각을 통째로
-     지우면(수천 개) Windows에서 Chroma 색인이 손상된 적이 있다. 그때는 `chroma` 폴더를 백업하고,
-     `get(include=["embeddings", ...])`로 꺼내 새 폴더에 넣어 복구했다 (다시 임베딩할 필요 없음).
-   - 수집 중에는 백엔드 서버를 끄는 것이 안전하다 (같은 저장소를 두 프로세스가 연다).
+   - 이미 넣은 파일을 다시 넣을 때는 `store.replace_source(파일명, docs)`를 쓴다 (조각 수가 줄면
+     예전 조각이 남으므로 새 목록에 없는 것만 지운다).
    - 옮겨 적은 글의 앞부분과 표를 열어 빠진 내용이 없는지 눈으로 확인한다.
 3. 수집: 파일 하나만 넣을 때는 전체를 다시 임베딩하지 않도록 이렇게 한다.
    ```bash
@@ -88,4 +86,6 @@ description: 전역도우미에 검색 자료를 추가한다 — 사용자가 �
 
 - 2026년부터 전남·광주는 '전남광주통합특별시'. 자료마다 '전남광주통합', '(구)광주', 청년정책
   지역 코드 12로 다르게 적혀 있다. 지역 관련 코드는 `benefits/regions.py`에 모여 있다.
-- Windows 한글 경로라 Chroma는 `%LOCALAPPDATA%\jeonyeok_helper\chroma`에 저장된다.
+- 벡터 저장소는 PostgreSQL(pgvector)이다. 수집 전에 `docker compose up -d db`(프로젝트 폴더)로 띄운다.
+  문서 수는 `uv run jeonyeok-rag stats`, 출처별 확인은
+  `docker exec jeonyeok_helper-db-1 psql -U jeonyeok -d jeonyeok`에서 `langchain_pg_embedding` 표.

@@ -11,6 +11,21 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # 벡터 저장소 테스트용 PostgreSQL(pgvector)
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: jeonyeok
+          POSTGRES_PASSWORD: jeonyeok
+          POSTGRES_DB: jeonyeok
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jeonyeok -d jeonyeok"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://jeonyeok:jeonyeok@localhost:5432/jeonyeok
     steps:
       - uses: actions/checkout@v7
 

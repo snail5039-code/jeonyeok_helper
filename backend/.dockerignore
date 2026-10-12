@@ -8,7 +8,6 @@
 .ruff_cache
 docs
 tests
-data/chroma
 data/raw
 data/state*
 data/eval/results

@@ -17,7 +17,6 @@ next-env.d.ts
 .env.local
 
 # 실행 중 생기는 데이터 (벡터 DB, 원본 문서, 대화 기록, 평가 결과)
-backend/data/chroma/
 backend/data/raw/*
 !backend/data/raw/.gitkeep
 backend/data/datasets/

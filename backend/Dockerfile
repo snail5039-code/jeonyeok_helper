@@ -20,13 +20,12 @@ COPY data/eval ./data/eval
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
 
-# 실행 중 생기는 데이터(벡터 DB, 대화 기록)는 볼륨으로 뺀다.
+# 실행 중 생기는 데이터(대화 기록)는 볼륨으로 뺀다. 벡터 검색과 피드백은 PostgreSQL(DATABASE_URL).
 RUN useradd --create-home --uid 1000 app \
-    && mkdir -p data/chroma data/raw data/state \
+    && mkdir -p data/raw data/state \
     && chown -R app:app data
 USER app
-ENV STATE_DB=/app/data/state/state.sqlite \
-    APP_DB_URL=sqlite:////app/data/state/app.sqlite
+ENV STATE_DB=/app/data/state/state.sqlite
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
