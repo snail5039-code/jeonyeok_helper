@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
 COPY src ./src
-COPY data/laws.yaml data/institutions.yaml ./data/
+COPY data/*.yaml ./data/
 COPY data/eval ./data/eval
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev
@@ -25,7 +25,8 @@ RUN useradd --create-home --uid 1000 app \
     && mkdir -p data/chroma data/raw data/state \
     && chown -R app:app data
 USER app
-ENV STATE_DB=/app/data/state/state.sqlite
+ENV STATE_DB=/app/data/state/state.sqlite \
+    APP_DB_URL=sqlite:////app/data/state/app.sqlite
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
