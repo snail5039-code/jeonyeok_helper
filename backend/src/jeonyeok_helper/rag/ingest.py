@@ -3,6 +3,7 @@
 uv run jeonyeok-rag laws            # data/laws.yaml의 법령·행정규칙 수집
 uv run jeonyeok-rag ordinances      # data/ordinances.yaml 기준 지자체 조례 수집
 uv run jeonyeok-rag interpretations # data/interpretations.yaml 기준 법령해석례 수집
+uv run jeonyeok-rag datasets        # 공공데이터 CSV(보훈 민원·구비서류, 장학금) 수집
 uv run jeonyeok-rag files          # data/raw/ 의 파일 수집
 uv run jeonyeok-rag search "질문"    # 검색 결과 확인
 uv run jeonyeok-rag stats           # 저장된 문서 수
@@ -117,6 +118,7 @@ def _run(argv: list[str] | None) -> int:
     sub.add_parser("laws", help="법령·행정규칙 수집")
     sub.add_parser("ordinances", help="지자체 조례 수집")
     sub.add_parser("interpretations", help="법령해석례 수집")
+    sub.add_parser("datasets", help="공공데이터 CSV(보훈 민원, 장학금) 수집")
     sub.add_parser("files", help="data/raw 파일 수집")
     sub.add_parser("stats", help="저장된 문서 수")
     p_search = sub.add_parser("search", help="검색 결과 확인")
@@ -149,6 +151,15 @@ def _run(argv: list[str] | None) -> int:
             label = "법령해석례"
         print(f"{label} {total}개 저장, 실패 {len(errors)}건")
         return 1 if errors else 0
+
+    if args.cmd == "datasets":
+        from jeonyeok_helper.rag.datasets import load_datasets
+
+        docs, notes = load_datasets()
+        for note in notes:
+            print(f"  ✓ {note}")
+        print(f"공공데이터 {store.upsert(docs)}건 저장")
+        return 0
 
     if args.cmd == "files":
         total, _ = ingest_files(store, s.raw_docs_dir)

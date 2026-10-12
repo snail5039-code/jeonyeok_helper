@@ -96,6 +96,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 | `uv run jeonyeok-rag laws` | `data/laws.yaml`의 법령·행정규칙(훈령·고시) 수집 (LAW_API_OC 필요) |
 | `uv run jeonyeok-rag ordinances` | `data/ordinances.yaml` 기준 지자체 조례 수집 (LAW_API_OC 필요) |
 | `uv run jeonyeok-rag interpretations` | `data/interpretations.yaml` 기준 국가보훈부·국방부·병무청·법제처 법령해석례 수집 |
+| `uv run jeonyeok-rag datasets` | 공공데이터 CSV(보훈 민원·구비서류, 장학금) 수집, 파일이 없으면 data.go.kr에서 내려받음 |
 | `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (HWP는 PDF로 변환) |
 | `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
 | `uv run jeonyeok-mcp` | MCP 서버 (stdio) |

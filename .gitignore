@@ -20,6 +20,7 @@ next-env.d.ts
 backend/data/chroma/
 backend/data/raw/*
 !backend/data/raw/.gitkeep
+backend/data/datasets/
 backend/data/state.sqlite*
 backend/data/eval/results/
 
