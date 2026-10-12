@@ -231,6 +231,12 @@ questions:
     sources_any: [한국장학재단]
     answer_any: [장학, 학자금]
     should_ask: false
+  - id: t11
+    category: tools
+    question: 장기복무 제대군인인데 서울에서 보훈특별고용 채용공고 있어요?
+    tools_any: [search_veteran_jobs]
+    answer_any: [보훈특별고용, 채용]
+    should_ask: false
   # ---------- 일반 / 되묻기 ----------
   - id: g01
     category: general

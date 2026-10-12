@@ -58,5 +58,15 @@ class RegulationStore:
     def search(self, query: str, k: int, region: str | None = None) -> list[Document]:
         return self.db.similarity_search(query, k=k, filter=region_filter(region))
 
+    def replace_source(self, source: str, docs: list[Document]) -> int:
+        """파일 하나의 조각을 새 조각으로 바꾼다. 조각 수가 줄면 예전 조각이 남으므로 새 목록에
+        없는 것만 지운다. 파일 조각을 통째로(수천 개) 지웠다가 Windows에서 Chroma 색인이
+        손상된 적이 있어(2026-10-12, 문서를 새 저장소로 옮겨 복구) 한꺼번에 지우지 않는다."""
+        new_ids = {d.metadata["doc_id"] for d in docs}
+        old_ids = self.db._collection.get(where={"source": source}, include=[])["ids"]
+        if stale := [i for i in old_ids if i not in new_ids]:
+            self.db._collection.delete(ids=stale)
+        return self.upsert(docs)
+
     def count(self) -> int:
         return self.db._collection.count()

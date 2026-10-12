@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
-from jeonyeok_helper.rag.transcribe import TRANSCRIPT_DIR, read_transcript
+from jeonyeok_helper.rag.transcribe import TRANSCRIPT_DIR, read_transcript, undouble
 
 SUPPORTED = {".pdf", ".txt", ".md"}
 
@@ -28,15 +28,16 @@ def split_text(text: str) -> list[str]:
 def _read_pages(path: Path) -> list[tuple[int | None, str]]:
     """(페이지 번호, 텍스트) 목록. 페이지 개념이 없는 파일은 번호가 None."""
     if path.suffix.lower() == ".pdf":
+        # 글자가 없거나 겹쳐 뽑히는 PDF는 Gemini로 옮겨 적어 둔 글을 먼저 쓴다 (rag.transcribe)
         reader = PdfReader(path)
-        pages = [(i + 1, page.extract_text() or "") for i, page in enumerate(reader.pages)]
+        # 굵은 글씨가 겹쳐 뽑히는 인쇄용 PDF가 있어 겹친 글자를 되돌린다 (rag.transcribe.undouble)
+        pages = [(i + 1, undouble(p.extract_text() or "")) for i, p in enumerate(reader.pages)]
         if any(text.strip() for _, text in pages):
             return pages
-        # 글자 정보가 없는 PDF는 Gemini로 옮겨 적어 둔 글을 쓴다 (rag.transcribe)
-        transcript = read_transcript(path)
-        if transcript is None:
-            raise ValueError(f"글자를 추출할 수 없는 PDF입니다 (옮겨 적기 필요): {path.name}")
-        return transcript
+        # 글자 정보가 없는 PDF는 Gemini로 옮겨 적어 둔 글을 쓴다
+        if (transcript := read_transcript(path)) is not None:
+            return transcript
+        raise ValueError(f"글자를 추출할 수 없는 PDF입니다 (옮겨 적기 필요): {path.name}")
     return [(None, path.read_text(encoding="utf-8"))]
 
 

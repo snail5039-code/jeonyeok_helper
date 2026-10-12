@@ -31,8 +31,8 @@ KNOWN_KEYS = {
 
 def test_question_set_is_valid():
     questions = load_questions()
-    assert len(questions) == 40
-    assert len({q["id"] for q in questions}) == 40
+    assert len(questions) == 41
+    assert len({q["id"] for q in questions}) == 41
     for q in questions:
         assert set(q) <= KNOWN_KEYS, q["id"]
         assert q["category"] in CATEGORY_NAMES

@@ -33,8 +33,48 @@ def has_text(path: Path) -> bool:
     return any((p.extract_text() or "").strip() for p in PdfReader(path).pages)
 
 
+# 굵은 글씨를 두 번 찍은 인쇄용 PDF(전역간부안내서, 병 복지 길라잡이)는 '급급지지 ((445511KKmm'처럼
+# 글자가 겹쳐 뽑힌다. 이런 파일도 Gemini로 옮겨 적지 않는다: 옮겨 적기는 쪽의 절반을 빠뜨리거나
+# 표에서 같은 줄을 끝없이 반복하는 경우가 있었다 (전역간부안내서 236쪽 중 90쪽). 추출한 글에서
+# 겹친 글자만 되돌리면 원문이 빠짐없이 남는다.
+
+
+def _is_doubled(token: str) -> bool:
+    return len(token) >= 2 and len(token) % 2 == 0 and token[0::2] == token[1::2]
+
+
+def undouble(text: str) -> str:
+    """굵은 글씨 줄의 겹친 글자를 되돌린다.
+
+    '개개인인정정보보' → '개인정보', '((445511KKmm' → '(451Km'. '1100' 같은 숫자를 망치지
+    않도록 한글이 겹친 낱말이 2개 이상인 줄만 고친다."""
+    out = []
+    for line in text.splitlines():
+        tokens = line.split(" ")
+        hangul = [t for t in tokens if _is_doubled(t) and re.search(r"[가-힣]", t)]
+        # '퇴퇴직직수수당당'처럼 네 글자 넘게 겹친 한글 낱말은 하나만 있어도 굵은 글씨 줄로 본다
+        if len(hangul) >= 2 or any(len(t) >= 6 for t in hangul):
+            line = " ".join(t[0::2] if _is_doubled(t) else t for t in tokens)
+        out.append(line)
+    return "\n".join(out)
+
+
 def transcript_path(pdf: Path) -> Path:
     return pdf.parent / TRANSCRIPT_DIR / f"{pdf.name}.md"
+
+
+_RULE = re.compile(r"(?:[-=_─|:]\s*){8,}")  # 표 구분선이 끝없이 이어지는 경우
+MAX_PAGE_CHARS = 12_000  # 한 쪽에 이보다 길면 같은 줄을 반복한 것 (보통 쪽은 2천 자 안팎)
+
+
+def clean_transcript(text: str) -> str:
+    """Gemini가 표를 옮기다 구분선이나 같은 줄을 끝없이 반복하는 경우가 있다
+    (병 복지 길라잡이 80쪽 중 2쪽이 130만 자). 구분선을 줄이고 연달아 반복되는 줄은 한 번만 둔다."""
+    lines: list[str] = []
+    for line in _RULE.sub("---", text).splitlines():
+        if not lines or line.strip() != lines[-1].strip() or not line.strip():
+            lines.append(line)
+    return "\n".join(lines)[:MAX_PAGE_CHARS].strip()
 
 
 def read_transcript(pdf: Path) -> list[tuple[int, str]] | None:
@@ -44,7 +84,7 @@ def read_transcript(pdf: Path) -> list[tuple[int, str]] | None:
         return None
     parts = PAGE_MARK.split(path.read_text(encoding="utf-8"))
     # split 결과: [머리말, 번호, 본문, 번호, 본문, ...]
-    return [(int(parts[i]), parts[i + 1].strip()) for i in range(1, len(parts) - 1, 2)]
+    return [(int(parts[i]), clean_transcript(parts[i + 1])) for i in range(1, len(parts) - 1, 2)]
 
 
 def _page_pdf(reader: PdfReader, index: int) -> bytes:
@@ -64,13 +104,13 @@ def transcribe_pdf(pdf: Path, transcribe_page=None, workers: int = 4) -> Path:
         texts = list(pool.map(transcribe_page, pages))
     out = transcript_path(pdf)
     out.parent.mkdir(parents=True, exist_ok=True)
-    body = "\n\n".join(f"<!-- page {i} -->\n{t.strip()}" for i, t in enumerate(texts, 1))
+    body = "\n\n".join(f"<!-- page {i} -->\n{clean_transcript(t)}" for i, t in enumerate(texts, 1))
     out.write_text(f"# {pdf.name} (Gemini로 옮겨 적음)\n\n{body}\n", encoding="utf-8")
     return out
 
 
 def ensure_transcripts(directory: Path, transcribe_page=None) -> list[str]:
-    """글자가 없는 PDF 중 아직 옮겨 적지 않은 것을 옮겨 적는다. 처리한 파일 이름 목록."""
+    """글자 정보가 없는 PDF 중 아직 옮겨 적지 않은 것을 옮겨 적는다. 처리한 파일 이름 목록."""
     done = []
     for pdf in sorted(directory.rglob("*.pdf")):
         if TRANSCRIPT_DIR in pdf.parts or transcript_path(pdf).exists() or has_text(pdf):
@@ -93,7 +133,10 @@ def _gemini_transcriber():
     # 응답이 오지 않는 요청을 무한정 기다리지 않도록 5분 제한 (그림이 많은 쪽은 2분 넘게 걸림)
     client = genai.Client(api_key=s.google_api_key, http_options=types.HttpOptions(timeout=300_000))
     config = types.GenerateContentConfig(
-        temperature=0, thinking_config=types.ThinkingConfig(thinking_budget=0)
+        temperature=0,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+        # 같은 줄을 끝없이 반복하면 몇 분씩 걸리고 수십만 자가 나온다. 한 쪽에 충분한 길이로 자른다.
+        max_output_tokens=8192,
     )
 
     def transcribe(page: bytes) -> str:

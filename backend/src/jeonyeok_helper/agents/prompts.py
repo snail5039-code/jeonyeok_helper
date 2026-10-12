@@ -77,7 +77,9 @@ WORKER_PROMPTS = {
     "대상이 맞지 않는 혜택은 빼세요. 의무복무 병사나 34세 이하 사용자에게는 "
     "search_youth_policies로 청년정책도 함께 찾으세요(지역·나이를 알면 넣을 것). "
     "채용공고나 일자리를 물으면 search_jobs로 "
-    "사용자 지역의 제대군인지원센터 공고를 찾으세요. 예비군 훈련 이수자·현역병 할인이나 "
+    "사용자 지역의 제대군인지원센터 공고를 찾으세요. 보훈특별고용, 공무원·군무원 특별채용, "
+    "국가유공자·장기복무 제대군인의 취업 공고를 물으면 search_veteran_jobs를 쓰세요. "
+    "예비군 훈련 이수자·현역병 할인이나 "
     "나라사랑가게를 물으면 find_stores로 사용자 지역 가게를 찾으세요(지역을 모르면 쓰지 말 것)."
     + GROUNDING,
     "institution": COMMON + "\n\n당신은 기관 연계 담당입니다. find_institutions 도구로 "
@@ -96,6 +98,7 @@ WORKER_TOOLS = {
         "get_benefit_detail",
         "search_youth_policies",
         "search_jobs",
+        "search_veteran_jobs",
         "find_stores",
     ],
     "institution": ["find_institutions", "find_veterans_office", "find_hospitals"],

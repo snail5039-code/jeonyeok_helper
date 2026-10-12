@@ -223,7 +223,7 @@ def make_server(fail: bool = False):
     )
 
 
-def test_server_exposes_four_tools():
+def test_server_exposes_all_tools():
     names = {t.name for t in asyncio.run(make_server().list_tools())}
     assert names == {
         "search_regulations",
@@ -232,6 +232,7 @@ def test_server_exposes_four_tools():
         "find_veterans_office",
         "find_hospitals",
         "search_jobs",
+        "search_veteran_jobs",
         "find_stores",
         "search_youth_policies",
         "find_institutions",
@@ -519,3 +520,38 @@ def test_find_offices_by_region(region, expected):
 def test_benefits_for_other_service_types_are_dropped(name, target, service_type, expected):
     benefit = Benefit(service_id="1", name=name, target=target)
     assert fits_service_type(benefit, service_type) is expected
+
+
+# ---------- 보훈관서 채용정보 ----------
+
+VACANCIES_XML = """<?xml version="1.0" encoding="euc-kr"?>
+<vacancies><total_count>2</total_count>
+<vacancy><r_company>부산교통공사</r_company><r_title>도시철도 보안관 보훈특별고용</r_title>
+<r_section>보훈특별고용</r_section><r_work_place>
+  부산
+</r_work_place><reg_date>2026-10-08</reg_date><end_date>2026-10-22</end_date>
+<link>https://job.mpva.go.kr/govRecurit/speclEmpmnView.do?rIdx=1&amp;menuKey=147</link></vacancy>
+<vacancy><r_company>지난회사</r_company><r_title>마감된 공고</r_title>
+<r_section>보훈특별고용</r_section><end_date>2026-10-01</end_date></vacancy>
+</vacancies>"""
+
+
+@respx.mock
+def test_veteran_jobs_use_place_codes_and_drop_closed():
+    from jeonyeok_helper.benefits.veteran_jobs import BASE_URL as VJ_URL
+    from jeonyeok_helper.benefits.veteran_jobs import VeteranJobClient
+
+    route = respx.get(VJ_URL).mock(
+        return_value=httpx.Response(200, content=VACANCIES_XML.encode("euc-kr"),
+                                    headers={"content-type": "text/xml;charset=euc-kr"})
+    )  # fmt: skip
+    jobs = VeteranJobClient().search(
+        region="부산 해운대", section="보훈특별고용", today=date(2026, 10, 12)
+    )
+    assert [j.company for j in jobs] == ["부산교통공사"]  # 마감 지난 공고는 뺀다
+    assert jobs[0].area == "부산" and "rIdx=1" in jobs[0].url
+    params = route.calls[0].request.url.params
+    assert params["place"] == "d" and params["section"] == "a"
+
+    VeteranJobClient().search(today=date(2026, 10, 12))  # 지역을 모르면 전국
+    assert route.calls[-1].request.url.params["place"] == "z"

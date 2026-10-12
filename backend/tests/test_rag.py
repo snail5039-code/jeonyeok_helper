@@ -280,3 +280,27 @@ def test_webpage_text_keeps_body_and_drops_menus():
     assert docs[0].metadata["source_type"] == "web"
     assert docs[0].metadata["citation"] == page["name"]
     assert docs[0].metadata["doc_id"] == page_to_documents(page, "다른 내용")[0].metadata["doc_id"]
+
+
+def test_clean_transcript_drops_runaway_repetition():
+    from jeonyeok_helper.rag.transcribe import MAX_PAGE_CHARS, clean_transcript
+
+    table = "| 계급 | 봉급 |\n|" + "-" * 5000 + "|\n| 병장 | 2,050,000원 |\n" + "| | |\n" * 3000
+    out = clean_transcript(table)
+    assert "병장 | 2,050,000원" in out
+    assert len(out) < 200  # 구분선은 '---'로, 연달아 반복된 빈 표 줄은 한 번만
+    assert len(clean_transcript("가" * 50_000)) == MAX_PAGE_CHARS
+
+
+def test_undouble_fixes_bold_lines_only():
+    from jeonyeok_helper.rag.transcribe import undouble
+
+    assert undouble("개개인인정정보보  이이용용 동의서") == "개인정보  이용 동의서"
+    assert (
+        undouble("11  급급지지  ((445511KKmm  이이상상)) 152,200")
+        == "1  급지  (451Km  이상) 152,200"
+    )
+    assert undouble("1100원 봉급 33개월") == "1100원 봉급 33개월"  # 한글 겹침이 없는 줄은 그대로
+    assert undouble("첫 줄\n구구 분분 내내 용용\n끝") == "첫 줄\n구 분 내 용\n끝"
+    assert undouble("2) 퇴퇴직직수수당당 (군인연금법)") == "2) 퇴직수당 (군인연금법)"
+    assert undouble("하하 웃었다") == "하하 웃었다"  # 두 글자 하나는 실제 말일 수 있다

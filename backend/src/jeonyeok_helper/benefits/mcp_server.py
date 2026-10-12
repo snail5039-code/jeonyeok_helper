@@ -9,6 +9,7 @@
 - search_benefits    : 공공서비스(혜택) 조회
 - get_benefit_detail : 혜택 상세
 - search_jobs        : 제대군인지원센터 채용공고
+- search_veteran_jobs : 보훈관서 채용정보 (보훈특별고용, 공무원 특별채용)
 - find_stores        : 병무청 나라사랑가게 (병역이행자 할인)
 - search_youth_policies : 온통청년 청년정책
 - find_veterans_office : 관할 지방보훈청·보훈지청
@@ -36,6 +37,7 @@ from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirect
 from jeonyeok_helper.benefits.jobs import VnetJobClient
 from jeonyeok_helper.benefits.offices import find_offices, load_offices
 from jeonyeok_helper.benefits.stores import StoreClient
+from jeonyeok_helper.benefits.veteran_jobs import VeteranJobClient
 from jeonyeok_helper.benefits.youth import YouthPolicyClient
 from jeonyeok_helper.config import get_settings
 
@@ -74,6 +76,7 @@ class Services:
         HospitalClient, "data_go_kr_service_key"
     )
     jobs_factory: Callable[[], VnetJobClient] = VnetJobClient
+    veteran_jobs_factory: Callable[[], VeteranJobClient] = VeteranJobClient
     stores_factory: Callable[[], StoreClient] = _with_key(StoreClient, "data_go_kr_service_key")
     youth_factory: Callable[[], YouthPolicyClient] = _with_key(
         YouthPolicyClient, "youthcenter_api_key"
@@ -100,6 +103,10 @@ class Services:
     @property
     def jobs(self) -> VnetJobClient:
         return self._get("jobs", self.jobs_factory)
+
+    @property
+    def veteran_jobs(self) -> VeteranJobClient:
+        return self._get("veteran_jobs", self.veteran_jobs_factory)
 
     @property
     def hospitals(self) -> HospitalClient:
@@ -256,6 +263,31 @@ def create_server(services: Services | None = None) -> FastMCP:
         except BenefitApiError as e:
             return {"jobs": [], "error": str(e), "fallback": fallback("취업")}
         return {"jobs": [j.model_dump() for j in jobs]}
+
+    @server.tool()
+    @threaded
+    def search_veteran_jobs(
+        region: str | None = None,
+        section: str | None = None,
+        keyword: str | None = None,
+        limit: int = 10,
+    ) -> dict:
+        """국가보훈부 보훈관서 채용정보의 마감 전 공고.
+
+        section: '보훈특별고용'(국가유공자·10년 이상 장기복무 제대군인 등 취업지원대상자를
+        공기업·기업체에 특별고용) 또는 '특별채용'(일반직공무원·군무원 특별채용). 비우면 둘 다.
+        region은 근무지 시도(예: '부산'), keyword는 제목·회사명에서 찾을 단어(예: '경비').
+        """
+        try:
+            jobs = svc.veteran_jobs.search(
+                region=region, section=section, keyword=keyword, limit=limit
+            )
+        except BenefitApiError as e:
+            return {"vacancies": [], "error": str(e), "fallback": fallback("취업")}
+        return {
+            "vacancies": [j.model_dump() for j in jobs],
+            "note": "보훈특별고용은 취업지원대상자로 등록된 사람만 지원할 수 있다 (관할 보훈관서).",
+        }
 
     @server.tool()
     @threaded

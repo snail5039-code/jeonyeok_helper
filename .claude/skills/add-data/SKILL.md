@@ -26,7 +26,14 @@ description: 전역도우미에 검색 자료를 추가한다 — 사용자가 �
    uv run python -c "from pathlib import Path; from jeonyeok_helper.rag.transcribe import has_text; print(has_text(Path('data/raw/파일.pdf')))"
    ```
    - `False`(스캔본, 글자를 도형으로 바꾼 인쇄용 파일)면 `jeonyeok-rag files`가 Gemini로 한 쪽씩
-     옮겨 적어 `data/raw/.transcripts/<파일명>.md`에 저장한다 (30쪽에 약 5분). 한 번만 한다.
+     옮겨 적어 `data/raw/.transcripts/<파일명>.md`에 저장한다. 한 번만 한다.
+   - 글자가 있어도 **겹쳐 뽑히는** PDF가 있다 (굵은 글씨를 두 번 찍은 인쇄용: '급급지지 ((445511KKmm').
+     이런 파일은 Gemini로 옮겨 적지 않는다: 옮겨 적기가 쪽의 절반을 빠뜨리거나 표 줄을 끝없이
+     반복했다(전역간부안내서 236쪽 중 90쪽). 로더가 `undouble`로 겹친 글자를 되돌린다.
+   - 이미 넣은 파일을 다시 넣을 때는 `store.replace_source(파일명, docs)`를 쓴다. 조각을 통째로
+     지우면(수천 개) Windows에서 Chroma 색인이 손상된 적이 있다. 그때는 `chroma` 폴더를 백업하고,
+     `get(include=["embeddings", ...])`로 꺼내 새 폴더에 넣어 복구했다 (다시 임베딩할 필요 없음).
+   - 수집 중에는 백엔드 서버를 끄는 것이 안전하다 (같은 저장소를 두 프로세스가 연다).
    - 옮겨 적은 글의 앞부분과 표를 열어 빠진 내용이 없는지 눈으로 확인한다.
 3. 수집: 파일 하나만 넣을 때는 전체를 다시 임베딩하지 않도록 이렇게 한다.
    ```bash
