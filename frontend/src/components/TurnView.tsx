@@ -225,7 +225,7 @@ function Feedback({ turn, onFeedback }: { turn: Turn; onFeedback: FeedbackHandle
             className="w-full resize-none rounded-lg border border-line-strong bg-bg px-3 py-2 text-sm"
           />
           <div className="flex gap-1.5">
-            <button type="submit" className={`${base} border-accent bg-accent text-white`}>
+            <button type="submit" className={`${base} border-accent bg-accent text-accent-ink`}>
               보내기
             </button>
             <button

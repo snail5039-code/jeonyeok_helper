@@ -1,41 +1,42 @@
 @import "tailwindcss";
 
-/* 전역도우미 — 흰 바탕에 초록 하나만 포인트로 쓰고, 나머지는 초록 기운이 도는 회색.
+/* 전역도우미 — 무난하고 모던하게: 사용자(대부분 20대 전역자)가 매일 쓰는 금융·생활 앱처럼
+   또렷한 파랑 하나만 포인트로 쓰고, 나머지는 색기 없는 회색. 법령 근거만 남보라로 구분한다.
    색은 토큰으로만 정의하고, 다크 모드는 토큰 값만 바꾼다.
    (시스템 설정을 따르되, 사용자가 고르면 html[data-theme]가 우선) */
 :root {
   --bg: #ffffff;
-  --bg-soft: #f6f8f7;
-  --bg-sunken: #eef2f0;
-  --line: #e3e8e5;
-  --line-strong: #cfd7d3;
-  --fg: #17201c;
-  --fg-2: #4a5550;
-  --fg-3: #87918c;
-  --accent: #0f7a5a;
-  --accent-soft: #e6f3ee;
+  --bg-soft: #f9fafb;
+  --bg-sunken: #f2f4f6;
+  --line: #e5e8eb;
+  --line-strong: #d1d6db;
+  --fg: #191f28;
+  --fg-2: #4e5968;
+  --fg-3: #8b95a1;
+  --accent: #2a6fdb; /* 흰 바탕 대비 4.8:1 (작은 글자 기준 4.5 이상) */
+  --accent-soft: #e8f3ff;
   --accent-ink: #ffffff;
-  --warn: #b26b00;
-  --warn-soft: #fdf3e2;
-  --law: #3559b8;
-  --law-soft: #ebf0fb;
-  --shadow: 0 1px 2px rgb(23 32 28 / 0.04), 0 8px 24px rgb(23 32 28 / 0.06);
+  --warn: #c26a00;
+  --warn-soft: #fff4e5;
+  --law: #5b5bd6;
+  --law-soft: #efeffc;
+  --shadow: 0 1px 2px rgb(25 31 40 / 0.04), 0 8px 24px rgb(25 31 40 / 0.06);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #111513; --bg-soft: #171c19; --bg-sunken: #1d2420; --line: #26302b; --line-strong: #34403a;
-    --fg: #e9eeeb; --fg-2: #b3bdb8; --fg-3: #7d8883;
-    --accent: #3fbf91; --accent-soft: #17302a; --accent-ink: #08130f;
-    --warn: #e6a640; --warn-soft: #2e2516; --law: #8ea8ec; --law-soft: #1d2538;
+    --bg: #17171c; --bg-soft: #1e1e24; --bg-sunken: #26262d; --line: #2c2c35; --line-strong: #3c3c47;
+    --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
+    --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
+    --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
     --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #111513; --bg-soft: #171c19; --bg-sunken: #1d2420; --line: #26302b; --line-strong: #34403a;
-  --fg: #e9eeeb; --fg-2: #b3bdb8; --fg-3: #7d8883;
-  --accent: #3fbf91; --accent-soft: #17302a; --accent-ink: #08130f;
-  --warn: #e6a640; --warn-soft: #2e2516; --law: #8ea8ec; --law-soft: #1d2538;
+  --bg: #17171c; --bg-soft: #1e1e24; --bg-sunken: #26262d; --line: #2c2c35; --line-strong: #3c3c47;
+  --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
+  --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
+  --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
   --shadow: none; color-scheme: dark;
 }
 
