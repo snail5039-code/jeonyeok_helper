@@ -37,6 +37,7 @@ CATEGORY_NAMES = {
     "merit": "보훈대상자",
     "tools": "외부 도구·자료",
     "general": "일반",
+    "hard": "어려운 질문",
 }
 
 
@@ -123,6 +124,11 @@ def grade(
         if words := case.get("answer_any"):
             hit = next((w for w in words if w in answer), None)
             checks.append(Check("답변 내용", hit is not None, hit or "핵심 단어 없음"))
+        if words := case.get("answer_all"):
+            # 여러 가지를 한꺼번에 물었을 때 빠뜨리지 않았는지
+            missing = [w for w in words if w not in answer]
+            detail = f"빠짐: {missing}" if missing else "전부"
+            checks.append(Check("답변 모두 포함", not missing, detail))
     for key, expected in (case.get("profile") or {}).items():
         actual = profile.get(key)
         checks.append(

@@ -25,8 +25,11 @@ CONTENT_SELECTORS = ["#contents", "#content", "main", "article", ".contents", ".
 NOISE_TAGS = ["script", "style", "nav", "header", "footer", "noscript", "button"]
 
 
-def extract_text(html: str, selector: str | None = None, start: str | None = None) -> str:
-    """페이지 본문 글. start를 주면 그 글이 처음 나오는 곳부터 (앞쪽 메뉴·공유 버튼 제거)."""
+def extract_text(
+    html: str, selector: str | None = None, start: str | None = None, end: str | None = None
+) -> str:
+    """페이지 본문 글. start를 주면 그 글이 처음 나오는 곳부터 (앞쪽 메뉴·공유 버튼 제거),
+    end를 주면 그 글이 나오기 전까지 (뒤쪽 저작권·운영원칙 안내 제거)."""
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(NOISE_TAGS):
         tag.decompose()
@@ -39,6 +42,8 @@ def extract_text(html: str, selector: str | None = None, start: str | None = Non
     text = "\n".join(line for line in lines if line)
     if start and (i := text.find(start)) >= 0:
         text = text[i:]
+    if end and (j := text.find(end)) > 0:
+        text = text[:j]
     return text
 
 
@@ -71,7 +76,7 @@ def load_webpages(pages: list[dict], client: httpx.Client | None = None, delay: 
         try:
             resp = client.get(page["url"])
             resp.raise_for_status()
-            text = extract_text(resp.text, page.get("selector"), page.get("start"))
+            text = extract_text(resp.text, page.get("selector"), page.get("start"), page.get("end"))
             if len(text) < 200:
                 raise ValueError(f"본문이 너무 짧음 ({len(text)}자)")
             docs += page_to_documents(page, text)

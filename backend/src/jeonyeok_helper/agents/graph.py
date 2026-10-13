@@ -118,7 +118,11 @@ def build_graph(
         """이번 메시지를 검색 없이 말로 답할지(talk), 자료를 찾아 답할지(research) 정한다."""
         # 버튼 동작(했어요·나중에)이 아닌데 신청 방법·자격 등을 물으면 바로 자료를 찾는다
         action = (config.get("configurable") or {}).get("action")
-        if c.coach is None or (not action and guide_rules.needs_research(_last_question(state))):
+        question = _last_question(state)
+        turns = sum(getattr(m, "type", "") == "human" for m in state["messages"])
+        # 무엇을 묻는지 모르는 '그거 신청 어디서 해요?'는 검색하지 말고 길잡이가 되묻는다
+        vague = guide_rules.is_vague_first_turn(question, turns)
+        if c.coach is None or (not action and guide_rules.needs_research(question) and not vague):
             return {"guide": {"mode": "research"}}
         items = _journey(config)
         missing = guide_rules.missing_field(state.get("profile"))

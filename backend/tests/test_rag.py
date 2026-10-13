@@ -303,6 +303,16 @@ def test_webpage_text_keeps_body_and_drops_menus():
     assert docs[0].metadata["doc_id"] == page_to_documents(page, "다른 내용")[0].metadata["doc_id"]
 
 
+def test_webpage_text_end_marker_drops_trailing_notice():
+    from jeonyeok_helper.rag.webpages import extract_text
+
+    html = """<html><body><main><p>카드 안내</p><p>만 34세 이하 제대군인이 대상</p>
+    <p>이 자료는</p><p>공공누리 저작권 안내와 운영원칙</p></main></body></html>"""
+    text = extract_text(html, start="카드 안내", end="이 자료는")
+    assert "34세" in text and "저작권" not in text
+    assert "저작권" in extract_text(html, start="카드 안내", end="없는 글")  # 못 찾으면 그대로
+
+
 def test_clean_transcript_drops_runaway_repetition():
     from jeonyeok_helper.rag.transcribe import MAX_PAGE_CHARS, clean_transcript
 

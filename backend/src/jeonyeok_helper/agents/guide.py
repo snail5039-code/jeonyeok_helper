@@ -75,8 +75,17 @@ RESEARCH_WORDS = re.compile(
 REOPEN_WORDS = re.compile(r"실수로|잘못 눌|잘못눌|되돌|취소|아직 안 ?했|안 했는데|놓쳤|다시 해")
 
 
+# '그거 신청 어디서 해요?'처럼 가리키는 말로 시작하는 질문
+VAGUE_START = re.compile(r"^\s*(그거|이거|저거|그것|이것|거기|그건|이건)")
+
+
 def needs_research(text: str) -> bool:
     return bool(RESEARCH_WORDS.search(text)) and not REOPEN_WORDS.search(text)
+
+
+def is_vague_first_turn(text: str, turns: int) -> bool:
+    """대화 첫 마디가 가리키는 말뿐이면 무엇을 묻는지 알 수 없다 (되물어야 한다)."""
+    return turns <= 1 and bool(VAGUE_START.match(text))
 
 
 def find_done(items: list[dict], title: str) -> dict | None:
@@ -210,6 +219,8 @@ COACH_PROMPT = ChatPromptTemplate.from_messages(
             "5. 완료 표시를 되돌려 달라는 말 ('실수로 했어요 눌렀어', '그거 아직 안 했어', "
             "'놓쳤어 다시 해줘'): reopen에 로드맵에서 ✓ 표시된 그 할 일 제목을 그대로 쓰고, say로 "
             "되돌렸다고 알려 주세요\n"
+            "6. '그거', '이거'처럼 가리키는 말뿐이고 앞 대화에 그 대상이 없어서 무엇을 묻는지 "
+            "알 수 없을 때: say에서 어떤 혜택·제도를 말하는지 되물으세요 (기관을 지어내지 말 것)\n"
             "그 밖에 혜택·제도·법령·자격·금액·기한·서류·신청 방법('어떻게 신청해요?')·기관을 "
             "묻는 질문은 모두 research ('혜택 뭐 있어요?'처럼 복무 형태를 몰라도: 병사 기준으로 "
             "찾고 화면이 따로 유형을 묻습니다). 애매하면 research.\n\n"
@@ -222,7 +233,10 @@ COACH_PROMPT = ChatPromptTemplate.from_messages(
             "- 빠진 정보가 없고 '지금 권할 다음 할 일'이 있으면 그 할 일을 한 문장으로 "
             "권하기 ([했어요] [어떻게 해요?] [나중에] 버튼이 함께 나옴)\n"
             "- 로드맵이 아직 없고 빠진 정보도 없으면 '로드맵을 만들고 있어요'라고 말하기\n"
-            "- 전역과 관계없는 질문이면 도울 수 있는 일을 짧게 알려 주기\n\n"
+            "- 전역과 관계없는 말(날씨·시사·장난)이나 뜻을 알 수 없는 입력이면, 인사로 착각하지 "
+            "말고 첫 문장에서 '그건 제가 도울 수 없어요'(못 알아들었으면 "
+            "'무슨 말인지 잘 모르겠어요')라고 분명히 말한 뒤, "
+            "전역 혜택·절차는 도울 수 있다고 짧게 이어 가기\n\n"
             "오늘: {today}\n사용자 프로필: {profile}\n빠진 정보: {missing}\n\n로드맵:\n{journey}",
         ),
         MessagesPlaceholder("messages"),

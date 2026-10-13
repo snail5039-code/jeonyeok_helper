@@ -100,3 +100,10 @@ pages:
     url: https://m.work24.go.kr/cm/c/f/1100/selecSystInfo.do?systId=SI00000316&systClId=SC00000206
     selector: "#contents"
     start: 프린트하기
+
+  # ---------- 정책브리핑(공식 보도·정책뉴스) ----------
+  - name: 정책브리핑 - 제대군인 히어로즈 카드(대상·할인·발급처)
+    url: https://www.korea.kr/news/policyNewsView.do?newsId=148931276
+    agency: 국가보훈부
+    start: 국가보훈부는 아이비케이
+    end: 이 자료는

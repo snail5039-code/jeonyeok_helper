@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Building2, ChevronDown, Map, MessageSquare, Moon, Plus, Sun, UserRound, UserRoundPen } from "lucide-react";
+import { BookOpen, Building2, ChevronDown, CircleHelp, Map, MessageSquare, Moon, Plus, Sun, UserRound, UserRoundPen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { levelOf, progress } from "@/lib/journey";
@@ -63,7 +63,7 @@ function useDismissable() {
   return [open, setOpen, ref] as const;
 }
 
-export type View = "home" | "chat" | "journey" | "profile";
+export type View = "home" | "chat" | "journey" | "profile" | "help";
 
 interface Props {
   view: View;
@@ -76,10 +76,11 @@ interface Props {
   onChat: () => void;
   onJourney: () => void;
   onProfile: () => void;
+  onHelp: () => void;
   onAsk: (text: string) => void;
 }
 
-export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHome, onChat, onJourney, onProfile, onAsk }: Props) {
+export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHome, onChat, onJourney, onProfile, onHelp, onAsk }: Props) {
   const [open, setOpen, ref] = useDismissable();
   const p = progress(journey);
   const rank = levelOf(journey).rank;
@@ -123,6 +124,10 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
           </button>
           <button type="button" onClick={onProfile} aria-current={view === "profile" ? "page" : undefined} className={link(view === "profile")}>
             <UserRound className="size-4" strokeWidth={2.2} />내 정보
+          </button>
+          <button type="button" onClick={onHelp} aria-current={view === "help" ? "page" : undefined} className={link(view === "help")}>
+            <CircleHelp className="size-4" strokeWidth={2.2} />
+            사용법
           </button>
           {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
             <button key={label} type="button" onClick={() => onAsk(ask)} className={link(false)}>
@@ -202,6 +207,7 @@ export function MobileTabs({
   onChat,
   onJourney,
   onProfile,
+  onHelp,
   onHome,
 }: {
   view: View;
@@ -209,6 +215,7 @@ export function MobileTabs({
   onChat: () => void;
   onJourney: () => void;
   onProfile: () => void;
+  onHelp: () => void;
   onHome: () => void;
 }) {
   const p = progress(journey);
@@ -235,6 +242,10 @@ export function MobileTabs({
       </button>
       <button type="button" onClick={onProfile} aria-current={view === "profile" ? "page" : undefined} className={tab(view === "profile")}>
         <UserRound className="size-[22px]" strokeWidth={2.2} />내 정보
+      </button>
+      <button type="button" onClick={onHelp} aria-current={view === "help" ? "page" : undefined} className={tab(view === "help")}>
+        <CircleHelp className="size-[22px]" strokeWidth={2.2} />
+        사용법
       </button>
       <button type="button" onClick={onHome} className={tab(false)}>
         <Plus className="size-[22px]" strokeWidth={2.2} />새 대화

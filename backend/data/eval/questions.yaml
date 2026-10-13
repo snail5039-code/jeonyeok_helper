@@ -8,6 +8,7 @@
 #                  merit(보훈대상자) / tools(외부 도구·자료) / general(일반)
 #   sources_any  : 출처 제목 중 하나라도 이 단어를 포함해야 함
 #   answer_any   : 답변에 이 단어 중 하나라도 있어야 함
+#   answer_all   : 답변에 이 단어가 모두 있어야 함 (한 번에 여러 가지를 물었을 때)
 #   tools_any    : 이 도구 중 하나라도 실제로 불러야 함 (실시간 API 연결 확인)
 #   profile      : 대화에서 추출해야 하는 프로필 값
 #   should_ask   : true면 답하지 말고 되물어야 함 / false면 되묻지 말아야 함
@@ -269,3 +270,117 @@ questions:
     category: general
     question: 고마워요!
     should_talk: true
+  # ---------- 어려운 질문: 구어체·경계 조건·함정·여러 조건 ----------
+  - id: h01
+    category: hard
+    question: 군대 갔다온 거 연금에 쳐주나요?
+    sources_any: [국민연금]
+    answer_any: [가입기간]
+    should_ask: false
+  - id: h02
+    category: hard
+    question: 서른둘인데 전역한 지 2년 됐어요. 히어로즈 카드 만들 수 있어요?
+    sources_any: [히어로즈]
+    answer_any: [34세, 3년]
+    should_ask: false
+  - id: h03
+    category: hard
+    question: 병사로 전역하면 제대군인 아니죠?
+    # 함정: 5년 미만 복무자도 '의무복무 제대군인'이다
+    answer_any: [의무복무]
+    should_ask: false
+  - id: h04
+    category: hard
+    question: 단기 3년 하사로 전역했는데 전직지원금 받을 수 있어요?
+    # 경계 조건: 전직지원금은 5년 이상 복무자 대상
+    sources_any: [제대군인지원, 전직지원금, 생활안정]
+    answer_any: [5년]
+    should_ask: false
+  - id: h05
+    category: hard
+    question: 상병 때 다친 무릎이 전역하고 더 심해졌어요. 치료비랑 보훈 등록은 어떻게 해요?
+    sources_any: [보훈, 국가유공자, 병_복지]
+    answer_any: [보훈]
+    profile: { service_type: conscript }
+    should_ask: false
+  - id: h06
+    category: hard
+    question: 군대 있을 때 들은 인터넷 강의 복학하면 학점 인정돼요?
+    sources_any: [병역법, 병_복지]
+    answer_any: [학점]
+    should_ask: false
+  - id: h07
+    category: hard
+    question: 군적금 만기되면 정부가 얼마 얹어줘요?
+    sources_any: [적금]
+    answer_any: [적금]
+    should_ask: false
+  - id: h08
+    category: hard
+    question: 경기 수원 사는 27살 병장 전역자인데 월세 지원 되는 거 있어요?
+    tools_any: [search_benefits, search_youth_policies]
+    answer_any: [월세]
+    profile: { service_type: conscript, region: 경기 }
+    should_ask: false
+  - id: h09
+    category: hard
+    question: 부산 사는데 전역자 대상 지역 지원 있어요?
+    tools_any: [search_benefits, search_youth_policies]
+    profile: { region: 부산 }
+    should_ask: false
+  - id: h10
+    category: hard
+    question: 전역하면 정부가 1억 준다는데 맞아요?
+    # 거짓 전제: 그런 제도는 없다고 바로잡아야 한다
+    answer_any: [않, 없, 아니]
+    should_ask: false
+  - id: h11
+    category: hard
+    question: 저 해군 부사관으로 8년 했고 다음 달 전역해요. 뭐 준비해야 해요?
+    answer_any: [전직지원금, 전직교육, 취업, 전직]
+    profile: { service_type: long_term }
+  - id: h12
+    category: hard
+    question: 전역하고 억울한 일로 소송 걸어야 하는데 무료로 도와주는 데 있어요?
+    sources_any: [법률구조]
+    answer_any: [법률구조]
+    should_ask: false
+  # 한 번에 여러 가지를 묻거나, 조건에 맞지 않는 전제를 깔고 묻는 질문
+  - id: h13
+    category: hard
+    question: 병장으로 전역했는데 전직지원금 신청하려고요. 서류 뭐 필요해요?
+    # 함정: 병사는 전직지원금 대상이 아니다. 서류부터 알려 주면 틀린 답
+    answer_any: [대상이 아, 해당하지, 해당되지, 받을 수 없, 지급 대상이 아, 없습니다]
+    should_ask: false
+  - id: h14
+    category: hard
+    question: 전역한 지 8개월 됐는데 군에서 다친 거 보훈 등록 신청 아직 할 수 있나요?
+    sources_any: [보훈, 국가유공자]
+    answer_any: [신청, 등록]
+    should_ask: false
+  - id: h15
+    category: hard
+    question: 상병으로 전역한 서울 사는 26살인데 군복무 크레딧이랑 청년 월세 지원 둘 다 알려줘
+    answer_all: [크레딧, 월세]
+    should_ask: false
+  - id: h16
+    category: hard
+    question: 광주 사는 전역자인데 우리 지역에서 주는 지원 뭐 있어요?
+    tools_any: [search_benefits, search_youth_policies, search_regulations]
+    profile: { region: 광주 }
+  - id: h17
+    category: hard
+    question: 그거 신청 어디서 해요?
+    # 무엇을 신청하는지 모르는 채로 아무 기관이나 지어내면 안 된다
+    should_ask: true
+  - id: h18
+    category: hard
+    question: 군복무 크레딧이랑 예비군 훈련 연기랑 히어로즈 카드 한 번에 알려줘
+    answer_all: [크레딧, 예비군, 히어로즈]
+    should_ask: false
+  - id: h19
+    category: hard
+    question: 의무복무 병사도 보훈병원 진료비 50% 감면 받죠?
+    # 함정: 감면은 장기복무 제대군인이나 복무 중 발병한 중증질환 등 조건이 있다
+    answer_any: [중증, 발병, 장기복무, 10년, 조건]
+    should_ask: false

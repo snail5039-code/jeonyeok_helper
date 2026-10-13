@@ -157,3 +157,26 @@ def test_reopen_words_skip_research_and_find_done_item():
     assert find_done(items, "전역예정군인 재취업 지원")["id"] == "a"
     assert find_done(items, "서울시 청년수당") is None  # 안 끝낸 일은 되돌릴 게 없다
     assert find_done(items, "") is None
+
+
+def test_coach_prompt_tells_off_topic_input_apart_from_greeting():
+    from jeonyeok_helper.agents.guide import COACH_PROMPT
+
+    system = COACH_PROMPT.messages[0].prompt.template
+    assert "인사로 착각하지" in system and "도울 수 없어요" in system
+
+
+def test_coach_prompt_asks_back_when_the_referent_is_missing():
+    from jeonyeok_helper.agents.guide import COACH_PROMPT
+
+    system = COACH_PROMPT.messages[0].prompt.template
+    assert "'그거', '이거'" in system and "기관을 지어내지 말 것" in system
+
+
+def test_vague_first_turn_is_not_sent_to_search():
+    from jeonyeok_helper.agents.guide import is_vague_first_turn, needs_research
+
+    assert needs_research("그거 신청 어디서 해요?")  # 낱말만 보면 검색으로 가지만
+    assert is_vague_first_turn("그거 신청 어디서 해요?", turns=1)  # 첫 마디면 되물어야 한다
+    assert not is_vague_first_turn("그거 신청 어디서 해요?", turns=3)  # 앞 대화가 있으면 아니다
+    assert not is_vague_first_turn("군복무 크레딧 신청 어디서 해요?", turns=1)

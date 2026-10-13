@@ -13,6 +13,7 @@ import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Su
 
 import { Book, BookTitle } from "./Book";
 import { Composer } from "./Composer";
+import { HelpView } from "./HelpView";
 import { HomeView } from "./HomeView";
 import { JourneyPanel } from "./JourneyPanel";
 import { DeadlineChip } from "./JourneyParts";
@@ -52,7 +53,7 @@ function useTheme() {
 
 const DEMO_PROFILE_KEY = "jeonyeok.demo.profile";
 
-export type Page = "chat" | "journey" | "profile";
+export type Page = "chat" | "journey" | "profile" | "help";
 
 export function ChatApp() {
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -250,7 +251,7 @@ export function ChatApp() {
         }
       }
       const start = params.get("page");
-      if (start === "journey" || start === "profile") setPage(start);
+      if (start === "journey" || start === "profile" || start === "help") setPage(start);
       setUserId(id);
       setDemo(useDemo);
       setReady(true);
@@ -288,10 +289,13 @@ export function ChatApp() {
         onChat={() => setPage("chat")}
         onJourney={openJourney}
         onProfile={() => setPage("profile")}
+        onHelp={() => setPage("help")}
         onAsk={ask}
       />
 
-      {page === "journey" ? (
+      {page === "help" ? (
+        <HelpView onAsk={ask} onJourney={openJourney} onProfile={() => setPage("profile")} />
+      ) : page === "journey" ? (
         <JourneyView journey={journey} profile={profile} onAsk={ask} onProfile={() => setPage("profile")} />
       ) : page === "profile" ? (
         <ProfileView
@@ -373,6 +377,7 @@ export function ChatApp() {
         onChat={() => setPage("chat")}
         onJourney={openJourney}
         onProfile={() => setPage("profile")}
+        onHelp={() => setPage("help")}
         onHome={goHome}
       />
     </div>

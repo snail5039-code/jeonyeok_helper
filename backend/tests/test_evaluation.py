@@ -23,6 +23,7 @@ KNOWN_KEYS = {
     "question",
     "sources_any",
     "answer_any",
+    "answer_all",
     "tools_any",
     "profile",
     "should_ask",
@@ -32,13 +33,14 @@ KNOWN_KEYS = {
 
 def test_question_set_is_valid():
     questions = load_questions()
-    assert len(questions) == 44
-    assert len({q["id"] for q in questions}) == 44
+    assert len(questions) == 63
+    assert len({q["id"] for q in questions}) == 63
     for q in questions:
         assert set(q) <= KNOWN_KEYS, q["id"]
         assert q["category"] in CATEGORY_NAMES
         # 채점할 거리가 하나 이상 있어야 한다.
-        checks = {"sources_any", "answer_any", "tools_any", "profile", "should_ask", "should_talk"}
+        checks = {"sources_any", "answer_any", "answer_all", "tools_any"}
+        checks |= {"profile", "should_ask", "should_talk"}
         assert checks & set(q), q["id"]
     # 유형마다 고르게 들어 있다.
     counts = {c: sum(q["category"] == c for q in questions) for c in CATEGORY_NAMES}

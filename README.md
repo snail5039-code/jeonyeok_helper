@@ -1,91 +1,141 @@
-# 전역도우미 (jeonyeok_helper)
+# 전역도우미
 
-전역자가 자기 상황을 말하면 **받을 수 있는 혜택, 근거 규정, 신청처**를 한 번에 알려주는 AI 에이전트입니다.
+> 전역한 사람이 "나는 뭘 받을 수 있지?"를 물으면, **받을 수 있는 혜택, 그 법적 근거, 신청할 곳**을 찾아
+> 한 걸음씩 안내하는 AI 에이전트입니다.
 
-- **규정 Q&A**: 법령, 행정규칙, 법령해석례, 지자체 조례, 국가보훈부 자료를 RAG로 검색해 근거 조문과 함께 답변
-- **맞춤 혜택 찾기**: 복무 형태, 기간, 나이, 지역에 맞는 공공서비스 혜택 조회
-- **기관 연계**: 소관 기관, 신청 방법, 링크, 연락처 안내
-- **길잡이 대화**: 길잡이 '전역이'가 먼저 말을 걸고 복무 형태 → 지역 → 전역일을 버튼으로 하나씩 물어 로드맵을 만든 뒤,
-  다음 할 일을 하나씩 권한다 ([했어요] [어떻게 해요?] [나중에]). 자료가 필요한 질문만 RAG로 찾아 답하고,
-  긴 답변은 '자세히 보기'로 접어 두고 위에 "지금 이것부터" 한마디를 보여 준다
-- **전역 로드맵**: 답변에서 길잡이가 제안한 할 일 중 고른 것을 담고, 끝낸 개수로 계급(이병 → 병장)이 오른다.
-  단계마다 ⭐핵심 할 일을 다 끝내면 민간인(완주). 근거 자료에 신청 기한이 있으면 전역일 기준 D-day로 보여 준다
-- **내 정보**: 복무·지역·학력·주거·목표·희망 직무·자격증·메모를 자세히 적어 두면 답변과 로드맵 검색에 반영
+전역자 지원은 법령(제대군인지원법, 국민연금법, 병역법…), 보훈부·국방부 안내서, 지자체 조례, 공공 API에 흩어져 있고,
+복무 형태(병사·단기 간부·중장기)와 지역, 전역 시기에 따라 받을 수 있는 것이 달라집니다.
+전역도우미는 이 흩어진 자료를 RAG로 모아 **근거와 함께** 답하고, 답에서 끝나지 않고 **내가 해야 할 일의 목록(작전도)** 으로 이어 줍니다.
 
-자세한 내용은 [기획서](docs/기획서.md), [개발 순서](docs/개발순서.md), [작업 기록](docs/작업기록.md)을 참고하세요.
-직접 써 보는 순서는 [사용·테스트 안내](docs/사용_테스트_안내.md)에 있습니다.
+## 한눈에
+
+| 하는 일 | 어떻게 |
+|---|---|
+| 근거 있는 답 | 법령·행정규칙·법령해석·조례·안내서 PDF·기관 웹 페이지 10,143조각을 검색해 조문 번호와 함께 답하고, 자료에 없으면 모른다고 답함 |
+| 내 상황 맞춤 | 대화에서 복무 형태·지역·전역일을 읽어 반영. 5년 미만 복무자에게 전직지원금을 안내하는 식의 실수를 조건으로 걸러 냄 |
+| 최신 정보 | 정부24·온통청년·제대군인지원센터·보훈 위탁병원 등 실시간 API를 MCP 도구로 연결 |
+| 길 안내 | 질문에 답하는 검색기가 아니라, 복무 형태 → 지역 → 전역일을 버튼으로 묻고 다음 할 일을 하나씩 권하는 길잡이 |
+| 진행 관리 | 끝낸 임무 수로 계급이 오르고, 기한이 있는 것은 전역일 기준 D-day로 표시. 완료·빼기·담기 모두 되돌릴 수 있음 |
 
 ## 화면
 
-| 처음 온 사람: 전역이가 먼저 묻기 | 버튼으로 답하면 로드맵 완성 |
+| 처음 온 사람: 전역이가 먼저 묻기 | 버튼으로 답하면 작전도 완성 |
 |---|---|
-| ![첫 방문](docs/screenshots/guide_1_first_visit.png) | ![로드맵 완성](docs/screenshots/guide_2_roadmap_built.png) |
+| ![첫 방문](docs/screenshots/guide_1_first_visit.png) | ![작전도 완성](docs/screenshots/guide_2_roadmap_built.png) |
 
-| "어떻게 해요?" → 한마디 + 자세히 보기 | "했어요" → 계급 오르고 다음 할 일 |
+| "어떻게 해요?" → 한마디 + 자세히 보기 | "했어요" → 계급이 오르고 다음 임무 |
 |---|---|
 | ![신청 방법](docs/screenshots/guide_3_how_to.png) | ![했어요](docs/screenshots/guide_4_done_next.png) |
 
-| 다시 왔을 때 (D-day) | 내 로드맵 | 다크 모드 |
+| 나의 전역 작전도 | 사용법 | 다크 모드 |
 |---|---|---|
-| ![다시 왔을 때](docs/screenshots/guide_5_returning.png) | ![내 로드맵](docs/screenshots/2_journey_top.png) | ![다크 모드](docs/screenshots/guide_7_dark.png) |
+| ![작전도](docs/screenshots/2_journey_top.png) | ![사용법](docs/screenshots/help_desk.png) | ![다크 모드](docs/screenshots/guide_7_dark.png) |
 
-| 모바일 | 할 일 카드 | 내 정보 |
+| 모바일 | 임무 카드 | 내 정보 |
 |---|---|---|
-| ![모바일](docs/screenshots/guide_6_mobile.png) | ![할 일 카드](docs/screenshots/3_journey_items.png) | ![내 정보](docs/screenshots/1_profile.png) |
+| ![모바일](docs/screenshots/guide_6_mobile.png) | ![임무 카드](docs/screenshots/3_journey_items.png) | ![내 정보](docs/screenshots/1_profile.png) |
 
-<details><summary>예전 화면 (검색형 답변)</summary>
+## 설계에서 고민한 것
 
-| 첫 화면 | 답변 화면 |
+### 1. RAG를 대화 안으로: 검색기가 아니라 길잡이
+
+처음에는 질문하면 답을 길게 뽑는 RAG 챗봇이었습니다. 그런데 사용자는 "무슨 혜택이 있는지"보다 "그래서 나는 뭘 해야 하지?"가 궁금합니다.
+그래서 그래프 맨 앞에 **길잡이(coach) 노드**를 두었습니다.
+
+```
+start → profile(복무 정보 추출) → coach ─┬ talk: 인사·진행 보고·내 정보 → 검색 없이 2초 안에 짧게 답
+                                         └ research → supervisor ─┬ regulation / benefit / institution 워커
+                                                                  ├ ask_user (정보가 부족하면 되묻기)
+                                                                  └ respond → verify(근거 검증) → guide(한마디·할 일 제안)
+```
+
+- 자료가 필요한 질문만 RAG로 보냅니다. "안녕하세요"에 검색을 돌리지 않습니다.
+- **버튼은 LLM이 아니라 규칙으로** 만듭니다(모르는 정보가 있으면 고르는 버튼, 없으면 다음 할 일 버튼). 버튼이 매번 달라지거나 틀리지 않게 하기 위해서입니다.
+- 다음 할 일은 안 끝낸 것 중 핵심 → 기한 빠른 것 → 단계 순으로 고릅니다.
+- 긴 답변은 "자세히 보기"로 접고, 위에 "지금 이것부터" 한마디만 보여 줍니다.
+
+### 2. 환각을 줄이는 장치
+
+- **근거 검증(verify)**: 초안의 문장마다 도구 원문에 실제로 있는지 대조합니다. 원문에 없는 혜택·금액·기간·연령·연락처는 지우고, 엉뚱한 출처 번호는 바로잡습니다(워커의 요약은 근거로 인정하지 않음).
+- **기한은 출처에 그 문구가 있을 때만** 남깁니다(`ground_deadline`). "전역 후 3년 이내" 같은 말을 모델이 지어 붙이지 못합니다.
+- **떠넘기기 금지**: "정부24에서 조회해 보세요"로 끝내는 답은 서비스를 쓸 이유가 없으므로, 복무 형태를 몰라도 병사 기준으로 구체적으로 답하고 그 기준을 첫 문단에 밝힙니다.
+- 할 일 제안은 혜택·규정 출처가 있는 것만 받고, 기관 안내만 있는 제안은 버립니다.
+
+### 3. 검색 품질
+
+| 기법 | 이유 |
 |---|---|
-| ![첫 화면](docs/screenshots/home-light.png) | ![답변 화면](docs/screenshots/answer-light.png) |
+| HyDE (가상 답변으로 검색) | "군대 갔다온 거 연금에 쳐주나요" 같은 구어체 질문과 "가입기간 추가 산입" 같은 조문 문장의 거리를 줄임 |
+| 재정렬(Re-ranking) | 후보를 넓게 가져온 뒤 질문과 맞는 순으로 다시 정렬 |
+| 용어 사전(`LEGAL_TERMS`) | 사람들이 쓰는 말과 법령 용어가 다를 때(실업급여 ↔ 구직급여) 보정 |
+| 같은 문서 2개 제한 | 큰 PDF가 법령 근거를 밀어내 평가가 24/30까지 떨어진 적이 있어 한 문서에서 2개까지만 |
+| 지역 필터 | 사는 지역의 조례를 함께 검색 |
 
-| 모바일 | 모바일 메뉴 | 다크 모드 |
+자료는 법령 API로 받은 법령·행정규칙, 법령해석례, 지자체 조례, 보훈부·국방부 안내서 PDF(글자가 없는 스캔본은 Gemini로 옮겨 적음),
+기관 웹 페이지(공공누리 이용 조건을 확인한 공식 페이지만)입니다. 수집 절차는 [add-data 스킬](.claude/skills/add-data/SKILL.md)로 정리해 두었습니다.
+
+### 4. 평가를 먼저 만들고, 회귀를 잡았습니다
+
+"좋아 보이는데"로 끝내지 않으려고 평가 세트를 같이 키웠습니다.
+
+| 평가 | 규모 | 보는 것 |
 |---|---|---|
-| ![모바일 답변 화면](docs/screenshots/answer-mobile.jpg) | ![모바일 메뉴](docs/screenshots/menu-mobile.jpg) | ![다크 모드 답변 화면](docs/screenshots/answer-dark.png) |
+| 답변 평가 | 56문항 | 되묻기/바로 답변, 근거 출처, 핵심 내용, 사용한 도구, 프로필 추출 |
+| 규정 검색 골든셋 | 84문항 | 상위 6개에 정답 근거가 있는지 (Hit@6, Recall@6, MRR). 구어체·경계 조건·돌려 말하기 14문항 포함 |
 
-</details>
+- 정답은 검색 결과를 베끼지 않고 조문·쪽 내용으로 정했습니다. 금액·기한처럼 바뀌는 사실은 기준에 넣지 않았습니다.
+- 프로필 추출 항목을 늘렸더니 답변 평가가 41/41에서 37/41로 떨어진 일이 있었습니다. 되돌린 뒤 같은 일이 없도록 스키마를 지키는 테스트를 넣었습니다.
+- "혜택 알려줘"가 복무 형태를 되묻던 문제, "병장으로 전역"을 병사로 못 읽던 문제, 한 임무만 끝냈는데 민간인이 되던 계급 버그는 모두 평가 문항이나 테스트로 남겼습니다.
 
-> 예전 화면은 데모 모드입니다. 백엔드에 Gemini 키가 없으면 자동으로 데모 모드로 열려 예시 응답을 보여줍니다. `?q=질문` 주소로 들어오면 바로 질문합니다.
+결과 (2026-10-13)
+
+| 평가 | 결과 |
+|---|---|
+| 답변 평가 63문항 | 전부 통과 59개, 체크 통과율 98%, 평균 18초. 이후 채점 기준 오류(h13)와 되묻기 누락(h17)을 고쳐 두 문항을 다시 돌려 통과 (61/63에 해당). 어려운 질문 19문항 포함 |
+| 규정 검색 84문항 | Hit@6 100%, Recall@6 100%, MRR 0.85. 구어체·경계 조건 14문항도 Hit 100% (검색은 실행마다 조금 달라 MRR 0.84~0.85) |
+| 아직 못 푸는 문항 | `m03` 보훈보상대상자와 국가유공자의 차이: 답은 맞지만 근거가 법 조문이 아니라 법령해석례로 잡힘. `t10` 한국장학재단 장학금: 출처 제목에 기관명이 없어 근거 확인에 걸림 |
+
+어려운 질문에는 "병장인데 전직지원금 서류 알려줘"처럼 전제가 틀린 질문, "그거 신청 어디서 해요?"처럼 대상이 없는 질문,
+세 가지를 한 번에 묻는 질문이 들어 있습니다. 전제가 틀리면 서류부터 알려 주지 않고 대상이 아니라고 바로잡는지, 대상이 없으면 되묻는지를 봅니다.
+
+### 5. 마음이 바뀌어도 되돌릴 수 있게
+
+완료·빼기·담기·"내 정보로 작전도 만들기"는 모두 변경 기록에 쌓이고, 아래 알림이나 작전도의 "여기까지 N개 되돌리기"로
+되돌릴 수 있습니다. 뺀 임무를 되돌리면 완료 여부, 핵심 표시, 출처까지 그대로 복원됩니다. 계급은 임무 한 개로 민간인이 되지 않도록,
+핵심 임무 3개 이상을 모두 끝내고 병장 수준(8개)을 채워야 합니다.
 
 ## 구조
 
 ```
-브라우저 ─▶ Next.js (frontend) ─/api/*─▶ FastAPI (backend) ─▶ 슈퍼바이저 (Gemini, LangGraph)
-                                                                ├─ 규정 에이전트     (RAG)
-                                                                ├─ 혜택 에이전트     (MCP → 공공서비스 API)
-                                                                └─ 기관연계 에이전트
-                                                             ─▶ 근거 검증 ─▶ 답변 (SSE 스트리밍)
+브라우저 ─▶ Next.js (frontend) ─/api/*─▶ FastAPI (backend) ─▶ LangGraph 에이전트 (Gemini)
+                                                               ├─ 규정 워커  (RAG: pgvector)
+                                                               ├─ 혜택 워커  (MCP → 공공서비스 API)
+                                                               └─ 기관 워커
+                                                            ─▶ 근거 검증 ─▶ 길잡이 ─▶ SSE 스트리밍
 ```
 
 | 영역 | 기술 |
 |---|---|
-| 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
-| LLM | Gemini |
-| 에이전트 | LangChain, LangGraph |
-| 평가 | 답변 평가 41문항 + 규정 검색 골든셋 69문항 (`jeonyeok-eval`, `--retrieval`) |
-| 도구 연동 | MCP |
+| 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, 손으로 그린 SVG 캐릭터와 계급장 |
+| LLM·에이전트 | Gemini, LangChain, LangGraph (구조화 출력, 노드별 역할 분리) |
 | RAG | PostgreSQL + pgvector, HyDE, Re-ranking |
-| 서버 | FastAPI (SSE), PostgreSQL (벡터 검색·피드백, SQLAlchemy 2.0 + Alembic), SQLite (대화 기록·프로필) |
-| 배포 | Docker Compose, GitHub Actions |
-
-## 폴더
+| 도구 연동 | MCP 서버 (정부24, 온통청년, 제대군인지원센터 채용, 보훈 채용, 위탁병원, 나라사랑가게) |
+| 서버 | FastAPI (SSE 스트리밍), SQLAlchemy 2.0 + Alembic, SQLite(대화 기록) |
+| 품질 | pytest 184개, vitest 39개, ruff, ESLint, 평가 세트 2종, GitHub Actions |
+| 배포 | Docker Compose |
 
 ```
 backend/                      # Python (uv)
 ├─ src/jeonyeok_helper/
-│  ├─ rag/                    # 법령·문서 수집과 검색
+│  ├─ rag/                    # 법령·문서 수집, 검색(HyDE·재정렬)
 │  ├─ benefits/               # 공공서비스 API, 기관 링크, MCP 서버
-│  ├─ agents/                 # LangGraph 슈퍼바이저와 워커
+│  ├─ agents/                 # LangGraph: coach, supervisor, 워커, verify, guide
 │  ├─ api/                    # FastAPI
-│  └─ evaluation.py           # 평가
+│  └─ evaluation.py           # 평가 채점
 ├─ tests/
-└─ data/                      # 수집 법령 목록, 기관 목록, 평가 질문
-frontend/                     # Next.js
-├─ src/app/                   # 페이지, /api/* 프록시
-├─ src/components/            # 화면 컴포넌트
-└─ src/lib/                   # SSE 처리, 답변 해석, 데모 응답
-docs/
-docker-compose.yml
+└─ data/                      # 수집 대상 목록, 기관 목록, 평가 질문
+frontend/                     # Next.js (app, components, lib)
+docs/                         # 기획서, 개발 순서, 작업 기록, 테스트 안내
 ```
 
 ## 시작하기
@@ -96,6 +146,8 @@ docker-compose.yml
 cp backend/.env.example backend/.env   # 키 입력
 docker compose up --build              # http://localhost:3000
 ```
+
+`GOOGLE_API_KEY`가 없으면 자동으로 데모 모드로 열려 예시 응답을 보여 줍니다.
 
 ### 개발 모드
 
@@ -109,7 +161,7 @@ cp .env.example .env
 uv run jeonyeok-serve      # http://127.0.0.1:8000
 ```
 
-프론트엔드 (Node 24):
+프런트엔드 (Node 24):
 
 ```bash
 cd frontend
@@ -117,54 +169,66 @@ npm install
 npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 127.0.0.1:8000)로 전달
 ```
 
-## 백엔드 명령
+### 직접 써 보기
 
-| 명령 | 설명 |
+- 순서대로 따라 하는 안내: [사용·테스트 안내](docs/사용_테스트_안내.md)
+- 쳐 볼 질문 60여 개와 기대 결과: [테스트 질문 모음](docs/테스트_질문모음.md)
+- 앱 안의 **사용법** 메뉴에서 예시 문장을 누르면 바로 물어봅니다.
+
+## 키 (`backend/.env`)
+
+| 키 | 발급처 | 용도 |
+|---|---|---|
+| `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) | Gemini |
+| `LAW_API_OC` | [국가법령정보센터 Open API](https://open.law.go.kr) | 법령, 조례 수집 |
+| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) | 공공서비스(혜택), 보훈 위탁병원, 나라사랑가게 |
+| `YOUTHCENTER_API_KEY` | [온통청년](https://www.youthcenter.go.kr) | 청년정책 |
+
+키 값은 `.env`에만 두고 저장소에는 올리지 않습니다.
+
+## 명령
+
+| 명령 (backend/) | 설명 |
 |---|---|
-| `uv run jeonyeok-rag laws` | `data/laws.yaml`의 법령·행정규칙(훈령·고시) 수집 (LAW_API_OC 필요) |
-| `uv run jeonyeok-rag ordinances` | `data/ordinances.yaml` 기준 지자체 조례 수집 (LAW_API_OC 필요) |
-| `uv run jeonyeok-rag interpretations` | `data/interpretations.yaml` 기준 국가보훈부·국방부·병무청·법제처 법령해석례 수집 |
-| `uv run jeonyeok-rag datasets` | 공공데이터 CSV(보훈 민원·구비서류, 장학금) 수집, 파일이 없으면 data.go.kr에서 내려받음 |
-| `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (HWP는 PDF로 변환, 글자 없는 PDF는 Gemini로 옮겨 적음) |
-| `uv run jeonyeok-rag web` | `data/webpages.yaml`의 기관 안내 페이지(국가보훈부·국방부·국민연금·고용24) 수집 |
-| `uv run jeonyeok-rag search "질문" [--region 부산]` | HyDE + Re-ranking 검색 결과 확인 (지역을 주면 그 지역 조례 포함) |
-| `uv run jeonyeok-mcp` | MCP 서버 (stdio) |
+| `uv run jeonyeok-rag laws` / `ordinances` / `interpretations` | 법령·행정규칙, 지자체 조례, 법령해석례 수집 |
+| `uv run jeonyeok-rag files` | `data/raw/`의 PDF·TXT·MD 수집 (글자 없는 PDF는 Gemini로 옮겨 적음) |
+| `uv run jeonyeok-rag web` | `data/webpages.yaml`의 기관 안내 페이지 수집 |
+| `uv run jeonyeok-rag search "질문" [--region 부산]` | 검색 결과 확인 |
 | `uv run jeonyeok-chat` | 터미널에서 에이전트와 대화 |
-| `uv run jeonyeok-eval` | 평가 40문항 채점, `data/eval/results/`에 보고서 |
-| `uv run jeonyeok-eval --retrieval [--ablation]` | 규정 검색 골든셋(Hit@k·Recall@k·MRR), 검색 설정 비교 |
+| `uv run jeonyeok-mcp` | MCP 서버 (stdio) |
+| `uv run jeonyeok-eval` | 답변 평가, `data/eval/results/`에 보고서 |
+| `uv run jeonyeok-eval --retrieval [--ablation]` | 규정 검색 골든셋, 검색 설정 비교 |
+| `uv run pytest && uv run ruff check .` | 테스트와 린트 |
+| `npm test && npm run lint && npm run typecheck` (frontend/) | 프런트 검사 |
 
-### API
+<details><summary>API</summary>
 
 | API | 설명 |
 |---|---|
-| `POST /chat` | `{message, thread_id?, user_id?, action?}` → SSE (`thread`, `step`, `delta`, `answer`, `guide`, `journey`, `question`, `error`, `done`). `guide`는 길잡이 한마디·버튼·할 일 제안, `action`은 버튼 동작(`done`·`later`) |
-| `GET /profile/{user_id}` | 저장된 사용자 프로필 |
-| `PUT /profile/{user_id}` | 내 정보 저장 (보낸 칸만 바꾸고, 빈 값은 지움) |
-| `GET /journey/{user_id}` | 로드맵 할 일 목록 (단계 순) |
-| `POST /journey/{user_id}/generate` | 내 정보로 할 일을 한 번에 모아 담기 → `{intro, added, items}` |
-| `POST /journey/{user_id}/items` | 길잡이가 제안한 할 일 중 고른 것 담기 `{items, question}` |
-| `PATCH /journey/{user_id}/items/{id}` | `{done}` 완료 체크 |
-| `DELETE /journey/{user_id}/items/{id}` | 할 일 빼기 |
-| `POST /feedback` | 답변 피드백 저장 `{rating: up/down, question, answer, comment?}` |
-| `GET /feedback/summary` | 피드백 수 (화면 프록시로는 열지 않음) |
+| `POST /chat` | `{message, thread_id?, user_id?, action?}` → SSE (`thread`, `step`, `delta`, `answer`, `guide`, `journey`, `question`, `error`, `done`). `action`은 버튼 동작(`done`·`later`) |
+| `GET·PUT /profile/{user_id}` | 사용자 프로필 (보낸 칸만 바꾸고 빈 값은 지움) |
+| `GET /journey/{user_id}` | 작전도 임무 목록 (단계 순) |
+| `POST /journey/{user_id}/generate` | 내 정보로 임무를 한 번에 모아 담기 |
+| `POST /journey/{user_id}/items` | 고른 임무 담기 |
+| `PATCH·DELETE /journey/{user_id}/items/{id}` | 완료 체크, 빼기 |
+| `POST /feedback` | 답변 피드백 `{rating, question, answer, comment?}` |
 | `GET /health` | 상태, 에이전트 준비 여부, 키 설정 여부 |
 
-### MCP 도구
+</details>
+
+<details><summary>MCP 도구</summary>
 
 | 도구 | 하는 일 |
 |---|---|
-| `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색, 지역을 주면 그 지역 조례도 |
-| `search_benefits` | 정부24 공공서비스(혜택)에서 전역자 혜택 조회, 지역 필터 |
-| `get_benefit_detail` | 혜택의 선정기준, 구비서류, 신청방법 |
-| `search_youth_policies` | 온통청년 청년정책 3,000여 건, 지역·나이·키워드 필터, 군 복무 관련 정책 우선 |
-| `search_jobs` | 제대군인지원센터(브이넷) 마감 전 채용공고, 지역·키워드 필터 (키 불필요) |
-| `search_veteran_jobs` | 국가보훈부 보훈관서 채용정보: 보훈특별고용·공무원 특별채용 마감 전 공고 (키 불필요) |
-| `find_stores` | 병무청 나라사랑가게(예비군 훈련 이수자·현역병 할인) 지역별 목록 |
-| `find_veterans_office` | 관할 지방보훈청·보훈지청 27곳 주소·전화 ([veterans_offices.yaml](backend/data/veterans_offices.yaml)) |
-| `find_hospitals` | 지역별 보훈 위탁병원(국가유공자 진료비 감면) 주소·전화·지도 링크 |
-| `find_institutions` | 주제별 기관 사이트·연락처 ([institutions.yaml](backend/data/institutions.yaml)) |
+| `search_regulations` | 법령·보훈부 자료에서 근거 조문 검색 (지역을 주면 그 지역 조례도) |
+| `search_benefits`, `get_benefit_detail` | 정부24 공공서비스 조회, 선정기준·구비서류·신청방법 |
+| `search_youth_policies` | 온통청년 청년정책 3,000여 건 (지역·나이·키워드) |
+| `search_jobs`, `search_veteran_jobs` | 제대군인지원센터 채용, 보훈관서 채용(보훈특별고용·공무원 특별채용) |
+| `find_stores` | 병무청 나라사랑가게 |
+| `find_veterans_office`, `find_hospitals` | 관할 보훈청, 지역별 보훈 위탁병원 |
+| `find_institutions` | 주제별 기관 사이트·연락처 |
 
-API 키가 없거나 호출이 실패하면 오류 대신 정부24, 온통청년 등 직접 찾아볼 수 있는 기관 링크를 돌려줍니다. Claude Desktop 같은 MCP 클라이언트에는 아래처럼 연결합니다.
+키가 없거나 호출이 실패하면 오류 대신 직접 찾아볼 수 있는 기관 링크를 돌려줍니다. Claude Desktop 같은 MCP 클라이언트에는 아래처럼 연결합니다.
 
 ```json
 {
@@ -177,35 +241,17 @@ API 키가 없거나 호출이 실패하면 오류 대신 정부24, 온통청년
 }
 ```
 
-### 에이전트 흐름
+</details>
 
-```
-start → profile(복무 정보 추출) → coach(길잡이) ─┬→ talk: 인사·진행 보고·정보 알려 주기 → 바로 짧게 답 (검색 없음)
-                                                └→ supervisor ─┬→ regulation / benefit / institution → supervisor
-                                                               ├→ ask_user (정보가 부족하면 되묻기)
-                                                               └→ respond → verify(근거 검증) → guide(한마디·할 일 제안)
-```
+## 한계와 다음 단계
 
-- 버튼은 LLM이 아니라 규칙으로 만든다: 모르는 정보가 있으면 고르는 버튼, 없으면 다음 할 일 버튼
-- 다음 할 일: 안 끝낸 것 중 ⭐핵심 → 기한 빠른 것 → 단계 순 (`agents/guide.py`의 `next_item`)
-- 복무 형태·지역·전역일을 다 알면 첫 로드맵을 자동으로 만들고 첫 할 일을 권한다
-- 할 일의 신청 기한은 근거 자료에 그 문구가 실제로 있을 때만 남긴다 (`journey.ground_deadline`)
+- 첫 작전도 만들기는 20~30초 걸립니다(자료 검색과 모델 호출이 여러 번 필요).
+- 임무 문장이 복무 형태와 어긋날 때가 있습니다(병사에게 "5년 이상 복무하셨다면" 같은 말). 길잡이 프롬프트와 필터로 줄였지만 남아 있습니다.
+- 답변 아래 출처 목록에 엉뚱한 혜택이 섞일 때가 있습니다(예: 주택금융공사 월세자금보증).
+- 로그인이 없어 브라우저마다 다른 사람으로 봅니다.
+- 다음 단계: 고용24 훈련과정·Q-Net 자격시험 API 연동([추가할 자료](docs/추가할_자료.md)), 공식 근거를 못 찾은 항목 보강, AWS 배포.
 
-## 테스트
-
-```bash
-cd backend && uv run pytest && uv run ruff check .
-cd frontend && npm test && npm run lint && npm run typecheck
-```
-
-## 필요한 키 (`backend/.env`)
-
-| 키 | 발급처 | 용도 |
-|---|---|---|
-| `GOOGLE_API_KEY` | [Google AI Studio](https://aistudio.google.com/apikey) | Gemini |
-| `LAW_API_OC` | [국가법령정보센터 Open API](https://open.law.go.kr) | 법령, 조례 수집 |
-| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr) | 공공서비스(혜택), 보훈 위탁병원, 나라사랑가게 |
-| `YOUTHCENTER_API_KEY` | [온통청년](https://www.youthcenter.go.kr) (마이페이지 > OPEN API) | 청년정책 |
+자세한 기획과 작업 과정은 [기획서](docs/기획서.md), [개발 순서](docs/개발순서.md), [작업 기록](docs/작업기록.md)에 있습니다.
 
 ## 안내
 
