@@ -86,3 +86,18 @@ export function benefitKind(text: string): "pension" | "job" | "school" | "reser
   if (/서울|경기|부산|지역|청년/.test(text)) return "region";
   return "other";
 }
+
+/** 답변 본문의 [1], [2, 3] 같은 근거 번호 (1부터) */
+export function citedNumbers(text: string): Set<number> {
+  const out = new Set<number>();
+  for (const m of text.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
+    for (const n of m[1].split(",")) out.add(Number(n.trim()));
+  }
+  return out;
+}
+
+/** 답변이 인용한 근거 수. 번호를 하나도 못 찾으면(번호 없는 짧은 답) 전체를 센다. */
+export function citedCount(text: string, total: number): number {
+  const used = [...citedNumbers(text)].filter((n) => n >= 1 && n <= total).length;
+  return used > 0 ? used : total;
+}

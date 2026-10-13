@@ -83,6 +83,23 @@ def fits_education(text: str, education: str | None, goals: list[str] | None = N
     return not ("졸업" in education and "대학" in education and not returning)
 
 
+# 5년 이상 복무한 중·장기 복무자 전용 제도 (병사·5년 미만 간부는 대상이 아니다)
+LONG_SERVICE_ONLY = re.compile(
+    r"(5|10|19)년\s*(6개월\s*)?(이상|미만)\s*복무|중기복무|장기복무|중[·ㆍ]장기\s*복무|전직지원금|군인연금\s*(비대상|대상)"
+)
+# 병사 전용 제도 (간부는 대상이 아니다)
+CONSCRIPT_ONLY = re.compile(r"의무복무\s*병사|장병내일준비적금|병\s*복지|병장\s*월급")
+
+
+def fits_service_text(text: str, service_type: str | None) -> bool:
+    """복무 형태와 안 맞는 제도를 권하지 않는다 (병사에게 '5년 이상 복무하셨다면…'). 모르면 통과."""
+    if service_type == "conscript":
+        return not LONG_SERVICE_ONLY.search(text)
+    if service_type in ("short_term_officer", "long_term"):
+        return not CONSCRIPT_ONLY.search(text)
+    return True
+
+
 # '내 정보'의 전역 후 계획에 따라 더 찾아볼 주제
 TOPICS_BY_GOAL = {
     "공무원": "제대군인 공무원 채용시험 응시연령 연장과 가점",
@@ -197,6 +214,8 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
             return
         if not fits_education(title, profile.education, profile.goals):
             return
+        if not fits_service_text(title, profile.service_type):
+            return
         seen.add((kind, title))
         evidence.append(
             {"id": f"E{len(evidence) + 1}", "kind": kind, "title": title, "url": url or "",
@@ -272,7 +291,7 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
     return evidence
 
 
-def assemble(draft: RoadmapDraft, evidence: list[dict]) -> dict:
+def assemble(draft: RoadmapDraft, evidence: list[dict], service_type: str | None = None) -> dict:
     """LLM 초안에서 근거가 확인되는 할 일만 남기고, 링크·출처는 모은 자료에서 붙인다."""
     from jeonyeok_helper.journey import ground_deadline
 
@@ -285,6 +304,8 @@ def assemble(draft: RoadmapDraft, evidence: list[dict]) -> dict:
                 refs = [by_id[i] for i in item.source_ids if i in by_id]
                 if not refs or item.title in used:
                     continue  # 근거 없는 할 일, 중복은 뺀다
+                if not fits_service_text(f"{item.title} {item.action}", service_type):
+                    continue  # 복무 형태와 안 맞는 제도
                 used.add(item.title)
                 # 기한은 근거 자료에 그 문구가 실제로 있을 때만 (지어낸 기한 방지)
                 deadline, due = ground_deadline(
@@ -320,7 +341,8 @@ async def build_roadmap(services: Any, organizer: Runnable, profile: RoadmapProf
     draft: RoadmapDraft = await organizer.ainvoke(
         {"profile": _profile_text(profile), "evidence": listing}
     )
-    return assemble(draft, evidence) | {"profile": profile.model_dump(exclude_none=True)}
+    out = assemble(draft, evidence, profile.service_type)
+    return out | {"profile": profile.model_dump(exclude_none=True)}
 
 
 def make_organizer(llm) -> Runnable:

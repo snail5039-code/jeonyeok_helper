@@ -14,10 +14,12 @@ const domain = (url: string) => {
   }
 };
 
-export function SourceList({ sources }: { sources: Source[] }) {
+/** 번호(i + 1)는 답변 본문의 [n]과 같아야 하므로, 걸러도 원래 번호를 쓴다 */
+export function SourceList({ sources, only }: { sources: Source[]; only?: Set<number> }) {
   return (
     <div className="grid gap-2">
       {sources.map((s, i) => {
+        if (only && !only.has(i + 1)) return null;
         const [label, kindClass] = KIND[s.type] ?? ["출처", "bg-sunken text-fg-2"];
         const body = (
           <>

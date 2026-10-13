@@ -26,7 +26,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from jeonyeok_helper.agents.prompts import COMMON
-from jeonyeok_helper.agents.roadmap import STAGE_TITLES, StageKey, fits_education
+from jeonyeok_helper.agents.roadmap import STAGE_TITLES, StageKey, fits_education, fits_service_text
 from jeonyeok_helper.journey import ground_deadline
 
 STAGE_ORDER = {key: i for i, key in enumerate(STAGE_TITLES)}
@@ -338,6 +338,8 @@ def pick_items(
             continue
         if not fits_education(title, p.get("education"), p.get("goals")):
             continue  # 대학원생에게 국가장학금 같은 학부 전용 장학금은 담지 않는다
+        if not fits_service_text(f"{title} {item.action}", p.get("service_type")):
+            continue  # 병사에게 5년 이상 복무자 전용 제도는 담지 않는다
         known.add(title)
         deadline, due = ground_deadline(item.deadline, item.due_months, [answer])
         items.append(

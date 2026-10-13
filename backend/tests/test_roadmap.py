@@ -168,3 +168,14 @@ def test_fits_education_drops_undergrad_scholarships_for_graduate_students():
     # 대졸자는 복학·진학 계획이 없을 때만 뺀다
     assert not fits_education(title, "대학 졸업", ["취업"])
     assert fits_education(title, "대학 졸업", ["복학·진학"])
+
+
+def test_service_type_filter_drops_programs_for_other_service_types():
+    from jeonyeok_helper.agents.roadmap import fits_service_text
+
+    assert not fits_service_text("전직지원금 신청 (5년 이상 복무하셨다면)", "conscript")
+    assert not fits_service_text("장기복무 제대군인 주택 특별공급", "conscript")
+    assert fits_service_text("군복무 크레딧 신청", "conscript")
+    assert fits_service_text("전직지원금 신청", "long_term")
+    assert not fits_service_text("장병내일준비적금 가입", "long_term")
+    assert fits_service_text("전직지원금 신청", None)  # 모르면 걸러 내지 않는다

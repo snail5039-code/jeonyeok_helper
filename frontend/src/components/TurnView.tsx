@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { parseAnswer } from "@/lib/answer";
+import { citedCount, parseAnswer } from "@/lib/answer";
 import type { Rating } from "@/lib/feedback";
 import { SERVICE_REPLIES } from "@/lib/guide";
 import {
@@ -29,7 +29,7 @@ import {
 import { BenefitList } from "./BenefitList";
 import { GuideBubble, QuickReplies, Say, SuggestBox, UserBubble } from "./Guide";
 import { InlineText } from "./InlineText";
-import { SourceList } from "./SourceList";
+import { SourcesBox } from "./SourcesBox";
 
 const CHIP = "inline-flex h-[26px] items-center rounded-full border px-2.5 text-[12.5px] font-medium";
 
@@ -370,7 +370,7 @@ function AnswerDetails({ turn, onAsk, onFeedback }: { turn: Turn; onAsk: (text: 
         <FileText className="size-4 text-fg-3" strokeWidth={1.8} />
         자세히 보기
         <span className="truncate font-medium text-fg-3">
-          {[benefits ? `혜택 ${benefits}개` : "", turn.sources.length ? `근거 ${turn.sources.length}개` : ""]
+          {[benefits ? `혜택 ${benefits}개` : "", turn.sources.length ? `근거 ${citedCount(turn.text, turn.sources.length)}개` : ""]
             .filter(Boolean)
             .join(" · ")}
         </span>
@@ -411,16 +411,7 @@ function Answer({
       {benefits.length > 0 && <BenefitList benefits={benefits} sources={turn.sources} />}
       {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
       {streaming && <span className="stream-caret" aria-hidden />}
-      {!streaming && !turn.stopped && turn.sources.length > 0 && (
-        <details className="group grid gap-2 rounded-xl border border-line px-3.5 py-2.5">
-          <summary className="cursor-pointer list-none text-sm font-bold">
-            근거 자료 {turn.sources.length}개 <span className="font-medium text-fg-3 group-open:hidden">펼치기</span>
-          </summary>
-          <div className="mt-2">
-            <SourceList sources={turn.sources} />
-          </div>
-        </details>
-      )}
+      {!streaming && !turn.stopped && turn.sources.length > 0 && <SourcesBox text={turn.text} sources={turn.sources} />}
       {turn.stopped && (
         <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
           <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />

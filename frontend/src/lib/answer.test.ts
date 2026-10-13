@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { benefitKind, parseAnswer, splitInline } from "./answer";
+import { benefitKind, citedCount, citedNumbers, parseAnswer, splitInline } from "./answer";
 
 describe("parseAnswer", () => {
   it("요약, 혜택 블록, 마무리 문단으로 나눈다", () => {
@@ -70,5 +70,23 @@ describe("benefitKind", () => {
     ["기타 지원", "other"],
   ])("%s → %s", (title, kind) => {
     expect(benefitKind(title)).toBe(kind);
+  });
+});
+
+describe("citedNumbers", () => {
+  it("[1], [2, 3] 같은 근거 번호를 모은다", () => {
+    expect([...citedNumbers("크레딧이에요 [1]. 신청은 공단에서 [2, 3]. 목록 [ ] 와 [가]는 무시")].sort()).toEqual([1, 2, 3]);
+  });
+  it("번호가 없으면 비어 있다", () => {
+    expect(citedNumbers("번호 없는 답").size).toBe(0);
+  });
+});
+
+describe("citedCount", () => {
+  it("인용한 근거만 센다 (범위 밖 번호는 무시)", () => {
+    expect(citedCount("가 [1] 나 [3] 다 [9]", 5)).toBe(2);
+  });
+  it("번호가 없으면 전체", () => {
+    expect(citedCount("번호 없는 답", 4)).toBe(4);
   });
 });
