@@ -34,7 +34,7 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
   const goTo = (key: StageKey) => document.getElementById(`stage-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-24 sm:px-5 sm:pt-6 lg:pb-12">
+    <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-6 sm:px-5 sm:pt-6 lg:pb-12">
       <Book as="div" rings={14} className="mx-auto grid max-w-[880px] grid-cols-[minmax(0,1fr)] gap-6">
         <Stamp className="absolute -top-3 right-4 rotate-[7deg] sm:right-8">임무 수행 중</Stamp>
         <header className="grid gap-2">

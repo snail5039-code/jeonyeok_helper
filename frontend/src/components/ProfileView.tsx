@@ -80,7 +80,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
   const field = "h-11 w-full rounded-[10px] border-2 border-edge bg-soft px-3.5 text-[15px] font-normal outline-none focus:border-ink";
 
   return (
-    <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-24 sm:px-5 sm:pt-6 lg:pb-12">
+    <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-6 sm:px-5 sm:pt-6 lg:pb-12">
       <Book as="div" rings={16} className="mx-auto grid max-w-[800px] grid-cols-[minmax(0,1fr)] gap-6">
         <header className="grid gap-2">
           <div>

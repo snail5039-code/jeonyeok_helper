@@ -304,7 +304,9 @@ export function ChatApp() {
           }}
         />
       ) : (
-        <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-24 sm:px-5 sm:pt-6 lg:pb-6">
+        // 위아래 여백은 padding 대신 빈 칸으로: sticky(지금 할 일·입력창)가 padding만큼 떨어져 그 틈으로 글이 비친다
+        <main className="flex-1 overflow-y-auto px-2.5 sm:px-5">
+          <div aria-hidden className="h-4 sm:h-6" />
           <div className="mx-auto grid max-w-[1320px] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
             {/* 왼쪽 수첩: 작전실 (대화) */}
             <Book label="작전실" rings={14} className="flex min-h-[calc(100dvh-150px)] min-w-0 flex-col">
@@ -314,7 +316,12 @@ export function ChatApp() {
 
               {/* 지금 할 일: 대화를 내려도 위에 남는다 */}
               {/* 첫 화면에서는 전역이 인사가 다음 임무를 말해 주므로 대화 중에만 */}
-              {ready && next && !isHome && <NowCard item={next} profile={profile} busy={busy} onReply={reply} />}
+              {ready && next && !isHome && (
+                // 위에 붙어 있는 동안 뒤로 대화가 비치지 않게 종이색 띠를 깐다 (아래로 갈수록 흐려짐)
+                <div className="z-10 mb-5 -mr-4 -ml-2 pr-4 pl-2 sm:sticky sm:top-0 sm:-mr-7 sm:bg-bg sm:pt-3 sm:pr-7 sm:pb-1 sm:shadow-[0_14px_12px_-4px_var(--bg)]">
+                  <NowCard item={next} profile={profile} busy={busy} onReply={reply} />
+                </div>
+              )}
 
               <div className="grid flex-1 content-start gap-7 pt-1">
                 {isHome ? (
@@ -335,7 +342,7 @@ export function ChatApp() {
                 )}
               </div>
 
-              <div className="sticky bottom-0 z-10 -mx-1 mt-6 grid gap-1.5 bg-gradient-to-t from-bg from-70% to-transparent px-1 pt-5 pb-2">
+              <div className="sticky bottom-0 z-10 mt-6 -mr-4 -ml-2 grid gap-1.5 bg-bg pt-3 pr-4 pb-2.5 pl-2 shadow-[0_-16px_14px_-4px_var(--bg)] sm:-mr-7 sm:pr-7">
                 <Composer
                   id="chat-input"
                   compact
@@ -353,6 +360,7 @@ export function ChatApp() {
               <JourneyPanel journey={journey} profile={profile} onOpen={openJourney} />
             </Book>
           </div>
+          <div aria-hidden className="h-4 lg:h-6" />
         </main>
       )}
 
@@ -384,7 +392,7 @@ function NowCard({
   return (
     <section
       aria-label="지금 할 일"
-      className="z-10 mb-5 grid grid-cols-[minmax(0,1fr)] items-center gap-3 sm:sticky sm:top-2 rounded-[14px] border-[2.5px] border-ink bg-soft px-3.5 py-3 shadow-[4px_4px_0_var(--olive-dark)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+      className="grid grid-cols-[minmax(0,1fr)] items-center gap-3 rounded-[14px] border-[2.5px] border-ink bg-soft px-3.5 py-3 shadow-[4px_4px_0_var(--olive-dark)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
     >
       <span className="font-stencil justify-self-start -rotate-3 rounded-md bg-warn px-2 py-1 text-[13px] text-bg">지금 할 일</span>
       <div className="min-w-0">

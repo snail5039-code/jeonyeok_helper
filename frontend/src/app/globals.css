@@ -144,10 +144,14 @@ body {
   overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
 }
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 6px;
+/* 키보드 포커스 표시. base 층에 둬서 입력칸의 outline-none 같은 유틸리티가 이기게 한다
+   (입력창은 바깥 상자 테두리로 포커스를 보여 준다) */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
 }
 
 /* 누를 수 있는 것은 마우스를 올리면 살짝 떠오르고(호버), 누르면 꾹 눌린다.

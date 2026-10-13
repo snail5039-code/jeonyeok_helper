@@ -195,7 +195,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
   );
 }
 
-/** 좁은 화면: 아래 탭바 */
+/** 좁은 화면: 아래 탭바. 화면 흐름 안에 둬서(fixed가 아니라) 대화 영역 바닥이 탭바 바로 위가 된다 */
 export function MobileTabs({
   view,
   journey,
@@ -217,7 +217,7 @@ export function MobileTabs({
   return (
     <nav
       aria-label="메뉴"
-      className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-olive-dark bg-[#f3ead2] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] lg:hidden dark:bg-[#2c3122]"
+      className="z-30 flex shrink-0 border-t-[3px] border-olive-dark bg-[#f3ead2] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] lg:hidden dark:bg-[#2c3122]"
     >
       <button type="button" onClick={onChat} aria-current={view === "home" || view === "chat" ? "page" : undefined} className={tab(view === "home" || view === "chat")}>
         <MessageSquare className="size-[22px]" strokeWidth={2.2} />
