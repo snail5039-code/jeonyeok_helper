@@ -19,6 +19,9 @@ class Settings(BaseSettings):
         env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    # 한 사용자가 1분에 보낼 수 있는 질문·작전도 생성 횟수 (0 = 제한 없음)
+    chat_rate_limit_per_minute: int = 20
+
     # Gemini
     google_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"

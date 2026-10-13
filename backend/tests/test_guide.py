@@ -180,3 +180,14 @@ def test_vague_first_turn_is_not_sent_to_search():
     assert is_vague_first_turn("그거 신청 어디서 해요?", turns=1)  # 첫 마디면 되물어야 한다
     assert not is_vague_first_turn("그거 신청 어디서 해요?", turns=3)  # 앞 대화가 있으면 아니다
     assert not is_vague_first_turn("군복무 크레딧 신청 어디서 해요?", turns=1)
+
+
+def test_repair_profile_does_not_invent_merit_status():
+    from jeonyeok_helper.agents.guide import repair_profile
+
+    asked = repair_profile("의병전역했는데 보훈 등록 가능한가요?", {"service_type": "merit"})
+    assert "service_type" not in asked  # 등록 가능한지 물은 것이지 등록했다는 말이 아니다
+    done = repair_profile("국가유공자로 등록했어요", {"service_type": "merit"})
+    assert done["service_type"] == "merit"
+    other = repair_profile("병장으로 전역했어요", {"service_type": "conscript", "region": "서울"})
+    assert other == {"service_type": "conscript", "region": "서울"}

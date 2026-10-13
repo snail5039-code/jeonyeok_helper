@@ -75,6 +75,22 @@ RESEARCH_WORDS = re.compile(
 REOPEN_WORDS = re.compile(r"실수로|잘못 눌|잘못눌|되돌|취소|아직 안 ?했|안 했는데|놓쳤|다시 해")
 
 
+# ---------- 프로필 보정 ----------
+
+MERIT_WORDS = re.compile(r"유공자|보훈대상|보훈보상|상이등급|등록(했|됐|되었|돼)|등록자")
+
+
+def repair_profile(user_text: str, new: dict) -> dict:
+    """추출된 프로필에서 사용자가 말하지 않은 것을 뺀다.
+
+    '의병전역했는데 보훈 등록 가능한가요?'를 이미 보훈대상자로 등록한 사람으로 읽은 적이 있다
+    (등록을 물은 것이지 등록했다고 한 것이 아니다). 등록했다고 말해야만 인정한다."""
+    out = dict(new)
+    if out.get("service_type") == "merit" and not MERIT_WORDS.search(user_text):
+        out.pop("service_type")
+    return out
+
+
 # '그거 신청 어디서 해요?'처럼 가리키는 말로 시작하는 질문
 VAGUE_START = re.compile(r"^\s*(그거|이거|저거|그것|이것|거기|그건|이건)")
 

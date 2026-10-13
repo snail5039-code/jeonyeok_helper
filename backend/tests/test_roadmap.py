@@ -179,3 +179,50 @@ def test_service_type_filter_drops_programs_for_other_service_types():
     assert fits_service_text("전직지원금 신청", "long_term")
     assert not fits_service_text("장병내일준비적금 가입", "long_term")
     assert fits_service_text("전직지원금 신청", None)  # 모르면 걸러 내지 않는다
+
+
+def test_gather_cached_reuses_evidence_for_the_same_conditions():
+    from jeonyeok_helper.agents import roadmap as rm
+
+    rm._evidence_cache.clear()
+    svc = services()
+    first = rm.gather_cached(svc, RoadmapProfile(service_type="conscript", region="서울"))
+    calls = len(svc.retriever.calls)
+    # 전역일이 달라도 자료 모으기 조건은 같다 → 다시 모으지 않는다
+    again = rm.gather_cached(
+        svc, RoadmapProfile(service_type="conscript", region="서울", discharge_date="2025-08")
+    )
+    assert again is first and len(svc.retriever.calls) == calls
+    # 지역이 다르면 새로 모은다
+    rm.gather_cached(svc, RoadmapProfile(service_type="conscript", region="부산"))
+    assert len(svc.retriever.calls) > calls
+    rm._evidence_cache.clear()
+
+
+def test_discharged_users_are_not_offered_in_service_only_programs():
+    from jeonyeok_helper.agents.roadmap import fits_discharge_status
+
+    assert not fits_discharge_status("장병내일준비적금 정부지원금", "2020-04")  # 이미 전역
+    assert fits_discharge_status("장병내일준비적금 정부지원금", "2099-04")  # 아직 복무 중
+    assert fits_discharge_status("장병내일준비적금 정부지원금", None)  # 모르면 걸러 내지 않는다
+    assert fits_discharge_status("국민연금 군복무 크레딧", "2020-04")
+
+
+def test_assemble_drops_policy_bodies_that_are_not_actionable():
+    evidence = [{"id": "E1", "kind": "benefit", "title": "x", "url": "", "text": ""}]
+    draft = RoadmapDraft(
+        intro="",
+        stages=[
+            RoadmapStageDraft(
+                key="job",
+                items=[
+                    RoadmapItemDraft(
+                        title="청년정책조정위원회 전문위원회 참여", action="참여", source_ids=["E1"]
+                    ),
+                    RoadmapItemDraft(title="국민취업지원제도", action="신청", source_ids=["E1"]),
+                ],
+            )
+        ],
+    )
+    titles = [i["title"] for s in assemble(draft, evidence)["stages"] for i in s["items"]]
+    assert titles == ["국민취업지원제도"]

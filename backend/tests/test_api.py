@@ -403,3 +403,29 @@ def test_removed_item_can_be_restored_with_its_state():
             restored["title"] == done["title"] and restored["done"] is True and restored["done_at"]
         )
         assert restored["origin"] == "plan"
+
+
+def test_rate_limiter_blocks_after_limit_and_recovers_after_window():
+    from jeonyeok_helper.api.limits import RateLimiter
+
+    limiter = RateLimiter(2, window=60)
+    assert limiter.allow("a", now=0) and limiter.allow("a", now=1)
+    assert not limiter.allow("a", now=2)  # 3번째는 막힘
+    assert limiter.allow("b", now=2)  # 다른 사용자는 영향 없음
+    assert limiter.allow("a", now=61)  # 창이 지나면 다시 허용
+    assert RateLimiter(0).allow("a")  # 0이면 제한 없음
+
+
+def test_chat_returns_429_with_a_message_when_over_the_limit():
+    from jeonyeok_helper.api.limits import RateLimiter
+
+    with make_client(
+        [Route(next="regulation"), Route(next="answer")], profile=Profile(service_type="conscript")
+    ) as client:
+        client.app.state.limiter = RateLimiter(1)
+        ok = client.post("/chat", json={"message": "군복무 크레딧?", "user_id": "u-limit"})
+        blocked = client.post("/chat", json={"message": "또 물어요", "user_id": "u-limit"})
+        other = client.post("/chat", json={"message": "군복무 크레딧?", "user_id": "u-other"})
+    assert ok.status_code == 200 and other.status_code == 200
+    assert blocked.status_code == 429
+    assert "너무 많아요" in blocked.json()["detail"]

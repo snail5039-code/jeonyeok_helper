@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Literal
@@ -98,6 +99,25 @@ def fits_service_text(text: str, service_type: str | None) -> bool:
     if service_type in ("short_term_officer", "long_term"):
         return not CONSCRIPT_ONLY.search(text)
     return True
+
+
+# 사용자가 신청해서 받는 혜택이 아니라 정책 기구 이야기 (임무로 담을 수 없다)
+NOT_ACTIONABLE = re.compile(r"위원회|위원\s*(확대|모집|위촉)|전문위원|자문단")
+
+
+# 복무 중에만 할 수 있는 제도 (이미 전역한 사람에게는 권하지 않는다)
+IN_SERVICE_ONLY = re.compile(
+    r"장병내일준비적금|전역\s*예정|원격\s*강좌|사이버\s*(교육|강좌)|복무\s*중\s*(가입|신청|수강)"
+)
+
+
+def fits_discharge_status(text: str, discharge_date: str | None) -> bool:
+    """이미 전역했다고 확인되면 복무 중 전용 제도를 거른다. 모르거나 복무 중이면 통과."""
+    from jeonyeok_helper.agents.prompts import discharge_status
+
+    if "이미 전역함" not in discharge_status(discharge_date):
+        return True
+    return not IN_SERVICE_ONLY.search(text)
 
 
 # '내 정보'의 전역 후 계획에 따라 더 찾아볼 주제
@@ -291,7 +311,12 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
     return evidence
 
 
-def assemble(draft: RoadmapDraft, evidence: list[dict], service_type: str | None = None) -> dict:
+def assemble(
+    draft: RoadmapDraft,
+    evidence: list[dict],
+    service_type: str | None = None,
+    discharge_date: str | None = None,
+) -> dict:
     """LLM 초안에서 근거가 확인되는 할 일만 남기고, 링크·출처는 모은 자료에서 붙인다."""
     from jeonyeok_helper.journey import ground_deadline
 
@@ -306,6 +331,10 @@ def assemble(draft: RoadmapDraft, evidence: list[dict], service_type: str | None
                     continue  # 근거 없는 할 일, 중복은 뺀다
                 if not fits_service_text(f"{item.title} {item.action}", service_type):
                     continue  # 복무 형태와 안 맞는 제도
+                if NOT_ACTIONABLE.search(item.title):
+                    continue  # '정부위원회 청년위원 확대' 같은 정책 기구
+                if not fits_discharge_status(f"{item.title} {item.action}", discharge_date):
+                    continue  # 이미 전역했는데 복무 중 전용 제도
                 used.add(item.title)
                 # 기한은 근거 자료에 그 문구가 실제로 있을 때만 (지어낸 기한 방지)
                 deadline, due = ground_deadline(
@@ -330,8 +359,38 @@ def assemble(draft: RoadmapDraft, evidence: list[dict], service_type: str | None
     return {"intro": draft.intro, "stages": stages}
 
 
+# 같은 조건(복무 형태·지역·나이·계획·학력)이면 모은 자료를 잠시 재사용한다.
+# 전역일은 자료 모으기에 쓰이지 않아서, 지역을 알게 된 때 미리 모아 두면
+# 마지막 질문 뒤에는 정리만 하면 된다.
+EVIDENCE_TTL = 30 * 60
+_evidence_cache: dict[tuple, tuple[float, list[dict]]] = {}
+
+
+def evidence_key(p: RoadmapProfile) -> tuple:
+    return (p.service_type, p.region, p.age, tuple(sorted(p.goals)), p.education)
+
+
+def gather_cached(services: Any, profile: RoadmapProfile) -> list[dict]:
+    key = evidence_key(profile)
+    hit = _evidence_cache.get(key)
+    if hit and time.monotonic() - hit[0] < EVIDENCE_TTL:
+        return hit[1]
+    evidence = gather(services, profile)
+    if evidence:  # 조회가 통째로 실패한 결과는 저장하지 않는다
+        _evidence_cache[key] = (time.monotonic(), evidence)
+    return evidence
+
+
+async def prefetch(services: Any, profile: RoadmapProfile) -> None:
+    """응답을 기다리게 하지 않고 미리 모아 둔다. 실패해도 나중에 다시 모으면 된다."""
+    try:
+        await asyncio.to_thread(gather_cached, services, profile)
+    except Exception:
+        log.warning("로드맵 자료 미리 모으기 실패", exc_info=True)
+
+
 async def build_roadmap(services: Any, organizer: Runnable, profile: RoadmapProfile) -> dict:
-    evidence = await asyncio.to_thread(gather, services, profile)
+    evidence = await asyncio.to_thread(gather_cached, services, profile)
     if not evidence:
         return {
             "intro": "지금은 자료를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -341,7 +400,7 @@ async def build_roadmap(services: Any, organizer: Runnable, profile: RoadmapProf
     draft: RoadmapDraft = await organizer.ainvoke(
         {"profile": _profile_text(profile), "evidence": listing}
     )
-    out = assemble(draft, evidence, profile.service_type)
+    out = assemble(draft, evidence, profile.service_type, profile.discharge_date)
     return out | {"profile": profile.model_dump(exclude_none=True)}
 
 

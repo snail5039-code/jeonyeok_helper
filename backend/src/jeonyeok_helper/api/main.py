@@ -48,6 +48,7 @@ from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
+from jeonyeok_helper.api.limits import RateLimiter
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
 
@@ -165,9 +166,11 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
+def _default_runtime() -> tuple[
+    AgentFactory, RoadmapBuilder, Callable[[RoadmapProfile], Awaitable[None]]
+]:
     """채팅 에이전트와 로드맵이 같은 도구 데이터(정책 목록 캐시 등)를 쓰도록 묶는다."""
-    from jeonyeok_helper.agents.roadmap import build_roadmap, make_organizer
+    from jeonyeok_helper.agents.roadmap import build_roadmap, make_organizer, prefetch
     from jeonyeok_helper.agents.runtime import open_agent
     from jeonyeok_helper.benefits.mcp_server import Services
 
@@ -176,12 +179,23 @@ def _default_runtime() -> tuple[AgentFactory, RoadmapBuilder]:
 
     async def roadmap(profile: RoadmapProfile) -> dict:
         if "organizer" not in chains:
-            from jeonyeok_helper.llm import get_answer_model
+            from jeonyeok_helper.llm import get_fast_chat_model
 
-            chains["organizer"] = make_organizer(get_answer_model())
+            # 정리는 자료에서 고르는 일이라 빠른 모델로 충분하다 (답변용 모델보다 약 6초 빠름)
+            chains["organizer"] = make_organizer(get_fast_chat_model())
         return await build_roadmap(services, chains["organizer"], profile)
 
-    return (lambda: open_agent(services=services)), roadmap
+    async def warm(profile: RoadmapProfile) -> None:
+        await prefetch(services, profile)
+
+    return (lambda: open_agent(services=services)), roadmap, warm
+
+
+def _limited(request: Request, key: str | None) -> None:
+    """모델을 부르는 요청을 사용자(없으면 접속 주소)별로 제한한다."""
+    who = key or (request.client.host if request.client else "unknown")
+    if not request.app.state.limiter.allow(who):
+        raise HTTPException(429, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.")
 
 
 def create_app(
@@ -189,15 +203,19 @@ def create_app(
     db_url: str | None = None,
     roadmap_builder: RoadmapBuilder | None = None,
 ) -> FastAPI:
+    warm_roadmap = None
     if agent_factory is None:
-        agent_factory, default_roadmap = _default_runtime()
+        agent_factory, default_roadmap, warm_roadmap = _default_runtime()
         roadmap_builder = roadmap_builder or default_roadmap
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
+        app.state.limiter = RateLimiter(get_settings().chat_rate_limit_per_minute)
         app.state.roadmap = roadmap_builder
+        app.state.warm_roadmap = warm_roadmap
+        app.state.background = set()  # 미리 모으기 작업이 끝나기 전에 사라지지 않게 붙들어 둔다
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -237,6 +255,14 @@ def create_app(
             },
         }
 
+    def warm_in_background(request: Request, profile: dict) -> None:
+        warm = request.app.state.warm_roadmap
+        if warm is None or not (profile.get("service_type") and profile.get("region")):
+            return
+        task = asyncio.create_task(warm(roadmap_profile(profile)))
+        request.app.state.background.add(task)
+        task.add_done_callback(request.app.state.background.discard)
+
     async def first_roadmap(request: Request, user_id: str, profile: dict) -> AsyncIterator[str]:
         """처음 쓰는 사람이 복무 형태·지역·전역일을 다 알려 주면 로드맵을 만들고
         첫 할 일을 권한다."""
@@ -275,6 +301,7 @@ def create_app(
     @app.post("/chat")
     async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
         agent = require_agent(request)
+        _limited(request, req.user_id)
         db: Database = request.app.state.db
 
         thread_id = req.thread_id or str(uuid.uuid4())
@@ -366,7 +393,10 @@ def create_app(
                         {"text": state["messages"][-1].text, "profile": state.get("profile", {})},
                     )
                 profile = state.get("profile", {})
-                if req.user_id and not items and not guide_rules.missing_field(profile):
+                missing = guide_rules.missing_field(profile)
+                if req.user_id and not items and missing == "discharge_date":
+                    warm_in_background(request, profile)  # 전역일을 답하는 동안 자료를 미리 모은다
+                if req.user_id and not items and not missing:
                     async for event in first_roadmap(request, req.user_id, profile):
                         yield event
             except Exception:
@@ -427,6 +457,7 @@ def create_app(
     @app.post("/journey/{user_id}/generate")
     async def generate_journey(user_id: UserId, request: Request) -> dict:
         """저장된 프로필('내 정보')로 시기별 할 일을 한 번에 만들어 로드맵에 담는다."""
+        _limited(request, user_id)
         agent = require_agent(request)
         if request.app.state.roadmap is None:
             raise HTTPException(503, "로드맵을 만들 수 없어요")

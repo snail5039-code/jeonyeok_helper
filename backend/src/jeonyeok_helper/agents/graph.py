@@ -109,7 +109,10 @@ def build_graph(
         except Exception:
             log.warning("프로필 추출 실패, 기존 프로필로 진행합니다.", exc_info=True)
             return {}
-        new = extracted.model_dump(exclude_none=True)
+        new = guide_rules.repair_profile(
+            " ".join(m.text for m in state["messages"] if getattr(m, "type", "") == "human"),
+            extracted.model_dump(exclude_none=True),
+        )
         if store is not None and (uid := _user_id(config)):
             await store.aput(PROFILE_NAMESPACE, uid, merge_profile(state.get("profile"), new))
         return {"profile": new}
