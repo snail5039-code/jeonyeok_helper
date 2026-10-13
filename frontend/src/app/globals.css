@@ -1,44 +1,62 @@
 @import "tailwindcss";
 
-/* 전역도우미 — 무난하고 모던하게: 사용자(대부분 20대 전역자)가 매일 쓰는 금융·생활 앱처럼
-   또렷한 파랑 하나만 포인트로 쓰고, 나머지는 색기 없는 회색. 법령 근거만 남보라로 구분한다.
-   색은 토큰으로만 정의하고, 다크 모드는 토큰 값만 바꾼다.
+/* 전역도우미 — '작전 수첩' 감성: 위장 무늬 책상 위에 펼친 줄 노트, 군용 녹색, 굵은 잉크 테두리.
+   이모지 대신 같은 굵기의 선 아이콘(lucide)과 직접 그린 계급장·훈장을 쓴다.
+   색은 토큰으로만 정의하고, 다크 모드('야간 작전')는 토큰 값만 바꾼다.
    (시스템 설정을 따르되, 사용자가 고르면 html[data-theme]가 우선) */
 :root {
-  --bg: #ffffff;
-  --bg-soft: #f9fafb;
-  --bg-sunken: #f2f4f6;
-  --line: #e5e8eb;
-  --line-strong: #d1d6db;
-  --fg: #191f28;
-  --fg-2: #4e5968;
-  --fg-3: #8b95a1;
-  --accent: #2a6fdb; /* 흰 바탕 대비 4.8:1 (작은 글자 기준 4.5 이상) */
-  --accent-soft: #e8f3ff;
+  --bg: #f6efdc; /* 종이 */
+  --bg-soft: #fffbee; /* 카드 */
+  --bg-sunken: #efe6cc;
+  --line: #ddd2b4;
+  --line-strong: #b5a67c;
+  --fg: #1f2416;
+  --fg-2: #4f4a3a;
+  --fg-3: #7a7055; /* 종이 바탕 대비 4.6:1 */
+  --accent: #2a5fc4;
+  --accent-soft: #e3ebfa;
   --accent-ink: #ffffff;
-  --warn: #c26a00;
-  --warn-soft: #fff4e5;
-  --law: #5b5bd6;
-  --law-soft: #efeffc;
-  --shadow: 0 1px 2px rgb(25 31 40 / 0.04), 0 8px 24px rgb(25 31 40 / 0.06);
-  --ink: #1b1b1b; /* B급 그림의 굵은 테두리·그림자. 다크에서는 크림색으로 바꿔 윤곽이 보이게 */
+  --warn: #b8322a;
+  --warn-soft: #f8e1d8;
+  --law: #4b48a8;
+  --law-soft: #e5e4f7;
+  --shadow: 3px 3px 0 rgb(31 36 22 / 0.14);
+  --ink: #1f2416; /* 굵은 테두리·밀린 그림자 */
+  --olive: #556b2f;
+  --olive-2: #6b7f3a;
+  --olive-dark: #3b4a22;
+  --olive-ink: #f6efdc;
+  --edge: #8a7b55; /* 종이 가장자리·보조 테두리 */
+  --bubble: #fbeaa9; /* 전역이 말풍선 */
+  --done: #c9e48a;
+  --desk-1: #52613a; --desk-2: #3a4721; --desk-3: #66743b; --desk-4: #2f3a1b; --desk-5: #6f6243;
+  --rule: #ddd2b4; /* 노트 줄 */
+  --margin: rgb(184 50 42 / 0.3); /* 노트 빨간 여백선 */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #17171c; --bg-soft: #1e1e24; --bg-sunken: #26262d; --line: #2c2c35; --line-strong: #3c3c47;
-    --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
-    --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
-    --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
-    --shadow: none; --ink: #e9dca6; color-scheme: dark;
+    --bg: #23271b; --bg-soft: #2c3122; --bg-sunken: #1b1f14; --line: #3b412f; --line-strong: #5d6347;
+    --fg: #efe8d2; --fg-2: #cbc3a7; --fg-3: #9c9479;
+    --accent: #7ea6f0; --accent-soft: #24304a; --accent-ink: #0d1424;
+    --warn: #f08a7e; --warn-soft: #3d2420; --law: #a9a6f0; --law-soft: #2b2a45;
+    --shadow: 3px 3px 0 rgb(0 0 0 / 0.35); --ink: #e9dca6;
+    --olive: #8aa055; --olive-2: #9bb062; --olive-dark: #6b7f3a; --olive-ink: #1b1f14; --edge: #6e6448;
+    --rule: #30352a; --margin: rgb(240 138 126 / 0.25);
+    --desk-1: #2a3220; --desk-2: #1f2618; --desk-3: #343d26; --desk-4: #181d12; --desk-5: #3a3426;
+    color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #17171c; --bg-soft: #1e1e24; --bg-sunken: #26262d; --line: #2c2c35; --line-strong: #3c3c47;
-  --fg: #f2f4f6; --fg-2: #b0b8c1; --fg-3: #7e8794;
-  --accent: #4c9bff; --accent-soft: #1c2b44; --accent-ink: #0a1424;
-  --warn: #f0a33a; --warn-soft: #33281a; --law: #9b9bf2; --law-soft: #26263f;
-  --shadow: none; --ink: #e9dca6; color-scheme: dark;
+  --bg: #23271b; --bg-soft: #2c3122; --bg-sunken: #1b1f14; --line: #3b412f; --line-strong: #5d6347;
+  --fg: #efe8d2; --fg-2: #cbc3a7; --fg-3: #9c9479;
+  --accent: #7ea6f0; --accent-soft: #24304a; --accent-ink: #0d1424;
+  --warn: #f08a7e; --warn-soft: #3d2420; --law: #a9a6f0; --law-soft: #2b2a45;
+  --shadow: 3px 3px 0 rgb(0 0 0 / 0.35); --ink: #e9dca6;
+  --olive: #8aa055; --olive-2: #9bb062; --olive-dark: #6b7f3a; --olive-ink: #1b1f14; --edge: #6e6448;
+  --rule: #30352a; --margin: rgb(240 138 126 / 0.25);
+  --desk-1: #2a3220; --desk-2: #1f2618; --desk-3: #343d26; --desk-4: #181d12; --desk-5: #3a3426;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -58,12 +76,20 @@
   --color-law: var(--law);
   --color-law-soft: var(--law-soft);
   --color-ink: var(--ink);
+  --color-olive: var(--olive);
+  --color-olive-2: var(--olive-2);
+  --color-olive-dark: var(--olive-dark);
+  --color-olive-ink: var(--olive-ink);
+  --color-edge: var(--edge);
+  --color-bubble: var(--bubble);
+  --color-done: var(--done);
+  --font-stencil: var(--font-black-han), "Black Han Sans", "Pretendard Variable", Pretendard, sans-serif;
   --shadow-card: var(--shadow);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   /* B급 감성 제목·말풍선용 (본문은 계속 Pretendard) */
   --font-fun: var(--font-jua), "Jua", "Pretendard Variable", Pretendard, sans-serif;
-  --color-paper: #fff4c9;
-  --color-paper-ink: #1b1b1b;
+  --color-paper: #fbeaa9;
+  --color-paper-ink: #1f2416;
   --animate-pop: pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
   --animate-wobble: wobble 2.4s ease-in-out infinite;
 }
@@ -100,7 +126,15 @@ body {
   height: 100%;
 }
 body {
-  background: var(--bg);
+  /* 위장 무늬 책상 */
+  background:
+    radial-gradient(60px 40px at 10% 20%, var(--desk-2) 60%, transparent 61%),
+    radial-gradient(80px 50px at 30% 70%, var(--desk-4) 60%, transparent 61%),
+    radial-gradient(70px 45px at 70% 30%, var(--desk-3) 60%, transparent 61%),
+    radial-gradient(90px 55px at 85% 80%, var(--desk-4) 60%, transparent 61%),
+    radial-gradient(50px 35px at 55% 55%, var(--desk-5) 60%, transparent 61%),
+    var(--desk-1);
+  background-size: 260px 220px;
   color: var(--fg);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -163,4 +197,42 @@ body {
   .stream-caret {
     animation: none;
   }
+}
+
+/* 펼친 줄 노트 (왼쪽 스프링은 Book 컴포넌트가 그린다). sticky 같은 유틸리티가 이기도록 components 층에 둔다 */
+@layer components {
+.notebook {
+  position: relative;
+  border-radius: 6px 14px 14px 6px;
+  background:
+    repeating-linear-gradient(transparent 0 31px, var(--rule) 31px 32px),
+    linear-gradient(90deg, transparent 54px, var(--margin) 54px 56px, transparent 56px),
+    var(--bg);
+  background-position: 0 14px, 0 0, 0 0;
+  border: 2px solid var(--edge);
+  box-shadow: 0 2px 0 var(--edge), 8px 10px 0 rgb(0 0 0 / 0.26), inset 0 0 40px rgb(120 95 40 / 0.14);
+}
+.notebook-rings {
+  position: absolute;
+  left: 13px;
+  top: 26px;
+  bottom: 26px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.notebook-rings i {
+  width: 32px;
+  height: 12px;
+  border-radius: 10px;
+  background: linear-gradient(#9da0a3, #e6e7e8 45%, #7b7e82);
+  border: 1.5px solid #4a4d50;
+  box-shadow: 1px 2px 0 rgb(0 0 0 / 0.25);
+}
+@media (max-width: 640px) {
+  .notebook-rings { left: 7px; }
+  .notebook-rings i { width: 24px; height: 10px; }
+  .notebook { background-position: 0 14px, -22px 0, 0 0; }
+}
 }

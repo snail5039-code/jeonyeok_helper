@@ -1,20 +1,24 @@
 "use client";
 
+import { Check, CircleHelp, Star } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { demoChat } from "@/lib/demo";
 import { sendFeedback, type Rating } from "@/lib/feedback";
-import { addItems, levelOf, saveProfile } from "@/lib/journey";
+import { stepReplies } from "@/lib/guide";
+import { addItems, levelOf, nextItem, saveProfile } from "@/lib/journey";
 import { streamChat } from "@/lib/sse";
 import { getUserId, readStorage, writeStorage } from "@/lib/storage";
 import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Suggestion, Turn } from "@/lib/types";
 
+import { Book, BookTitle } from "./Book";
 import { Composer } from "./Composer";
 import { HomeView } from "./HomeView";
-import { JourneyChip, JourneyPanel } from "./JourneyPanel";
+import { JourneyPanel } from "./JourneyPanel";
+import { DeadlineChip } from "./JourneyParts";
 import { JourneyView } from "./JourneyView";
 import { ProfileView } from "./ProfileView";
-import { TopNav } from "./TopNav";
+import { MobileTabs, TopNav } from "./TopNav";
 import { TurnView } from "./TurnView";
 import { useJourney } from "./useJourney";
 
@@ -268,6 +272,7 @@ export function ChatApp() {
   };
   const isHome = turns.length === 0;
   const view = page === "chat" ? (isHome ? "home" : "chat") : page;
+  const next = nextItem(journey.items);
 
   return (
     <div className="flex h-full flex-col">
@@ -279,6 +284,7 @@ export function ChatApp() {
         dark={dark}
         onToggleTheme={toggle}
         onHome={goHome}
+        onChat={() => setPage("chat")}
         onJourney={openJourney}
         onProfile={() => setPage("profile")}
         onAsk={ask}
@@ -297,57 +303,120 @@ export function ChatApp() {
             void journey.generate();
           }}
         />
-      ) : isHome ? (
-        <HomeView
-          profile={profile}
-          items={journey.items}
-          rank={rank}
-          ready={ready}
-          onAsk={ask}
-          onReply={reply}
-          onRoadmap={openJourney}
-          onProfile={() => setPage("profile")}
-        />
       ) : (
-        <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto grid max-w-[1180px] gap-7 px-4 pt-5 pb-[120px] lg:px-8 lg:pt-8 lg:pb-[140px] xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-10">
-              <div className="grid min-w-0 content-start gap-8">
-                <div className="sticky top-0 z-10 -mx-1 flex justify-end bg-gradient-to-b from-bg via-bg to-transparent px-1 pb-2 xl:hidden">
-                  <JourneyChip journey={journey} onOpen={openJourney} />
-                </div>
-                {turns.map((t, i) => (
-                  <TurnView
-                    key={t.id}
-                    turn={t}
-                    rank={rank}
-                    latest={i === turns.length - 1 && !busy}
-                    onAsk={ask}
-                    onReply={reply}
-                    onAddSuggest={addSuggest}
-                    onFeedback={feedback}
-                  />
-                ))}
+        <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-24 sm:px-5 sm:pt-6 lg:pb-6">
+          <div className="mx-auto grid max-w-[1320px] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+            {/* 왼쪽 수첩: 작전실 (대화) */}
+            <Book label="작전실" rings={14} className="flex min-h-[calc(100dvh-150px)] min-w-0 flex-col">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <BookTitle accent="작전실">전역 생활</BookTitle>
               </div>
-              <div className="hidden xl:block">
-                <JourneyPanel journey={journey} profile={profile} onAsk={ask} onOpen={openJourney} />
+
+              {/* 지금 할 일: 대화를 내려도 위에 남는다 */}
+              {/* 첫 화면에서는 전역이 인사가 다음 임무를 말해 주므로 대화 중에만 */}
+              {ready && next && !isHome && <NowCard item={next} profile={profile} busy={busy} onReply={reply} />}
+
+              <div className="grid flex-1 content-start gap-7 pt-1">
+                {isHome ? (
+                  <HomeView profile={profile} items={journey.items} rank={rank} ready={ready} onAsk={ask} onReply={reply} />
+                ) : (
+                  turns.map((t, i) => (
+                    <TurnView
+                      key={t.id}
+                      turn={t}
+                      rank={rank}
+                      latest={i === turns.length - 1 && !busy}
+                      onAsk={ask}
+                      onReply={reply}
+                      onAddSuggest={addSuggest}
+                      onFeedback={feedback}
+                    />
+                  ))
+                )}
               </div>
-            </div>
+
+              <div className="sticky bottom-0 z-10 -mx-1 mt-6 grid gap-1.5 bg-gradient-to-t from-bg from-70% to-transparent px-1 pt-5 pb-2">
+                <Composer
+                  id="chat-input"
+                  compact
+                  placeholder={isHome ? "아무거나 물어봐도 돼요. 예) 병장으로 전역했고 서울 살아요" : "전역이에게 이어서 말해 보세요"}
+                  busy={busy}
+                  onStop={() => abort.current?.abort()}
+                  onSubmit={ask}
+                />
+                <p className="hidden px-1 text-[12.5px] text-fg-3 sm:block">근거가 있는 내용만 답해요. 정확한 자격과 기한은 기관에 꼭 확인하세요.</p>
+              </div>
+            </Book>
+
+            {/* 오른쪽 수첩: 나의 전역 작전도 */}
+            <Book as="aside" label="나의 전역 작전도" rings={10} className="sticky top-6 hidden lg:block">
+              <JourneyPanel journey={journey} profile={profile} onOpen={openJourney} />
+            </Book>
           </div>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-b from-transparent to-bg to-40% px-3 pt-4 pb-[calc(12px+env(safe-area-inset-bottom,0px))] lg:px-8 lg:pb-[calc(20px+env(safe-area-inset-bottom,0px))]">
-            <div className="mx-auto max-w-[1116px]">
-              <Composer
-                id="chat-input"
-                compact
-                placeholder="전역이에게 이어서 말해 보세요"
-                busy={busy}
-                onStop={() => abort.current?.abort()}
-                onSubmit={ask}
-              />
-            </div>
-          </div>
-        </div>
+        </main>
       )}
+
+      <MobileTabs
+        view={view}
+        journey={journey.items}
+        onChat={() => setPage("chat")}
+        onJourney={openJourney}
+        onProfile={() => setPage("profile")}
+        onHome={goHome}
+      />
     </div>
+  );
+}
+
+/** 지금 할 일 카드: 다음 임무 하나와 [방법 보기] [했어요] */
+function NowCard({
+  item,
+  profile,
+  busy,
+  onReply,
+}: {
+  item: JourneyItem;
+  profile: Profile;
+  busy: boolean;
+  onReply: (r: QuickReply) => void;
+}) {
+  const [done, how] = stepReplies(item);
+  return (
+    <section
+      aria-label="지금 할 일"
+      className="z-10 mb-5 grid grid-cols-[minmax(0,1fr)] items-center gap-3 sm:sticky sm:top-2 rounded-[14px] border-[2.5px] border-ink bg-soft px-3.5 py-3 shadow-[4px_4px_0_var(--olive-dark)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+    >
+      <span className="font-stencil justify-self-start -rotate-3 rounded-md bg-warn px-2 py-1 text-[13px] text-bg">지금 할 일</span>
+      <div className="min-w-0">
+        <h3 className="flex items-center gap-1.5 text-[16px] font-extrabold">
+          {item.core && <Star aria-label="핵심" className="size-4 shrink-0 fill-[#e0a100] text-[#c98a00]" />}
+          <span className="truncate">{item.title}</span>
+        </h3>
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13.5px] text-fg-2">
+          <span className="min-w-0">{item.action}</span>
+          <DeadlineChip item={item} dischargeDate={profile.discharge_date} />
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onReply(how)}
+          className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[10px] border-2 border-edge bg-bg px-3.5 text-[14px] font-bold text-fg-2 hover:border-ink disabled:opacity-50 sm:flex-none"
+        >
+          <CircleHelp className="size-4" strokeWidth={2.2} />
+          방법 보기
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onReply(done)}
+          className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-[10px] border-[2.5px] border-[#1f2416] bg-done px-4 text-[14.5px] font-extrabold text-[#1f2416] shadow-[3px_3px_0_var(--ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50 sm:flex-none"
+        >
+          <Check className="size-4" strokeWidth={2.8} />
+          했어요
+        </button>
+      </div>
+    </section>
   );
 }

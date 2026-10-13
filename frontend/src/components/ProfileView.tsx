@@ -1,12 +1,14 @@
 "use client";
 
-import { Check, Save, Wand2 } from "lucide-react";
+import { Check, HeartPulse, NotebookPen, Save, Shield, Target, UserRound, Wand2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 
 import { profileCompleteness } from "@/lib/journey";
 import { SERVICE_TYPE_LABELS, type Profile, type ServiceType } from "@/lib/types";
 
-import { Bubble, Mascot } from "./Doodle";
+import { Book, BookTitle } from "./Book";
+import { Mascot } from "./Doodle";
+import { Say } from "./Guide";
 
 export const REGIONS = [
   "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기",
@@ -32,11 +34,11 @@ function splitRegion(region = ""): [string, string] {
 }
 
 function caption(percent: number, hasType: boolean): string {
-  if (!hasType) return "아무것도 모르는 상태임. 일단 복무 형태부터 골라줘";
-  if (percent >= 90) return "이 정도면 신상 털림 수준… 아니 완벽함 👍";
-  if (percent >= 60) return "오 좋아. 조금만 더 쓰면 더 딱 맞게 찾아줌";
-  if (percent >= 30) return "음… 아직 반도 안 씀. 진로랑 지역 정도는 알려줘";
-  return "복무 형태 접수 완료. 지역이랑 목표도 알려주면 더 잘 찾음";
+  if (!hasType) return "복무 형태부터 골라 주세요. 그것만 알아도 찾을 수 있는 게 확 늘어요.";
+  if (percent >= 90) return "거의 다 적었어요. 이제 딱 맞는 임무만 골라 드릴게요.";
+  if (percent >= 60) return "좋아요. 희망 직무나 자격증까지 적으면 더 정확해져요.";
+  if (percent >= 30) return "지역이랑 전역 후 계획을 알려 주면 찾는 범위가 좁혀져요.";
+  return "복무 형태 확인했어요. 지역과 전역일도 알려 주세요.";
 }
 
 interface Props {
@@ -75,25 +77,31 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
   };
 
   const num = (v: string) => (v === "" ? undefined : Number(v));
-  const field = "h-11 w-full rounded-xl border border-line-strong bg-bg px-3.5 text-[15px] font-normal outline-none focus:border-accent";
+  const field = "h-11 w-full rounded-[10px] border-2 border-edge bg-soft px-3.5 text-[15px] font-normal outline-none focus:border-ink";
 
   return (
-    <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto grid max-w-[760px] grid-cols-[minmax(0,1fr)] gap-6 px-4 pt-7 pb-16 lg:pt-10">
-        <header className="grid gap-1.5">
-          <h1 className="font-fun text-[30px] leading-tight md:text-[36px]">내 정보 📝</h1>
+    <main className="flex-1 overflow-y-auto px-2.5 pt-4 pb-24 sm:px-5 sm:pt-6 lg:pb-12">
+      <Book as="div" rings={16} className="mx-auto grid max-w-[800px] grid-cols-[minmax(0,1fr)] gap-6">
+        <header className="grid gap-2">
+          <div>
+            <BookTitle>내 정보</BookTitle>
+          </div>
           <p className="text-[15px] text-fg-2">
-            적어 둘수록 답변과 로드맵이 나한테 딱 맞게 바뀌어요. 다 안 써도 되고, 대화하면서 알려 줘도 돼요.
+            적어 둘수록 답변과 작전도가 나한테 딱 맞게 바뀌어요. 다 안 써도 되고, 대화하면서 알려 줘도 돼요.
           </p>
         </header>
 
-        <section className="grid grid-cols-[64px_minmax(0,1fr)] items-end gap-3 rounded-2xl border-[2.5px] border-[#1b1b1b] bg-paper p-4 text-paper-ink shadow-[4px_4px_0_var(--ink)]">
-          <Mascot rank={percent >= 90 ? "병장" : percent >= 50 ? "상병" : "이병"} size={64} />
-          <div className="grid gap-4">
-            <Bubble>{caption(percent, Boolean(current.service_type))}</Bubble>
+        <section className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-3">
+          <Mascot rank={percent >= 90 ? "병장" : percent >= 50 ? "상병" : "이병"} size={56} />
+          <div className="grid gap-2.5">
+            <Say>{caption(percent, Boolean(current.service_type))}</Say>
             <div className="flex items-center gap-2 text-[13px] font-bold">
-              <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-[#1b1b1b] bg-white">
-                <div className="h-full bg-[#ffb84d] transition-[width]" style={{ width: `${percent}%` }} />
+              <span className="text-fg-2">채운 정도</span>
+              <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-ink bg-white">
+                <div
+                  className="h-full bg-[repeating-linear-gradient(-45deg,#556b2f_0_8px,#6b7f3a_8px_16px)] transition-[width]"
+                  style={{ width: `${percent}%` }}
+                />
               </div>
               <span className="tabular-nums">{percent}%</span>
             </div>
@@ -107,7 +115,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             void save();
           }}
         >
-          <Section title="🪖 복무">
+          <Section title="복무" icon={Shield}>
             <Chips label="복무 형태" required options={Object.keys(SERVICE_TYPE_LABELS)} labels={SERVICE_TYPE_LABELS} value={form.service_type} onPick={(v) => set({ service_type: v as ServiceType })} />
             <Chips label="군" options={BRANCHES} value={form.branch} onPick={(v) => set({ branch: v })} />
             <div className="grid gap-4 sm:grid-cols-3">
@@ -127,7 +135,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             </Field>
           </Section>
 
-          <Section title="🙋 나">
+          <Section title="나" icon={UserRound}>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="나이">
                 <input type="number" inputMode="numeric" min={15} max={100} placeholder="예: 24" value={form.age ?? ""} onChange={(e) => set({ age: num(e.target.value) })} className={field} />
@@ -152,7 +160,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             </div>
           </Section>
 
-          <Section title="🚀 전역 후 계획">
+          <Section title="전역 후 계획" icon={Target}>
             <Chips
               label="하고 싶은 것 (여러 개)"
               options={GOALS}
@@ -173,11 +181,11 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             </div>
           </Section>
 
-          <Section title="🩹 보훈·건강">
+          <Section title="보훈·건강" icon={HeartPulse}>
             <Chips label="복무 중 다치거나 아픈 적" options={INJURY} value={form.injury} onPick={(v) => set({ injury: v })} />
           </Section>
 
-          <Section title="✍️ 메모">
+          <Section title="메모" icon={NotebookPen}>
             <Field label="그 밖에 알려 줄 것" hint="고민이나 상황을 편하게 적어 주세요. 답변할 때 참고해요.">
               <textarea
                 rows={3}
@@ -185,17 +193,17 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
                 value={form.memo ?? ""}
                 onChange={(e) => set({ memo: e.target.value || undefined })}
                 placeholder="예: 월세 살고 있어서 주거 지원이 제일 궁금함. 내년 3월 복학 예정."
-                className="w-full resize-y rounded-xl border border-line-strong bg-bg px-3.5 py-2.5 text-[15px] font-normal outline-none focus:border-accent"
+                className="w-full resize-y rounded-[10px] border-2 border-edge bg-soft px-3.5 py-2.5 text-[15px] font-normal outline-none focus:border-ink"
               />
             </Field>
           </Section>
 
-          <div className="sticky bottom-0 -mx-4 grid gap-2 border-t border-line bg-bg/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border">
+          <div className="sticky bottom-2 z-10 grid gap-2 rounded-xl border-2 border-edge bg-soft/95 px-4 py-3 shadow-[3px_3px_0_rgb(0_0_0_/_0.15)] backdrop-blur">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="submit"
                 disabled={state === "saving"}
-                className="inline-flex h-11 items-center gap-1.5 rounded-xl bg-accent px-4 text-[15px] font-bold text-accent-ink disabled:opacity-60"
+                className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border-[2.5px] border-[#1f2416] bg-done px-4 text-[15px] font-extrabold text-[#1f2416] shadow-[3px_3px_0_var(--ink)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-60"
               >
                 {state === "saved" ? <Check className="size-[18px]" /> : <Save className="size-[18px]" />}
                 {state === "saving" ? "저장 중…" : state === "saved" ? "저장 완료!" : "저장하기"}
@@ -204,9 +212,9 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
                 <button
                   type="button"
                   onClick={onFillJourney}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-xl border-[2.5px] border-[#1b1b1b] bg-[#ffe066] px-3.5 text-[14px] font-bold text-[#1b1b1b] shadow-[3px_3px_0_var(--ink)]"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border-2 border-edge bg-bg px-3.5 text-[14px] font-bold text-fg hover:border-ink"
                 >
-                  <Wand2 className="size-4" />이 정보로 로드맵 채우기
+                  <Wand2 className="size-4" />이 정보로 작전도 만들기
                 </button>
               )}
               {demo && <span className="text-[12.5px] text-fg-3">데모 모드: 이 브라우저에만 저장돼요</span>}
@@ -214,15 +222,18 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             {error && <p role="alert" className="text-[13px] font-semibold text-warn">{error}</p>}
           </div>
         </form>
-      </div>
+      </Book>
     </main>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
-    <fieldset className="grid gap-4 rounded-2xl border border-line p-4 md:p-5">
-      <legend className="font-fun px-1 text-[19px]">{title}</legend>
+    <fieldset className="grid gap-4 rounded-xl border-2 border-edge bg-soft/70 p-4 md:p-5">
+      <legend className="flex items-center gap-1.5 px-1">
+        <Icon className="size-[18px] text-olive" strokeWidth={2.2} />
+        <span className="font-stencil text-[19px] font-normal">{title}</span>
+      </legend>
       {children}
     </fieldset>
   );
@@ -278,8 +289,8 @@ function Chips({
             type="button"
             aria-pressed={on(o)}
             onClick={() => onPick(o)}
-            className={`inline-flex h-9 items-center gap-1 rounded-full border px-3.5 text-sm font-medium ${
-              on(o) ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-fg-2 hover:border-accent"
+            className={`inline-flex h-9 items-center gap-1 rounded-full border-2 px-3.5 text-sm font-semibold ${
+              on(o) ? "border-olive bg-olive text-olive-ink" : "border-edge bg-soft text-fg-2 hover:border-ink"
             }`}
           >
             {on(o) && <Check className="size-4" strokeWidth={2.2} />}

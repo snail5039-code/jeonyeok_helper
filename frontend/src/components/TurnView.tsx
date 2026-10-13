@@ -83,11 +83,11 @@ function Process({ turn }: { turn: Turn }) {
   const showSteps = live || open;
   return (
     <div
-      className={`flex flex-wrap gap-2.5 rounded-xl border border-line bg-soft px-3.5 py-2.5 text-[13.5px] text-fg-2 ${
+      className={`flex flex-wrap gap-2.5 rounded-xl border border-line bg-bg px-3.5 py-2.5 text-[13.5px] text-fg-2 ${
         live ? "items-start" : "items-center"
       }`}
     >
-      <ShieldCheck className="size-[18px] shrink-0 text-accent" strokeWidth={1.8} />
+      <ShieldCheck className="size-[18px] shrink-0 text-olive" strokeWidth={2} />
       <span>
         {turn.stopped
           ? "답변을 멈췄어요"
@@ -115,7 +115,7 @@ function Process({ turn }: { turn: Turn }) {
             return (
               <li key={i} className="flex items-center gap-2 text-[13px] text-fg-2">
                 {done ? (
-                  <span className="grid size-3.5 place-items-center rounded-full bg-accent-soft text-[9px] font-black text-accent">✓</span>
+                  <Check className="size-3.5 text-olive" strokeWidth={3} />
                 ) : (
                   <span className="step-dot" />
                 )}
@@ -277,7 +277,7 @@ export function TurnView({
   const searching = turn.status !== "loading" || turn.steps.length > 1;
 
   return (
-    <article id={turn.id} className="grid scroll-mt-6 gap-4 pb-2">
+    <article id={turn.id} className="grid scroll-mt-32 gap-4 pb-2">
       <UserBubble text={turn.question} />
 
       {turn.status === "talk" && (
@@ -328,18 +328,18 @@ export function TurnView({
       ))}
 
       {lastGuide && (
-        <div className="pl-[58px]">
+        <div className="pl-[54px] sm:pl-[68px]">
           <QuickReplies replies={lastGuide.quick_replies} disabled={!latest} onReply={onReply} />
         </div>
       )}
       {!live && turn.followUps.length > 0 && latest && (
-        <div className="flex flex-wrap gap-1.5 pl-[58px]" role="group" aria-label="이어서 물어볼 질문">
+        <div className="flex flex-wrap gap-1.5 pl-[54px] sm:pl-[68px]" role="group" aria-label="이어서 물어볼 질문">
           {turn.followUps.map((q) => (
             <button
               key={q}
               type="button"
               onClick={() => onAsk(q)}
-              className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-line-strong bg-bg px-3 py-1 text-left text-[13px] font-medium text-fg-2 hover:border-accent hover:text-accent"
+              className="inline-flex min-h-[32px] items-center gap-1 rounded-full border-[1.5px] border-dashed border-edge px-3 py-1 text-left text-[13.5px] font-semibold text-fg-2 hover:border-ink hover:text-fg"
             >
               <CornerDownRight className="size-[14px] shrink-0" strokeWidth={1.8} />
               {q}
@@ -364,12 +364,12 @@ function AnswerDetails({ turn, onAsk, onFeedback }: { turn: Turn; onAsk: (text: 
         const now = (e.currentTarget as HTMLDetailsElement).open;
         if (now !== open) setUserOpen(now);
       }}
-      className="group rounded-2xl border border-line bg-bg"
+      className="group rounded-2xl border-2 border-edge bg-soft"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[14px] font-bold">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[14px] font-bold whitespace-nowrap">
         <FileText className="size-4 text-fg-3" strokeWidth={1.8} />
         자세히 보기
-        <span className="font-medium text-fg-3">
+        <span className="truncate font-medium text-fg-3">
           {[benefits ? `혜택 ${benefits}개` : "", turn.sources.length ? `근거 ${turn.sources.length}개` : ""]
             .filter(Boolean)
             .join(" · ")}

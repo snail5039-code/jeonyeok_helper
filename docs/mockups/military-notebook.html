@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>전역도우미 목업 · 작전 수첩</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Nanum+Pen+Script&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  :root {
+    --ink: #1f2416;
+    --ink-2: #4f4a3a;
+    --ink-3: #857a5c;
+    --olive: #556b2f;
+    --olive-2: #6b7f3a;
+    --olive-dark: #3b4a22;
+    --paper: #f6efdc;
+    --card: #fffbee;
+    --line: #ddd2b4;
+    --edge: #8a7b55;
+    --red: #b8322a;
+    --red-soft: #f8e1d8;
+    --blue: #2a5fc4;
+    --bubble: #fbeaa9;
+    --done: #c9e48a;
+    --stencil: "Black Han Sans", "Pretendard Variable", sans-serif;
+    --fun: "Jua", "Pretendard Variable", sans-serif;
+    --hand: "Nanum Pen Script", cursive;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: "Pretendard Variable", Pretendard, sans-serif;
+    color: var(--ink); min-height: 100vh;
+    background:
+      radial-gradient(60px 40px at 10% 20%, #4a5a2a 60%, transparent 61%),
+      radial-gradient(80px 50px at 30% 70%, #3a4721 60%, transparent 61%),
+      radial-gradient(70px 45px at 70% 30%, #66743b 60%, transparent 61%),
+      radial-gradient(90px 55px at 85% 80%, #2f3a1b 60%, transparent 61%),
+      radial-gradient(50px 35px at 55% 55%, #6f6243 60%, transparent 61%),
+      #52613a;
+    background-size: 260px 220px;
+  }
+  .i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .i.lg { width: 22px; height: 22px; }
+  .i.sm { width: 15px; height: 15px; stroke-width: 2.4; }
+  button { font: inherit; cursor: pointer; color: inherit; }
+  :focus-visible { outline: 3px solid #f2c230; outline-offset: 2px; }
+
+  /* ---------- 위 메뉴 ---------- */
+  .top {
+    display: flex; align-items: center; gap: 18px; padding: 10px 28px;
+    background: linear-gradient(#f3ead2, #e9dfc0);
+    border-bottom: 3px solid var(--olive-dark); box-shadow: 0 3px 0 rgba(0,0,0,.22);
+  }
+  .logo {
+    display: flex; align-items: center; gap: 9px; padding: 6px 16px 6px 12px;
+    background: linear-gradient(135deg, #ececE6, #bcbdb3);
+    border: 2.5px solid var(--ink); border-radius: 12px 26px 26px 12px;
+    font-family: var(--stencil); font-size: 23px; box-shadow: 3px 3px 0 var(--ink); transform: rotate(-2deg);
+  }
+  .logo::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #f3ead2; border: 2px solid var(--ink); }
+  .nav { display: flex; gap: 2px; margin-left: 8px; }
+  .nav a {
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 8px;
+    color: var(--ink-2); text-decoration: none; font-weight: 700; font-size: 15px;
+  }
+  .nav a:hover { background: rgba(85,107,47,.12); color: var(--ink); }
+  .nav a.on { background: var(--olive); color: #f6efdc; box-shadow: inset 0 -3px 0 var(--olive-dark); }
+  .top-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .search {
+    display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 40px;
+    border: 2px solid var(--olive-dark); border-radius: 999px; background: #fffdf5; color: var(--ink-3);
+  }
+  .search input { border: 0; outline: 0; width: 220px; font: inherit; background: transparent; color: var(--ink); }
+  .search kbd { font: 600 12px/1 inherit; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 6px; color: var(--ink-3); }
+  .profile-chip {
+    display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 6px;
+    border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 800; font-size: 14px;
+  }
+  .profile-chip .av { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e9e1c6; display: grid; place-items: end center; }
+
+  /* ---------- 수첩 ---------- */
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 26px; max-width: 1320px; margin: 22px auto; padding: 0 22px 40px; }
+  .book {
+    position: relative; border-radius: 6px 14px 14px 6px;
+    background:
+      repeating-linear-gradient(transparent 0 31px, var(--line) 31px 32px),
+      linear-gradient(90deg, transparent 54px, rgba(184,50,42,.30) 54px 56px, transparent 56px),
+      var(--paper);
+    background-position: 0 14px, 0 0, 0 0;
+    border: 2px solid var(--edge);
+    box-shadow: 0 2px 0 var(--edge), 8px 10px 0 rgba(0,0,0,.26), inset 0 0 40px rgba(120,95,40,.16);
+    padding: 24px 30px 24px 76px;
+  }
+  .rings { position: absolute; left: 14px; top: 26px; bottom: 26px; display: flex; flex-direction: column; justify-content: space-between; }
+  .rings i { width: 34px; height: 13px; border-radius: 10px; background: linear-gradient(#9da0a3, #e6e7e8 45%, #7b7e82); border: 1.5px solid #4a4d50; box-shadow: 1px 2px 0 rgba(0,0,0,.25); }
+
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+  .head h1 {
+    margin: 0; font-family: var(--stencil); font-weight: 400; font-size: 28px; padding: 3px 14px 1px;
+    border: 3px solid var(--ink); background: #fffaea; box-shadow: 4px 4px 0 var(--olive-dark); transform: rotate(-1deg);
+  }
+  .head h1 span { color: var(--olive); }
+  .ghost-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 9px;
+    border: 2px solid var(--edge); background: var(--card); font-weight: 700; font-size: 14px; color: var(--ink-2);
+  }
+
+  /* 지금 할 일 (대화 맨 위에 고정) */
+  .now {
+    position: sticky; top: 8px; z-index: 2;
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center;
+    padding: 12px 14px; margin-bottom: 18px; background: var(--card);
+    border: 2.5px solid var(--ink); border-radius: 14px; box-shadow: 4px 4px 0 var(--olive-dark);
+  }
+  .now .label { font-family: var(--stencil); font-size: 13px; color: #f6efdc; background: var(--red); padding: 4px 8px; border-radius: 6px; transform: rotate(-3deg); }
+  .now h3 { margin: 0; font-size: 16.5px; }
+  .now p { margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dday { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; background: var(--red-soft); color: var(--red); font-weight: 800; font-size: 12.5px; }
+  .actions { display: flex; gap: 8px; }
+  .primary {
+    display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 10px;
+    background: var(--done); border: 2.5px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); font-weight: 800; font-size: 15px;
+  }
+  .primary:active { transform: translate(2px, 2px); box-shadow: none; }
+  .secondary {
+    display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 10px;
+    background: #fff; border: 2px solid var(--edge); font-weight: 700; font-size: 14.5px; color: var(--ink-2);
+  }
+
+  /* 대화 */
+  .chat { display: grid; gap: 14px; }
+  .row { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .say {
+    justify-self: start; max-width: 620px; background: var(--bubble);
+    border: 2.5px solid var(--ink); border-radius: 6px 20px 20px 20px; padding: 12px 17px;
+    box-shadow: 4px 4px 0 var(--ink); font-size: 16px; line-height: 1.7;
+  }
+  .say b { background: linear-gradient(transparent 60%, #ffd54a 60%); }
+  .say sup { font-size: 11px; font-weight: 800; color: var(--blue); margin-left: 1px; }
+  .me { display: flex; justify-content: flex-end; }
+  .me p { margin: 0; max-width: 70%; background: var(--blue); color: #fff; padding: 10px 17px; font-size: 15.5px; border-radius: 20px 6px 20px 20px; box-shadow: 3px 3px 0 #173d7a; }
+  .indent { margin-left: 74px; display: grid; gap: 10px; }
+  .replies { display: flex; flex-wrap: wrap; gap: 8px; }
+  .reply {
+    height: 36px; padding: 0 14px; border-radius: 999px; background: #fffdf5;
+    border: 2px solid var(--edge); font-weight: 700; font-size: 14.5px; color: var(--ink);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .reply:hover { border-color: var(--ink); }
+
+  /* 근거: 접힌 한 줄 + 펼친 목록 */
+  details.src { border: 2px solid var(--edge); border-radius: 12px; background: #fffdf6; }
+  details.src summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 11px 14px; font-weight: 800; font-size: 14.5px;
+  }
+  details.src summary::-webkit-details-marker { display: none; }
+  details.src summary span { font-weight: 600; color: var(--ink-3); }
+  details.src summary .chev { margin-left: auto; transition: transform .15s; }
+  details.src[open] summary .chev { transform: rotate(90deg); }
+  .src ol { margin: 0; padding: 0 14px 12px; list-style: none; display: grid; gap: 8px; }
+  .src li { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 10px; align-items: start; padding-top: 8px; border-top: 1.5px dashed var(--line); font-size: 14px; }
+  .src li .n { width: 22px; height: 22px; border-radius: 6px; background: var(--olive); color: #f6efdc; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+  .src li b { display: block; }
+  .src li small { color: var(--ink-2); }
+  .src li a { color: var(--blue); font-weight: 800; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; font-size: 13.5px; white-space: nowrap; }
+  .tag { font-size: 11.5px; font-weight: 800; padding: 1px 6px; border-radius: 5px; margin-right: 4px; }
+  .tag.law { background: #e5e4f7; color: #4b48a8; }
+  .tag.gov { background: #e1ecd0; color: var(--olive-dark); }
+
+  /* 담기 제안 */
+  .suggest { padding: 12px 14px 14px; border: 2.5px solid var(--ink); border-radius: 14px; background: #fff6d6; box-shadow: 4px 4px 0 var(--olive-dark); }
+  .suggest h4 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .suggest h4 small { font-weight: 600; color: var(--ink-3); }
+  .sg { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 10px; padding: 7px 4px; border-radius: 8px; cursor: pointer; }
+  .sg:hover { background: rgba(255,255,255,.55); }
+  .box { width: 22px; height: 22px; border: 2.5px solid var(--ink); border-radius: 5px; background: #fff; display: grid; place-items: center; color: #fff; }
+  .box.on { background: var(--olive); }
+  .sg b { font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
+  .sg small { display: block; color: var(--ink-2); font-size: 13.5px; margin-top: 2px; }
+  .core { color: #c98a00; }
+  .suggest .foot { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+  .suggest .foot span { font-size: 13px; color: var(--ink-3); }
+
+  .typing { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 8px 74px; }
+  .typing button { height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px dashed var(--edge); background: transparent; color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+  .composer {
+    display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 16px;
+    border: 2.5px solid var(--olive-dark); border-radius: 16px; background: #fffdf6; box-shadow: 3px 3px 0 rgba(0,0,0,.16);
+  }
+  .composer input { flex: 1; border: 0; outline: 0; font: inherit; font-size: 16px; background: transparent; }
+  .send { width: 46px; height: 42px; border: 0; border-radius: 11px; background: var(--blue); color: #fff; display: grid; place-items: center; }
+  .hint { margin: 6px 0 0 4px; font-size: 12.5px; color: var(--ink-3); }
+
+  /* ---------- 작전도 ---------- */
+  .side { padding: 24px 22px 24px 64px; align-self: start; position: sticky; top: 14px; }
+  .side h2 { margin: 0 0 14px; font-family: var(--stencil); font-weight: 400; font-size: 24px; }
+  .stamp {
+    position: absolute; right: -12px; top: -16px; z-index: 3; font-family: var(--stencil); font-size: 17px; color: var(--red);
+    border: 3.5px double var(--red); padding: 3px 10px; border-radius: 6px; transform: rotate(-8deg); background: rgba(255,248,230,.7);
+  }
+  .rankcard {
+    display: grid; grid-template-columns: 88px minmax(0,1fr); gap: 14px; align-items: center;
+    padding: 12px 14px; background: var(--card); border: 2.5px solid var(--ink); border-radius: 12px; box-shadow: 4px 4px 0 var(--olive-dark);
+  }
+  .photo { background: #e9e1c6; border: 2px solid var(--edge); border-radius: 8px; display: grid; place-items: center; padding-top: 4px; }
+  .rankcard h3 { margin: 0; font-family: var(--fun); font-weight: 400; font-size: 25px; display: flex; align-items: baseline; gap: 8px; }
+  .rankcard h3 small { font-family: "Pretendard Variable", sans-serif; font-size: 13px; font-weight: 700; color: var(--ink-3); }
+  .bar { height: 12px; margin: 8px 0 6px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 75%; background: repeating-linear-gradient(-45deg, var(--olive) 0 8px, var(--olive-2) 8px 16px); }
+  .rankcard p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+  .rankcard p b { color: var(--ink); }
+
+  .ranks { display: grid; grid-template-columns: repeat(5, 1fr); margin: 16px 0 4px; position: relative; }
+  .ranks::before { content: ""; position: absolute; left: 10%; right: 10%; top: 20px; border-top: 3px dashed var(--edge); }
+  .rk { position: relative; display: grid; justify-items: center; gap: 4px; font-weight: 800; font-size: 13px; }
+  .rk .c { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 2.5px solid var(--ink); }
+  .rk.on .c { background: #ffe066; box-shadow: 0 0 0 4px rgba(255,224,102,.5); }
+  .rk.off { color: #a1977d; }
+  .rk.off .c { border-style: dashed; border-color: #a1977d; background: #f1ead6; overflow: hidden; place-items: end center; }
+  .stripes { display: grid; gap: 2px; }
+  .stripes b { display: block; width: 18px; height: 4px; border-radius: 1px; background: #f2c230; border: 1px solid var(--ink); }
+
+  .missions { margin-top: 14px; background: var(--card); border: 2px solid var(--edge); border-radius: 12px; overflow: hidden; }
+  .tabs { display: flex; border-bottom: 2px solid var(--edge); }
+  .tabs button { flex: 1; height: 40px; border: 0; background: transparent; font-weight: 700; font-size: 14px; color: var(--ink-3); }
+  .tabs button.on { color: var(--ink); background: #fff6d6; box-shadow: inset 0 -3px 0 var(--olive); }
+  .ms { display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 10px; padding: 11px 14px; border-top: 1.5px dashed var(--line); }
+  .ms:first-of-type { border-top: 0; }
+  .ms .box { margin-top: 1px; cursor: pointer; }
+  .ms h5 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .ms .meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12.5px; color: var(--ink-3); font-weight: 700; }
+  .ms .meta a { color: var(--blue); text-decoration: none; display: inline-flex; align-items: center; gap: 2px; }
+  .ms.done h5 { color: var(--ink-3); text-decoration: line-through; }
+  .ms.focus { background: #fff6d6; box-shadow: inset 3px 0 0 var(--red); }
+  .missions footer { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-top: 2px solid var(--edge); font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+  .missions footer a { color: var(--olive-dark); text-decoration: none; display: inline-flex; align-items: center; gap: 2px; }
+
+  .medals { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+  .medals svg { width: 30px; height: 36px; }
+
+  /* 모바일 */
+  .mbar { display: none; }
+  @media (max-width: 900px) {
+    .top { padding: 8px 12px; }
+    .nav, .search { display: none; }
+    .logo { font-size: 20px; }
+    .desk { grid-template-columns: minmax(0,1fr); margin: 12px auto; padding: 0 10px 90px; gap: 16px; }
+    .book { padding: 18px 14px 18px 46px; }
+    .rings { left: 7px; }
+    .rings i { width: 26px; height: 11px; }
+    .side { display: none; }
+    .head h1 { font-size: 22px; }
+    .head .ghost-btn { display: none; }
+    .now { grid-template-columns: minmax(0,1fr); }
+    .now .label { justify-self: start; }
+    .now .actions .primary, .now .actions .secondary { flex: 1; justify-content: center; }
+    .row { grid-template-columns: 46px minmax(0,1fr); }
+    .indent, .typing { margin-left: 0; }
+    .src li { grid-template-columns: 22px minmax(0,1fr); }
+    .src li a { grid-column: 2; }
+    .mbar {
+      display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; justify-content: space-around;
+      padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: #f3ead2; border-top: 3px solid var(--olive-dark);
+    }
+    .mbar a { display: grid; justify-items: center; gap: 2px; font-size: 11.5px; font-weight: 700; color: var(--ink-3); text-decoration: none; padding: 4px 10px; }
+    .mbar a.on { color: var(--olive-dark); }
+    .mbar .pill { font-family: var(--stencil); font-size: 11px; background: #ffe066; border: 1.5px solid var(--ink); border-radius: 999px; padding: 0 6px; color: var(--ink); }
+  }
+</style>
+</head>
+<body>
+
+<!-- 아이콘: 굵은 선 한 가지 스타일로 직접 그린 것 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11 12 4l8 7"/><path d="M6 10v9h12v-9"/><path d="M10 19v-5h4v5"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-5.5 8-5.5s6.5 1.5 8 5.5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v14"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M5 20V5h9v15M14 9h5v11M3 20h18"/><path d="M8 8h3M8 12h3M8 16h3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.5 2M9 3h6"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5H5V6h5"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-5 16-3.5-6.5z"/><path d="M11.5 13.5 20 4"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 6l7 6-7 6zM13 6l7 6-7 6z"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5a2.6 2.6 0 015 .8c0 1.8-2.5 2.2-2.5 3.7"/><path d="M12 17.2v.1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 4v16M7 20h10M5 8h14"/><path d="M5 8l-3 6h6zM19 8l-3 6h6z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8L3.5 9.7l5.9-.8z" fill="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24"><path d="M16 7l-7.5 7.5a2 2 0 002.8 2.8L19 9.6a4 4 0 00-5.7-5.7L5.6 11.6a6 6 0 008.5 8.5L20 14"/></symbol>
+    <symbol id="i-medal" viewBox="0 0 30 36"><path d="M9 1h12l-3 12h-6z" fill="#b8322a" stroke="#1f2416" stroke-width="2"/><circle cx="15" cy="23" r="10" fill="#f2c230" stroke="#1f2416" stroke-width="2.4"/><path d="M15 17.5l1.8 3.6 4 .5-2.9 2.8.7 3.9L15 26.4l-3.6 1.9.7-3.9-2.9-2.8 4-.5z" fill="#1f2416"/></symbol>
+    <symbol id="i-medal-off" viewBox="0 0 30 36"><path d="M9 1h12l-3 12h-6z" fill="#d6cfb8" stroke="#a1977d" stroke-width="2"/><circle cx="15" cy="23" r="10" fill="#e8e1cb" stroke="#a1977d" stroke-width="2.4" stroke-dasharray="3 3"/></symbol>
+  </defs>
+</svg>
+
+<header class="top">
+  <div class="logo">전역도우미</div>
+  <nav class="nav" aria-label="메뉴">
+    <a class="on" href="#"><svg class="i"><use href="#i-chat"/></svg>작전실</a>
+    <a href="#"><svg class="i"><use href="#i-map"/></svg>작전도</a>
+    <a href="#"><svg class="i"><use href="#i-user"/></svg>내 정보</a>
+    <a href="#"><svg class="i"><use href="#i-book"/></svg>규정 찾기</a>
+    <a href="#"><svg class="i"><use href="#i-building"/></svg>기관 안내</a>
+  </nav>
+  <div class="top-right">
+    <label class="search"><svg class="i"><use href="#i-search"/></svg><input placeholder="제도·법령 검색" /><kbd>/</kbd></label>
+    <button class="profile-chip" aria-label="내 정보: 의무복무 병사, 서울, 2025년 전역">
+      <span class="av" data-mascot="병장" data-size="26"></span>병사 · 서울 · 25년 전역
+    </button>
+  </div>
+</header>
+
+<main class="desk">
+  <!-- 왼쪽: 작전실 (대화) -->
+  <section class="book" aria-label="작전실">
+    <div class="rings"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+    <div class="head">
+      <h1>전역 생활 <span>작전실</span></h1>
+      <button class="ghost-btn"><svg class="i sm"><use href="#i-plus"/></svg>새 대화</button>
+    </div>
+
+    <!-- 지금 할 일: 대화를 내려도 위에 남는다 -->
+    <div class="now" role="region" aria-label="지금 할 일">
+      <span class="label">지금 할 일</span>
+      <div>
+        <h3>국민취업지원제도 신청</h3>
+        <p>고용24에서 온라인으로 신청
+          <span class="dday"><svg class="i sm"><use href="#i-clock"/></svg>D-38</span></p>
+      </div>
+      <div class="actions">
+        <button class="secondary"><svg class="i sm"><use href="#i-help"/></svg>방법 보기</button>
+        <button class="primary"><svg class="i sm"><use href="#i-check"/></svg>했어요</button>
+      </div>
+    </div>
+
+    <div class="chat">
+      <div class="row">
+        <div data-mascot="병장" data-size="60"></div>
+        <div class="say">충성! 다시 왔군요. 예비군 편성 확인까지 끝냈으니 다음은 <b>국민취업지원제도</b>예요.
+          기한이 38일 남아서 이번 주에 해 두면 좋아요.</div>
+      </div>
+      <div class="indent">
+        <div class="replies">
+          <button class="reply"><svg class="i sm"><use href="#i-help"/></svg>어떻게 해요?</button>
+          <button class="reply"><svg class="i sm"><use href="#i-skip"/></svg>나중에 할게요</button>
+        </div>
+      </div>
+
+      <div class="me"><p>국민취업지원제도, 어떻게 신청해요?</p></div>
+
+      <div class="row">
+        <div data-mascot="병장" data-size="60"></div>
+        <div class="say">순서는 두 단계예요. <b>고용24 구직신청</b>을 먼저 하고, 이어서 <b>국민취업지원제도 신청</b>을 누르면 돼요.<sup>1</sup>
+          병역 기간만큼 청년 나이를 늘려 줘서 지금 청년 유형으로 받을 수 있어요.<sup>2</sup></div>
+      </div>
+      <div class="indent">
+        <details class="src" open>
+          <summary><svg class="i"><use href="#i-scale"/></svg>근거 2개 <span>법령 1 · 정부24 1</span><svg class="i sm chev"><use href="#i-arrow"/></svg></summary>
+          <ol>
+            <li><span class="n">1</span><div><b><span class="tag gov">정부24</span>국민취업지원제도</b><small>고용24에서 온라인 신청, 신청 후 2주 안에 상담</small></div><a href="#">열기<svg class="i sm"><use href="#i-out"/></svg></a></li>
+            <li><span class="n">2</span><div><b><span class="tag law">법령</span>구직자 취업촉진법 시행령 제2조</b><small>병역을 마친 사람은 그 기간(최대 3년)을 청년 나이에 더함</small></div><a href="#">조문<svg class="i sm"><use href="#i-out"/></svg></a></li>
+          </ol>
+        </details>
+
+        <div class="suggest" role="group" aria-label="작전도에 담을 할 일">
+          <h4>작전도에 담을까요? <small>고른 것만 담겨요</small></h4>
+          <label class="sg"><span class="box on"><svg class="i sm"><use href="#i-check"/></svg></span>
+            <span><b><svg class="i sm core"><use href="#i-star"/></svg>고용센터 첫 상담 받기</b><small>신청 후 2주 안에 상담 일정이 잡혀요</small></span></label>
+          <label class="sg"><span class="box"></span>
+            <span><b>구직촉진수당 계좌 등록</b><small>본인 명의 계좌가 필요해요</small></span></label>
+          <div class="foot"><button class="primary"><svg class="i sm"><use href="#i-plus"/></svg>1개 담기</button><span>★ 핵심 임무는 미리 골라 뒀어요</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="typing" aria-label="이어서 물어볼 것">
+      <button>구직촉진수당은 얼마예요?</button>
+      <button>예비군 훈련은 언제예요?</button>
+      <button>서울 청년 월세 지원도 돼요?</button>
+    </div>
+    <div class="composer">
+      <svg class="i" style="color:var(--ink-3)"><use href="#i-clip"/></svg>
+      <input aria-label="메시지" placeholder="전역이에게 말해 보세요" />
+      <button class="send" aria-label="보내기"><svg class="i"><use href="#i-send"/></svg></button>
+    </div>
+    <p class="hint">근거가 있는 내용만 답해요. 정확한 자격과 기한은 기관에 꼭 확인하세요.</p>
+  </section>
+
+  <!-- 오른쪽: 작전도 -->
+  <aside class="book side" aria-label="나의 전역 작전도">
+    <div class="rings"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <span class="stamp">임무 수행 중</span>
+    <h2>나의 전역 작전도</h2>
+
+    <div class="rankcard">
+      <div class="photo"><div data-mascot="병장" data-size="76"></div></div>
+      <div>
+        <h3>병장 <small>핵심 임무 6/8</small></h3>
+        <div class="bar" role="progressbar" aria-valuenow="75" aria-valuemin="0" aria-valuemax="100" aria-label="핵심 임무 진행률"><i></i></div>
+        <p><b>2개</b>만 더 끝내면 민간인이에요.</p>
+      </div>
+    </div>
+
+    <div class="ranks" aria-label="계급">
+      <div class="rk"><div class="c"><span class="stripes"><b></b></span></div>이병</div>
+      <div class="rk"><div class="c"><span class="stripes"><b></b><b></b></span></div>일병</div>
+      <div class="rk"><div class="c"><span class="stripes"><b></b><b></b><b></b></span></div>상병</div>
+      <div class="rk on"><div class="c"><span class="stripes"><b></b><b></b><b></b><b></b></span></div>병장</div>
+      <div class="rk off"><div class="c" data-mascot="민간인" data-size="34"></div>민간인</div>
+    </div>
+
+    <div class="missions">
+      <div class="tabs" role="tablist">
+        <button class="on" role="tab">남은 임무 3</button>
+        <button role="tab">완료 6</button>
+      </div>
+      <div class="ms focus">
+        <span class="box" role="checkbox" aria-checked="false"></span>
+        <div><h5><svg class="i sm core"><use href="#i-star"/></svg>국민취업지원제도 신청</h5>
+          <div class="meta"><span class="dday"><svg class="i sm"><use href="#i-clock"/></svg>D-38</span><span>취업·창업</span><a href="#">근거<svg class="i sm"><use href="#i-arrow"/></svg></a></div></div>
+      </div>
+      <div class="ms">
+        <span class="box" role="checkbox" aria-checked="false"></span>
+        <div><h5><svg class="i sm core"><use href="#i-star"/></svg>국가장학금 2학기 신청</h5>
+          <div class="meta"><span><svg class="i sm" style="vertical-align:-3px"><use href="#i-calendar"/></svg> 학기마다</span><span>학업</span><a href="#">근거<svg class="i sm"><use href="#i-arrow"/></svg></a></div></div>
+      </div>
+      <div class="ms">
+        <span class="box" role="checkbox" aria-checked="false"></span>
+        <div><h5>서울 청년 월세 지원 알아보기</h5>
+          <div class="meta"><span>주거·생활</span><a href="#">근거<svg class="i sm"><use href="#i-arrow"/></svg></a></div></div>
+      </div>
+      <footer><span>최근 완료: 예비군 편성 확인</span><a href="#">전체 보기<svg class="i sm"><use href="#i-arrow"/></svg></a></footer>
+    </div>
+
+    <div class="medals" aria-label="받은 훈장 3개, 전체 8개">
+      <svg><use href="#i-medal"/></svg><svg><use href="#i-medal"/></svg><svg><use href="#i-medal"/></svg>
+      <svg><use href="#i-medal-off"/></svg><svg><use href="#i-medal-off"/></svg>
+      <span>훈장 3/8</span>
+    </div>
+  </aside>
+</main>
+
+<nav class="mbar" aria-label="메뉴">
+  <a class="on" href="#"><svg class="i lg"><use href="#i-chat"/></svg>작전실</a>
+  <a href="#"><svg class="i lg"><use href="#i-map"/></svg><span class="pill">병장 6/8</span></a>
+  <a href="#"><svg class="i lg"><use href="#i-user"/></svg>내 정보</a>
+  <a href="#"><svg class="i lg"><use href="#i-book"/></svg>규정</a>
+</nav>
+
+<script>
+// 앱의 Mascot(Doodle.tsx)을 그대로 옮긴 것: 계급마다 표정·차림이 바뀐다
+const INK = "#1b1b1b", SKIN = "#ffd7a1", OLIVE = "#7d8c3c", OLIVE_DARK = "#5e6b2a";
+const STRIPES = { 이병: 1, 일병: 2, 상병: 3, 병장: 4 };
+const s = `stroke="${INK}" stroke-width="3" stroke-linecap="round" fill="none"`;
+const FACES = {
+  이병: `<circle cx="48" cy="57" r="5.5" fill="#fff" stroke="${INK}" stroke-width="2.5"/><circle cx="72" cy="57" r="5.5" fill="#fff" stroke="${INK}" stroke-width="2.5"/><circle cx="49" cy="58" r="2.2" fill="${INK}"/><circle cx="71" cy="58" r="2.2" fill="${INK}"/><path d="M52 74 q4 -3 8 0 q4 3 8 0" ${s}/><path d="M86 44 q5 8 0 11 q-5 -3 0 -11Z" fill="#6ec6ff" stroke="${INK}" stroke-width="2"/>`,
+  일병: `<circle cx="48" cy="58" r="2.8" fill="${INK}"/><circle cx="72" cy="58" r="2.8" fill="${INK}"/><path d="M53 73 L67 73" ${s}/>`,
+  상병: `<path d="M42 58 L54 58 M66 58 L78 58" ${s}/><path d="M44 55 q4 -3 9 -1 M67 54 q5 -2 9 1" ${s} stroke-width="2.5"/><path d="M52 72 q8 5 16 -3" ${s}/>`,
+  병장: `<path d="M37 52 L83 52" stroke="${INK}" stroke-width="3"/><path d="M38 52 q1 13 12 12 q9 -1 9 -12Z M61 52 q0 12 10 12 q11 0 11 -12Z" fill="${INK}"/><path d="M42 55 l5 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M51 72 q9 7 18 0" ${s}/>`,
+  민간인: `<path d="M42 59 q6 -8 12 0 M66 59 q6 -8 12 0" ${s}/><path d="M49 69 q11 12 22 0 Z" fill="#c0392b" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>`,
+};
+function mascot(rank, size) {
+  const civ = rank === "민간인";
+  const stripes = Array.from({ length: STRIPES[rank] ?? 0 }, (_, i) => `<rect x="68.5" y="${100 + i * 2.6}" width="10" height="1.6" fill="#f2d54a"/>`).join("");
+  const arm = civ ? "M92 112 q14 -14 12 -32" : "M90 108 q12 -22 -4 -38";
+  return `<svg viewBox="0 0 120 150" width="${size}" height="${(size * 150) / 120}" role="img" aria-label="${rank} 전역이">
+    <ellipse cx="60" cy="143" rx="34" ry="5" fill="${INK}" opacity="0.15"/>
+    <path d="M27 141 C25 112 33 92 60 90 C88 92 96 113 93 141 Z" fill="${civ ? "#ff8a3d" : OLIVE}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+    ${civ ? "" : `<path d="M38 118 q6 -5 11 0 q-4 6 -11 0Z M70 108 q7 -4 11 2 q-6 4 -11 -2Z M74 128 q5 -3 9 1 q-4 5 -9 -1Z" fill="${OLIVE_DARK}"/><rect x="66" y="98" width="15" height="13" rx="2" fill="#2b2b2b" stroke="${INK}" stroke-width="2"/>${stripes}`}
+    <path d="M44 93 L41 140 M76 93 L79 140" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>
+    <path d="${arm}" fill="none" stroke="${INK}" stroke-width="9" stroke-linecap="round"/>
+    <path d="${arm}" fill="none" stroke="${civ ? "#ff8a3d" : OLIVE}" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="${civ ? 104 : 86}" cy="${civ ? 79 : 69}" r="6.5" fill="${SKIN}" stroke="${INK}" stroke-width="3"/>
+    <path d="M31 54 C30 33 43 22 60 22 C79 22 90 34 89 55 C88 75 76 86 60 86 C43 86 32 75 31 54 Z" fill="${SKIN}" stroke="${INK}" stroke-width="3.5"/>
+    ${civ
+      ? `<path d="M33 42 C35 24 50 17 63 18 C78 19 88 28 87 41 Z" fill="#e24b4b" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/><path d="M33 41 L16 38 C14 44 22 47 34 46" fill="#e24b4b" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>`
+      : `<path d="M30 40 C31 22 46 14 61 15 C77 16 90 24 90 40 Z" fill="${OLIVE}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/><path d="M27 40 L93 40 L95 46 L25 46 Z" fill="${OLIVE_DARK}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>`}
+    ${FACES[rank] ?? FACES["민간인"]}
+    <ellipse cx="41" cy="66" rx="5" ry="3" fill="#ff8f8f" opacity="0.6"/><ellipse cx="79" cy="66" rx="5" ry="3" fill="#ff8f8f" opacity="0.6"/>
+  </svg>`;
+}
+document.querySelectorAll("[data-mascot]").forEach((el) => {
+  el.innerHTML = mascot(el.dataset.mascot, Number(el.dataset.size || 70));
+});
+</script>
+</body>
+</html>

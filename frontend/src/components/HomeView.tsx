@@ -1,24 +1,11 @@
 "use client";
 
-import {
-  ArrowRight,
-  BookOpen,
-  Briefcase,
-  Building2,
-  GraduationCap,
-  IdCard,
-  Landmark,
-  ShieldCheck,
-  User,
-  UserRoundPen,
-} from "lucide-react";
+import { BookOpen, Briefcase, Building2, ChevronRight, GraduationCap, IdCard, Landmark, ShieldCheck } from "lucide-react";
 
 import { greeting } from "@/lib/guide";
 import type { JourneyItem, Profile, QuickReply } from "@/lib/types";
 
-import { Composer } from "./Composer";
 import { GuideBubble, QuickReplies, Say } from "./Guide";
-import { Mascot } from "./Doodle";
 
 const POPULAR = [
   { icon: Landmark, q: "군복무 크레딧은 따로 신청해야 하나요?", tag: "연금" },
@@ -27,18 +14,10 @@ const POPULAR = [
   { icon: IdCard, q: "예비군은 전역 후 몇 년 차까지 하나요?", tag: "병역" },
 ];
 
-const TIMELINE = [
-  { when: "전역 전", what: "전직 교육·상담", where: "제대군인지원센터" },
-  { when: "전역 직후", what: "예비군 편성 확인", where: "병무청" },
-  { when: "구직할 때", what: "국민취업지원제도", where: "고용24" },
-  { when: "복학할 때", what: "국가장학금·학자금", where: "한국장학재단" },
-  { when: "연금 받을 때", what: "군복무 크레딧 반영", where: "국민연금공단" },
-];
-
 const TRUST = [
-  { icon: BookOpen, title: "근거 조문 표시", body: "답변마다 어떤 법 몇 조인지 보여드려요" },
-  { icon: Building2, title: "신청처까지 연결", body: "기관 사이트와 대표번호를 함께 안내해요" },
-  { icon: User, title: "로그인 없이 사용", body: "복무 정보는 상담에만 쓰여요" },
+  { icon: BookOpen, text: "답변마다 근거 조문" },
+  { icon: Building2, text: "신청처·연락처까지" },
+  { icon: ShieldCheck, text: "로그인 없이, 상담에만 사용" },
 ];
 
 interface Props {
@@ -48,116 +27,54 @@ interface Props {
   ready: boolean;
   onAsk: (text: string) => void;
   onReply: (reply: QuickReply) => void;
-  onRoadmap: () => void;
-  onProfile: () => void;
 }
 
-export function HomeView({ profile, items, rank, ready, onAsk, onReply, onRoadmap, onProfile }: Props) {
-  // 길잡이가 먼저 말을 건다: 처음이면 복무 형태부터, 로드맵이 있으면 다음 할 일
+/** 대화를 시작하기 전 작전실: 전역이가 먼저 말을 건다 (처음이면 복무 형태부터, 다시 오면 다음 임무) */
+export function HomeView({ profile, items, rank, ready, onAsk, onReply }: Props) {
   const { say, replies } = greeting(profile, items);
 
   return (
-    <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto grid max-w-[760px] gap-8 px-4 pt-7 pb-8 md:gap-10 md:px-6 md:pt-14 md:pb-12">
-        <section className="grid gap-4">
-          <span className="inline-flex items-center gap-1.5 justify-self-start rounded-full bg-accent-soft px-2.5 py-1 text-[12.5px] font-semibold text-accent">
-            <ShieldCheck className="size-[15px]" strokeWidth={1.8} />
-            법령 원문과 정부24 혜택 정보로 길을 안내해요
-          </span>
-          {ready ? (
-            <GuideBubble rank={rank} big>
-              <Say big>{say}</Say>
-              <QuickReplies replies={replies} onReply={onReply} />
-            </GuideBubble>
-          ) : (
-            <div className="h-[120px]" aria-hidden />
-          )}
-          <Composer
-            id="home-input"
-            rows={2}
-            placeholder="아무거나 물어봐도 돼요. 예) 작년에 병장으로 전역했고 서울 살아요. 뭐부터 해요?"
-            onSubmit={onAsk}
-          />
-        </section>
+    <div className="grid gap-7">
+      {ready ? (
+        <GuideBubble rank={rank} big>
+          <Say big>{say}</Say>
+          <QuickReplies replies={replies} onReply={onReply} />
+        </GuideBubble>
+      ) : (
+        <div className="h-[110px]" aria-hidden />
+      )}
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <button
-            type="button"
-            onClick={onRoadmap}
-            className="grid grid-cols-[48px_1fr] items-center gap-3 rounded-2xl border-[2.5px] border-[#1b1b1b] bg-paper px-4 py-3.5 text-left text-paper-ink shadow-[4px_4px_0_var(--ink)] transition-transform hover:-translate-y-0.5 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-          >
-            <Mascot rank="이병" size={48} />
-            <span className="grid gap-0.5">
-              <b className="font-fun text-[18px] leading-tight font-normal">내 전역 로드맵 🗺️</b>
-              <span className="text-[13px] opacity-80">물어볼수록 할 일이 쌓이고, 끝낼수록 계급이 올라감</span>
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={onProfile}
-            className="grid grid-cols-[48px_1fr_auto] items-center gap-3 rounded-2xl border border-line bg-soft px-4 py-3.5 text-left hover:border-accent"
-          >
-            <span className="grid size-12 place-items-center rounded-xl bg-accent text-accent-ink">
-              <UserRoundPen className="size-[22px]" strokeWidth={1.8} />
-            </span>
-            <span className="grid gap-0.5">
-              <b className="text-[15px]">내 정보 자세히 적기</b>
-              <span className="text-[13px] text-fg-2">복무·지역·목표를 적어 두면 더 딱 맞게 찾아요</span>
-            </span>
-            <ArrowRight className="size-5 text-fg-3" />
-          </button>
-        </div>
-
-        <section>
-          <h2 className="mb-3 text-[15px] font-bold">전역자들이 많이 물어봐요</h2>
-          <div className="grid gap-2.5 md:grid-cols-2">
-            {POPULAR.map(({ icon: Icon, q, tag }) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => onAsk(q)}
-                className="grid grid-cols-[36px_1fr] items-start gap-3 rounded-xl border border-line bg-bg px-4 py-3.5 text-left hover:border-line-strong hover:bg-soft"
-              >
-                <span className="grid size-9 place-items-center rounded-[10px] bg-sunken text-fg-2">
-                  <Icon className="size-[18px]" strokeWidth={1.8} />
-                </span>
-                <span>
-                  <b className="block text-[14.5px] leading-[1.45] font-semibold">{q}</b>
-                  <small className="text-[12.5px] text-fg-3">{tag}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-[15px] font-bold">시기별로 놓치기 쉬운 것</h2>
-          <ol className="grid overflow-hidden rounded-xl border border-line md:grid-cols-5">
-            {TIMELINE.map(({ when, what, where }) => (
-              <li
-                key={when}
-                className="grid grid-cols-[92px_1fr] gap-x-3 gap-y-1 border-b border-line px-3.5 py-3.5 last:border-b-0 md:grid-cols-1 md:content-start md:border-r md:border-b-0 md:last:border-r-0"
-              >
-                <span className="row-span-2 self-center text-xs font-bold text-accent md:row-span-1">{when}</span>
-                <b className="text-sm font-semibold">{what}</b>
-                <span className="text-[12.5px] text-fg-3">{where}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <section className="grid gap-4 border-t border-line pt-6 md:grid-cols-3">
-          {TRUST.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="grid grid-cols-[20px_1fr] gap-2 text-[13px] text-fg-2">
-              <Icon className="mt-0.5 size-[18px] text-accent" strokeWidth={1.8} />
-              <span>
-                <b className="block text-[13.5px] font-semibold text-fg">{title}</b>
-                {body}
+      <section className="grid gap-2.5">
+        <h2 className="font-stencil text-[17px] font-normal text-fg-2">전역자들이 많이 물어봐요</h2>
+        <div className="grid gap-2 md:grid-cols-2">
+          {POPULAR.map(({ icon: Icon, q, tag }) => (
+            <button
+              key={q}
+              type="button"
+              onClick={() => onAsk(q)}
+              className="grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border-2 border-edge bg-soft px-3.5 py-3 text-left hover:border-ink"
+            >
+              <span className="grid size-[34px] place-items-center rounded-lg border-2 border-ink bg-bg text-fg">
+                <Icon className="size-[18px]" strokeWidth={2.2} />
               </span>
-            </div>
+              <span className="min-w-0">
+                <b className="block text-[14.5px] leading-[1.45] font-bold">{q}</b>
+                <small className="text-[12.5px] font-semibold text-fg-3">{tag}</small>
+              </span>
+              <ChevronRight className="size-4 text-fg-3" />
+            </button>
           ))}
-        </section>
-      </div>
-    </main>
+        </div>
+      </section>
+
+      <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] font-semibold text-fg-3">
+        {TRUST.map(({ icon: Icon, text }) => (
+          <li key={text} className="inline-flex items-center gap-1.5">
+            <Icon className="size-4 text-olive" strokeWidth={2.2} />
+            {text}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

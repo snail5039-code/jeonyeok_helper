@@ -1,66 +1,13 @@
 "use client";
 
-import { AlarmClock, Check, ExternalLink, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
+import { AlarmClock, Check, ExternalLink, MessageCircle, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
 
-import { STAGES, currentStage, daysLeft, ddayLabel, dueDate, levelOf, progress, stageDone } from "@/lib/journey";
+import { STAGES, currentStage, daysLeft, ddayLabel, dueDate, stageDone } from "@/lib/journey";
 import type { JourneyItem, Source } from "@/lib/types";
 
-import { Bubble, Mascot } from "./Doodle";
+import { StageIcon } from "./StageIcon";
 
 const SOURCE_LABEL: Record<Source["type"], string> = { regulation: "법령", benefit: "혜택", institution: "기관" };
-
-/** 마스코트 + 계급 + 진행률. 노란 종이 위에 그려서 다크 모드에서도 그림이 잘 보인다. */
-export function JourneyHero({ items, compact = false }: { items: JourneyItem[]; compact?: boolean }) {
-  const p = progress(items);
-  const level = levelOf(items);
-  const empty = !items.length;
-  return (
-    <section
-      className={`relative grid items-end overflow-hidden rounded-2xl border-[2.5px] border-[#1b1b1b] bg-paper text-paper-ink shadow-[4px_4px_0_var(--ink)] ${
-        compact ? "grid-cols-[72px_minmax(0,1fr)] gap-3 p-3.5" : "grid-cols-[84px_minmax(0,1fr)] gap-3 p-4 sm:grid-cols-[130px_minmax(0,1fr)] sm:gap-4 sm:p-6"
-      }`}
-    >
-      <Mascot
-        rank={level.rank}
-        size={compact ? 72 : 130}
-        className={`animate-wobble justify-self-center ${compact ? "" : "max-sm:h-auto max-sm:w-[84px]"}`}
-      />
-      <div className="grid min-w-0 gap-3">
-        <Bubble className={compact ? "text-[14px]" : ""}>
-          {empty ? "할 일이 아직 없음. 물어보면 내가 적어 둘게!" : level.line}
-        </Bubble>
-        <div className="grid gap-1.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-            <span className="font-fun text-[20px] leading-none whitespace-nowrap">
-              {level.rank}
-              {level.next > 0 && !empty && (
-                <span className="ml-1.5 font-sans text-[12px] font-semibold opacity-70">
-                  {compact ? `+${level.next}개면 진급` : `다음 계급까지 ${level.next}개`}
-                </span>
-              )}
-            </span>
-            <span className="text-[13px] font-bold whitespace-nowrap tabular-nums">
-              {compact ? `⭐ ${p.coreDone}/${p.coreTotal}` : `⭐ 핵심 ${p.coreDone}/${p.coreTotal} · 전체 ${p.done}/${p.total}`}
-            </span>
-          </div>
-          <div
-            className="h-3.5 overflow-hidden rounded-full border-2 border-[#1b1b1b] bg-white"
-            role="progressbar"
-            aria-label="핵심 할 일 달성률"
-            aria-valuenow={p.percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full bg-[repeating-linear-gradient(-45deg,#7d8c3c_0_8px,#93a24c_8px_16px)] transition-[width] duration-700"
-              style={{ width: `${p.percent}%` }}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 /** 단계를 길 위의 정거장처럼: 끝난 단계는 도장, 지금 단계는 강조. */
 export function StageTrack({
@@ -78,7 +25,7 @@ export function StageTrack({
   return (
     <ol className="relative flex items-start justify-between gap-1 overflow-x-auto pt-4 pb-1">
       {/* 점선 길 */}
-      <span aria-hidden className="absolute top-[38px] right-5 left-5 border-t-[3px] border-dashed border-line-strong" />
+      <span aria-hidden className="absolute top-[38px] right-5 left-5 border-t-[3px] border-dashed border-edge" />
       {stages.map((s) => {
         const list = items.filter((i) => i.stage === s.key);
         const done = stageDone(list);
@@ -91,11 +38,11 @@ export function StageTrack({
               onClick={() => onSelect?.(s.key)}
               aria-label={`${s.title} ${list.filter((i) => i.done).length}/${list.length}`}
               aria-pressed={isSelected}
-              className={`relative grid size-[44px] place-items-center rounded-full border-[2.5px] border-ink text-[20px] transition-transform hover:-translate-y-0.5 ${
-                done ? "bg-[#c9e48a]" : current ? "bg-[#ffe066]" : "bg-bg"
+              className={`relative grid size-[44px] place-items-center rounded-full border-[2.5px] border-ink transition-transform hover:-translate-y-0.5 ${
+                done ? "bg-done text-[#1f2416]" : current ? "bg-[#ffe066] text-[#1f2416]" : "bg-soft text-fg-2"
               } ${isSelected ? "shadow-[3px_3px_0_var(--ink)]" : ""}`}
             >
-              {s.emoji}
+              <StageIcon stage={s.key} />
               {done && (
                 <span className="font-fun absolute -top-2 -right-3 -rotate-12 rounded-md border-2 border-[#c0392b] bg-white px-1 text-[10px] leading-tight text-[#c0392b]">
                   완료
@@ -159,7 +106,7 @@ export function ItemCard({
   return (
     <li
       className={`group grid grid-cols-[26px_minmax(0,1fr)] gap-3 rounded-xl border p-3.5 transition-colors ${
-        item.done ? "border-line bg-soft" : fresh ? "border-accent bg-accent-soft" : "border-line-strong bg-bg"
+        item.done ? "border-line bg-sunken" : fresh ? "border-accent bg-accent-soft" : "border-edge bg-soft"
       }`}
     >
       <button
@@ -167,8 +114,8 @@ export function ItemCard({
         onClick={() => onToggle(item)}
         aria-pressed={item.done}
         aria-label={`${item.title} ${item.done ? "완료 취소" : "완료"}`}
-        className={`mt-0.5 grid size-[24px] place-items-center rounded-md border-[2.5px] border-[#1b1b1b] ${
-          item.done ? "bg-[#7d8c3c] text-white" : "bg-white"
+        className={`mt-0.5 grid size-[24px] place-items-center rounded-md border-[2.5px] border-ink ${
+          item.done ? "bg-olive text-olive-ink" : "bg-white"
         }`}
       >
         {item.done && <Check className="size-4" strokeWidth={3.5} />}
@@ -179,7 +126,7 @@ export function ItemCard({
             {item.core && (
               <Star
                 aria-label="핵심"
-                className="mr-1 mb-0.5 inline size-4 fill-[#ffc531] text-[#d99a00]"
+                className="mr-1 mb-0.5 inline size-4 fill-[#e0a100] text-[#c98a00]"
                 strokeWidth={2}
               />
             )}
@@ -201,7 +148,7 @@ export function ItemCard({
             </button>
           )}
         </div>
-        {!item.done && <div className="text-[14px] font-semibold text-accent">{item.action}</div>}
+        {!item.done && <div className="text-[14px] font-semibold text-olive">{item.action}</div>}
         {item.deadline && (
           <div>
             <DeadlineChip item={item} dischargeDate={dischargeDate} />
@@ -224,7 +171,9 @@ export function ItemCard({
           </div>
         )}
         {!compact && item.origin === "chat" && item.question && (
-          <p className="text-[12px] text-fg-3">💬 “{item.question}” 대화에서 담김</p>
+          <p className="inline-flex items-center gap-1 text-[12px] text-fg-3">
+            <MessageCircle className="size-3.5" />“{item.question}” 대화에서 담김
+          </p>
         )}
       </div>
     </li>

@@ -1,4 +1,4 @@
-// B급 감성 그림: 마스코트 '전역이', 말풍선, 스티커 배지.
+// 직접 그린 그림: 마스코트 '전역이', 계급장, 훈장.
 // 굵은 검은 테두리 + 단색 채우기 + 살짝 삐뚤게. 다크 모드에서도 '노란 종이' 위에 그려서 잘 보이게 한다.
 
 import type { Badge } from "@/lib/journey";
@@ -139,41 +139,53 @@ function Face({ rank }: { rank: string }) {
   }
 }
 
-/** 삐뚤빼뚤한 말풍선 (꼬리는 왼쪽 아래) */
-export function Bubble({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+/** 계급장: 노란 줄 1~4개 (병장까지) */
+export function RankStripes({ rank, muted = false }: { rank: string; muted?: boolean }) {
+  const n = STRIPES[rank] ?? 0;
   return (
-    <div className={`relative ${className}`}>
-      <div className="font-fun relative z-10 -rotate-1 rounded-[18px_22px_20px_16px] border-[2.5px] border-[#1b1b1b] bg-white px-3.5 py-2 text-[15px] leading-snug text-[#1b1b1b] shadow-[3px_3px_0_#1b1b1b]">
-        {children}
-      </div>
-      <svg viewBox="0 0 24 18" className="absolute -bottom-[13px] left-5 z-20 h-[18px] w-6" aria-hidden>
-        <path d="M2 0 L8 16 L16 0" fill="#fff" stroke="#1b1b1b" strokeWidth="2.5" strokeLinejoin="round" />
-        <path d="M3 -1 L15 -1" stroke="#fff" strokeWidth="4" />
-      </svg>
-    </div>
+    <span className="grid gap-[2px]" aria-hidden>
+      {Array.from({ length: n }, (_, i) => (
+        <b
+          key={i}
+          className={`block h-[4px] w-[18px] rounded-[1px] border ${muted ? "border-edge bg-line" : "border-[#1f2416] bg-[#f2c230]"}`}
+        />
+      ))}
+    </span>
   );
 }
 
-/** 스티커 배지. 아직 못 받았으면 회색 물음표. */
-export function Sticker({ badge, fresh = false }: { badge: Badge; fresh?: boolean }) {
-  // 배지마다 기울기를 조금씩 다르게 (붙인 스티커 느낌)
-  const tilt = ((badge.id.length * 7) % 11) - 5;
+/** 훈장: 받으면 리본 달린 금빛 메달, 아직이면 점선 */
+export function Medal({ earned, size = 30 }: { earned: boolean; size?: number }) {
+  return (
+    <svg viewBox="0 0 30 36" width={size} height={(size * 36) / 30} aria-hidden>
+      {earned ? (
+        <>
+          <path d="M9 1h12l-3 12h-6z" fill="#b8322a" stroke={INK} strokeWidth="2" strokeLinejoin="round" />
+          <circle cx="15" cy="23" r="10" fill="#f2c230" stroke={INK} strokeWidth="2.4" />
+          <path d="M15 17.5l1.8 3.6 4 .5-2.9 2.8.7 3.9L15 26.4l-3.6 1.9.7-3.9-2.9-2.8 4-.5z" fill={INK} />
+        </>
+      ) : (
+        <>
+          <path d="M9 1h12l-3 12h-6z" fill="none" stroke="var(--edge)" strokeWidth="2" strokeLinejoin="round" />
+          <circle cx="15" cy="23" r="10" fill="none" stroke="var(--edge)" strokeWidth="2.4" strokeDasharray="3 3" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+/** 훈장 하나 (이름과 조건). 새로 받은 것은 튀어나온다. */
+export function MedalCard({ badge, fresh = false }: { badge: Badge; fresh?: boolean }) {
   return (
     <div
-      className={`grid w-[88px] justify-items-center gap-1 text-center ${fresh ? "animate-pop" : ""}`}
-      title={badge.earned ? `${badge.name} — ${badge.line}` : `잠김: ${badge.line}`}
+      className={`grid w-[84px] justify-items-center gap-1 text-center ${fresh ? "animate-pop" : ""}`}
+      title={badge.earned ? `${badge.name}: ${badge.line}` : `아직: ${badge.line}`}
     >
-      <div
-        style={{ rotate: `${tilt}deg` }}
-        className={`grid size-[58px] place-items-center rounded-full border-[2.5px] border-[#1b1b1b] text-[28px] shadow-[3px_3px_0_#1b1b1b] ${
-          badge.earned ? "bg-[#ffe066]" : "bg-[#d9d9d9] grayscale"
-        }`}
-      >
-        <span className={badge.earned ? "" : "opacity-40"}>{badge.earned ? badge.emoji : "?"}</span>
-      </div>
-      <span className={`font-fun text-[13px] leading-tight ${badge.earned ? "text-fg" : "text-fg-3"}`}>
+      <Medal earned={badge.earned} size={36} />
+      <span className={`text-[12.5px] leading-tight font-bold ${badge.earned ? "text-fg" : "text-fg-3"}`}>
         {badge.earned ? badge.name : "???"}
       </span>
+      <span className="text-[11px] leading-tight text-fg-3">{badge.line}</span>
     </div>
   );
 }

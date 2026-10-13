@@ -8,18 +8,17 @@ import type { JourneyItem, Profile, StageKey, Suggestion } from "./types";
 export interface Stage {
   key: StageKey;
   title: string;
-  emoji: string;
-  /** 단계를 다 끝내면 받는 배지 */
-  badge: { name: string; emoji: string; line: string };
+  /** 단계의 핵심 할 일을 다 끝내면 받는 훈장 */
+  badge: { name: string; line: string };
 }
 
 export const STAGES: Stage[] = [
-  { key: "before", title: "전역 전", emoji: "🎒", badge: { name: "짐 싸기 완료", emoji: "🎒", line: "말년엔 원래 할 게 많음" } },
-  { key: "right_after", title: "전역 직후", emoji: "🪖", badge: { name: "예비군 입문", emoji: "🪖", line: "축하합니다 예비군 1년 차" } },
-  { key: "job", title: "취업·창업", emoji: "💼", badge: { name: "취준 생존자", emoji: "💼", line: "자소서 쓰다 눈물 한 방울" } },
-  { key: "study", title: "학업", emoji: "📚", badge: { name: "복학생 각성", emoji: "📚", line: "과탑은 몰라도 출석은 1등" } },
-  { key: "life", title: "주거·생활", emoji: "🏠", badge: { name: "자취 만렙", emoji: "🏠", line: "월세 앞에 장사 없다" } },
-  { key: "later", title: "나중에", emoji: "⏳", badge: { name: "미래의 나에게", emoji: "⏳", line: "연금은 미래의 내가 고마워함" } },
+  { key: "before", title: "전역 전", badge: { name: "짐 싸기 완료", line: "전역 전 핵심 임무 완료" } },
+  { key: "right_after", title: "전역 직후", badge: { name: "예비군 입문", line: "전역 직후 핵심 임무 완료" } },
+  { key: "job", title: "취업·창업", badge: { name: "취준 생존자", line: "취업·창업 핵심 임무 완료" } },
+  { key: "study", title: "학업", badge: { name: "복학생 각성", line: "학업 핵심 임무 완료" } },
+  { key: "life", title: "주거·생활", badge: { name: "자취 만렙", line: "주거·생활 핵심 임무 완료" } },
+  { key: "later", title: "나중에", badge: { name: "미래의 나에게", line: "나중에 챙길 핵심 임무 완료" } },
 ]; // prettier-ignore
 
 export const STAGE_BY_KEY = Object.fromEntries(STAGES.map((s) => [s.key, s])) as Record<StageKey, Stage>;
@@ -147,7 +146,6 @@ export function ddayLabel(days: number): string {
 export interface Badge {
   id: string;
   name: string;
-  emoji: string;
   line: string;
   earned: boolean;
 }
@@ -160,17 +158,16 @@ export function badges(items: JourneyItem[], profile: Profile): Badge[] {
   }));
   const all = progress(items);
   return [
-    { id: "first", name: "첫 단추", emoji: "👔", line: "시작이 반이라던데 진짜임?", earned: all.done > 0 },
-    { id: "profile", name: "정보통", emoji: "🗂️", line: "내 정보 80% 이상 입력", earned: profileCompleteness(profile) >= 80 },
+    { id: "first", name: "첫 단추", line: "첫 임무 완료", earned: all.done > 0 },
+    { id: "profile", name: "정보통", line: "내 정보 80% 이상 입력", earned: profileCompleteness(profile) >= 80 },
     {
       id: "talker",
       name: "질문 폭격기",
-      emoji: "💬",
-      line: "대화로 할 일 3개 이상 담기",
+      line: "대화에서 임무 3개 담기",
       earned: items.filter((i) => i.origin === "chat").length >= 3,
     },
     ...stageBadges,
-    { id: "master", name: "전역 마스터", emoji: "🏆", line: "핵심 할 일 모두 완료", earned: levelOf(items).finished },
+    { id: "master", name: "전역 마스터", line: "핵심 임무 모두 완료", earned: levelOf(items).finished },
   ];
 }
 

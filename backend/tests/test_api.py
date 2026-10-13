@@ -322,7 +322,7 @@ def test_onboarding_complete_builds_first_roadmap_and_suggests_first_step():
         assert [i["title"] for i in added] == ["예비군 편성 확인", "적금 수령"]
         last_guide = [d for e, d in events if e == "guide"][-1]
         assert last_guide["step"]["title"] == "예비군 편성 확인"
-        assert "로드맵 완성" in last_guide["say"]
+        assert "작전도 완성" in last_guide["say"]
         # 로드맵이 이미 있으면 다시 만들지 않는다
         client.post("/chat", json={"message": "또", "user_id": "u1"})
         assert len(client.seen_profiles) == 1

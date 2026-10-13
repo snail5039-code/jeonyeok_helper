@@ -1,12 +1,12 @@
 "use client";
 
-import { BookOpen, Building2, ChevronDown, House, Map, Menu, Moon, Plus, Sun, UserRound, UserRoundPen, X } from "lucide-react";
+import { BookOpen, Building2, ChevronDown, Map, MessageSquare, Moon, Plus, Sun, UserRound, UserRoundPen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { levelOf, progress } from "@/lib/journey";
 import { SERVICE_TYPE_LABELS, type JourneyItem, type Profile } from "@/lib/types";
 
-import { LogoMark } from "./Logo";
+import { Mascot } from "./Doodle";
 
 const SHORTCUTS = [
   { icon: BookOpen, label: "규정 찾기", ask: "전역자 지원과 관련된 주요 법령을 알려주세요" },
@@ -20,9 +20,12 @@ const PROFILE_ROWS: [keyof Profile, string, (v: NonNullable<Profile[keyof Profil
   ["region", "지역", String],
 ];
 
-function profileSummary(p: Profile): string {
-  const parts = [p.service_type && SERVICE_TYPE_LABELS[p.service_type], p.region].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "내 복무 정보";
+/** 위에 늘 보이는 내 조건: 병사 · 서울 · 25년 전역 */
+export function profileSummary(p: Profile): string {
+  const type = p.service_type && SERVICE_TYPE_LABELS[p.service_type].replace("의무복무 ", "");
+  const year = p.discharge_date?.match(/^\d{4}/)?.[0];
+  const parts = [type, p.region?.split(" ")[0], year && `${year.slice(2)}년 전역`].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "내 조건 알려 주기";
 }
 
 function ProfileDetails({ profile }: { profile: Profile }) {
@@ -34,9 +37,7 @@ function ProfileDetails({ profile }: { profile: Profile }) {
         return (
           <div key={key} className="contents">
             <dt className="text-fg-3">{label}</dt>
-            <dd className={`text-right ${known ? "font-semibold" : "text-fg-3"}`}>
-              {known ? format(value) : key === "service_type" ? "아직 몰라요" : "-"}
-            </dd>
+            <dd className={`text-right ${known ? "font-semibold" : "text-fg-3"}`}>{known ? format(value) : "-"}</dd>
           </div>
         );
       })}
@@ -62,108 +63,109 @@ function useDismissable() {
   return [open, setOpen, ref] as const;
 }
 
+export type View = "home" | "chat" | "journey" | "profile";
+
 interface Props {
-  view: "home" | "chat" | "journey" | "profile";
+  view: View;
   profile: Profile;
   journey: JourneyItem[];
   demo: boolean;
   dark: boolean;
   onToggleTheme: () => void;
   onHome: () => void;
+  onChat: () => void;
   onJourney: () => void;
   onProfile: () => void;
   onAsk: (text: string) => void;
 }
 
-export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHome, onJourney, onProfile, onAsk }: Props) {
-  const [profileOpen, setProfileOpen, profileRef] = useDismissable();
-  const [mobileOpen, setMobileOpen, mobileRef] = useDismissable();
-
-  const navLink = "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-fg-2 hover:bg-sunken hover:text-fg";
-  const iconButton = "grid size-9 place-items-center rounded-lg text-fg-2 hover:bg-sunken hover:text-fg";
-
+export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHome, onChat, onJourney, onProfile, onAsk }: Props) {
+  const [open, setOpen, ref] = useDismissable();
   const p = progress(journey);
   const rank = levelOf(journey).rank;
-  const pages = [
-    { key: "journey", icon: Map, label: "내 로드맵", onClick: onJourney },
-    { key: "profile", icon: UserRoundPen, label: "내 정보", onClick: onProfile },
-  ] as const;
 
-  const go = (fn: () => void) => () => {
-    setMobileOpen(false);
-    fn();
-  };
+  const link = (on: boolean) =>
+    `inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[14.5px] font-bold ${
+      on ? "bg-olive text-olive-ink shadow-[inset_0_-3px_0_var(--olive-dark)]" : "text-fg-2 hover:bg-olive/10 hover:text-fg"
+    }`;
 
   return (
-    <header ref={mobileRef} className="relative z-20 shrink-0 border-b border-line bg-bg">
-      <div className="mx-auto flex h-16 max-w-[1120px] items-center gap-2 px-4 lg:px-8">
-        <button type="button" onClick={onHome} className="mr-4 flex items-center gap-2.5 text-[17px] font-bold tracking-[-0.03em] whitespace-nowrap">
-          <LogoMark />
+    <header className="relative z-20 shrink-0 border-b-[3px] border-olive-dark bg-[linear-gradient(#f3ead2,#e9dfc0)] shadow-[0_3px_0_rgb(0_0_0_/_0.2)] dark:bg-[linear-gradient(#2c3122,#23271b)]">
+      <div className="mx-auto flex h-[60px] max-w-[1320px] items-center gap-3 px-3 sm:px-6">
+        <button
+          type="button"
+          onClick={onHome}
+          aria-label="전역도우미 처음으로"
+          className="font-stencil flex shrink-0 -rotate-2 items-center gap-2 rounded-[10px_22px_22px_10px] border-[2.5px] border-[#1f2416] bg-[linear-gradient(135deg,#ececE6,#bcbdb3)] py-1 pr-3.5 pl-2.5 text-[19px] text-[#1f2416] shadow-[3px_3px_0_var(--ink)] sm:text-[21px]"
+        >
+          <span aria-hidden className="size-2 rounded-full border-2 border-[#1f2416] bg-[#f3ead2]" />
           전역도우미
         </button>
 
-        <nav className="hidden items-center gap-0.5 md:flex" aria-label="메뉴">
-          <button type="button" onClick={onHome} className={`${navLink} ${view === "home" ? "bg-sunken text-fg" : ""}`}>
-            <House className="size-4" strokeWidth={1.8} />홈
+        <nav className="ml-2 hidden items-center gap-0.5 lg:flex" aria-label="메뉴">
+          <button
+            type="button"
+            onClick={onChat}
+            aria-current={view === "home" || view === "chat" ? "page" : undefined}
+            className={link(view === "home" || view === "chat")}
+          >
+            <MessageSquare className="size-4" strokeWidth={2.2} />
+            작전실
           </button>
-          {pages.map(({ key, icon: Icon, label, onClick }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={onClick}
-              aria-current={view === key ? "page" : undefined}
-              className={`${navLink} ${view === key ? "bg-sunken text-fg" : ""}`}
-            >
-              <Icon className="size-4" strokeWidth={1.8} />
-              {label}
-              {key === "journey" && p.total > 0 && (
-                <span className="font-fun rounded-full border-[1.5px] border-[#1b1b1b] bg-paper px-1.5 text-[12px] leading-[18px] text-paper-ink">
-                  {rank} ⭐{p.coreDone}/{p.coreTotal}
-                </span>
-              )}
-            </button>
-          ))}
+          <button type="button" onClick={onJourney} aria-current={view === "journey" ? "page" : undefined} className={link(view === "journey")}>
+            <Map className="size-4" strokeWidth={2.2} />
+            작전도
+            {p.total > 0 && (
+              <span className="rounded-full border-[1.5px] border-[#1f2416] bg-[#ffe066] px-1.5 text-[11.5px] leading-[17px] font-extrabold text-[#1f2416]">
+                {rank} {p.coreDone}/{p.coreTotal}
+              </span>
+            )}
+          </button>
+          <button type="button" onClick={onProfile} aria-current={view === "profile" ? "page" : undefined} className={link(view === "profile")}>
+            <UserRound className="size-4" strokeWidth={2.2} />내 정보
+          </button>
           {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
-            <button key={label} type="button" onClick={() => onAsk(ask)} className={navLink}>
-              <Icon className="size-4" strokeWidth={1.8} />
+            <button key={label} type="button" onClick={() => onAsk(ask)} className={link(false)}>
+              <Icon className="size-4" strokeWidth={2.2} />
               {label}
             </button>
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
           {demo && (
             <span title="Gemini 키가 없어 예시 응답을 보여줘요" className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-bold whitespace-nowrap text-warn">
-              데모 모드
+              데모
             </span>
           )}
 
-          <div ref={profileRef} className="relative hidden md:block">
+          <div ref={ref} className="relative min-w-0">
             <button
               type="button"
-              onClick={() => setProfileOpen(!profileOpen)}
-              aria-expanded={profileOpen}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-semibold ${
-                profile.service_type ? "border-accent bg-accent-soft text-accent" : "border-line-strong text-fg-2"
-              }`}
+              onClick={() => setOpen(!open)}
+              aria-expanded={open}
+              aria-label={`내 조건: ${profileSummary(profile)}`}
+              className="inline-flex h-10 max-w-[240px] min-w-0 items-center gap-1.5 rounded-full border-2 border-ink bg-soft py-0 pr-2.5 pl-1 text-[13.5px] font-extrabold"
             >
-              <UserRound className="size-[15px]" strokeWidth={1.8} />
-              {profileSummary(profile)}
-              <ChevronDown className="size-3.5" />
+              <span className="grid size-7 shrink-0 place-items-end overflow-hidden rounded-full bg-sunken">
+                <Mascot rank={rank} size={26} />
+              </span>
+              <span className="truncate">{profileSummary(profile)}</span>
+              <ChevronDown className="size-3.5 shrink-0" />
             </button>
-            {profileOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-xl border border-line bg-bg p-4 shadow-card">
-                <div className="mb-3 flex items-center justify-between text-[13px] font-semibold">
-                  내 복무 정보 <span className="text-xs font-medium text-fg-3">대화하거나 직접 적어요</span>
+            {open && (
+              <div className="absolute right-0 mt-2 w-64 rounded-xl border-2 border-ink bg-soft p-4 shadow-[4px_4px_0_var(--olive-dark)]">
+                <div className="mb-3 flex items-center justify-between text-[13px] font-bold">
+                  내 조건 <span className="text-xs font-medium text-fg-3">대화하거나 직접 적어요</span>
                 </div>
                 <ProfileDetails profile={profile} />
                 <button
                   type="button"
                   onClick={() => {
-                    setProfileOpen(false);
+                    setOpen(false);
                     onProfile();
                   }}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-strong py-2 text-[13px] font-semibold text-fg-2 hover:border-fg-3"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-edge py-2 text-[13px] font-bold text-fg-2 hover:border-ink"
                 >
                   <UserRoundPen className="size-4" />
                   자세히 적기
@@ -175,56 +177,68 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
           <button
             type="button"
             onClick={onHome}
-            className="hidden h-9 items-center gap-1.5 rounded-lg bg-accent px-3 text-[13px] font-semibold text-accent-ink md:inline-flex"
+            className="hidden h-10 shrink-0 items-center gap-1 rounded-[10px] border-2 border-edge bg-soft px-3 text-[13.5px] font-bold text-fg-2 hover:border-ink md:inline-flex"
           >
-            <Plus className="size-[15px]" />새 질문
-          </button>
-          <button type="button" onClick={onToggleTheme} aria-label="화면 테마 바꾸기" className={iconButton}>
-            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            <Plus className="size-4" strokeWidth={2.4} />새 대화
           </button>
           <button
             type="button"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
-            aria-expanded={mobileOpen}
-            className={`${iconButton} md:hidden`}
+            onClick={onToggleTheme}
+            aria-label={dark ? "밝은 화면으로" : "어두운 화면으로"}
+            className="grid size-10 shrink-0 place-items-center rounded-[10px] text-fg-2 hover:bg-olive/10 hover:text-fg"
           >
-            {mobileOpen ? <X className="size-[18px]" /> : <Menu className="size-[18px]" />}
+            {dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
           </button>
         </div>
       </div>
-
-      {/* 모바일: 위에서 펼쳐지는 메뉴 */}
-      {mobileOpen && (
-        <div className="absolute inset-x-0 top-full grid gap-4 border-b border-line bg-bg px-4 pt-3 pb-5 shadow-card md:hidden">
-          <nav className="grid gap-0.5" aria-label="메뉴">
-            <button type="button" onClick={go(onHome)} className={navLink}>
-              <House className="size-4" strokeWidth={1.8} />홈 · 새 질문
-            </button>
-            {pages.map(({ key, icon: Icon, label, onClick }) => (
-              <button key={key} type="button" onClick={go(onClick)} className={navLink}>
-                <Icon className="size-4" strokeWidth={1.8} />
-                {label}
-                {key === "journey" && p.total > 0 && (
-                  <span className="text-[12px] text-fg-3">
-                    {rank} · 핵심 {p.coreDone}/{p.coreTotal}
-                  </span>
-                )}
-              </button>
-            ))}
-            {SHORTCUTS.map(({ icon: Icon, label, ask }) => (
-              <button key={label} type="button" onClick={go(() => onAsk(ask))} className={navLink}>
-                <Icon className="size-4" strokeWidth={1.8} />
-                {label}
-              </button>
-            ))}
-          </nav>
-          <section className="rounded-xl border border-line p-3.5">
-            <div className="mb-2.5 text-[13px] font-semibold">내 복무 정보</div>
-            <ProfileDetails profile={profile} />
-          </section>
-        </div>
-      )}
     </header>
+  );
+}
+
+/** 좁은 화면: 아래 탭바 */
+export function MobileTabs({
+  view,
+  journey,
+  onChat,
+  onJourney,
+  onProfile,
+  onHome,
+}: {
+  view: View;
+  journey: JourneyItem[];
+  onChat: () => void;
+  onJourney: () => void;
+  onProfile: () => void;
+  onHome: () => void;
+}) {
+  const p = progress(journey);
+  const rank = levelOf(journey).rank;
+  const tab = (on: boolean) => `grid flex-1 justify-items-center gap-0.5 py-1 text-[11.5px] font-bold ${on ? "text-olive" : "text-fg-3"}`;
+  return (
+    <nav
+      aria-label="메뉴"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t-[3px] border-olive-dark bg-[#f3ead2] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] lg:hidden dark:bg-[#2c3122]"
+    >
+      <button type="button" onClick={onChat} aria-current={view === "home" || view === "chat" ? "page" : undefined} className={tab(view === "home" || view === "chat")}>
+        <MessageSquare className="size-[22px]" strokeWidth={2.2} />
+        작전실
+      </button>
+      <button type="button" onClick={onJourney} aria-current={view === "journey" ? "page" : undefined} className={tab(view === "journey")}>
+        <Map className="size-[22px]" strokeWidth={2.2} />
+        {p.total ? (
+          <span className="rounded-full border-[1.5px] border-[#1f2416] bg-[#ffe066] px-1.5 text-[10.5px] leading-[15px] text-[#1f2416]">
+            {rank} {p.coreDone}/{p.coreTotal}
+          </span>
+        ) : (
+          "작전도"
+        )}
+      </button>
+      <button type="button" onClick={onProfile} aria-current={view === "profile" ? "page" : undefined} className={tab(view === "profile")}>
+        <UserRound className="size-[22px]" strokeWidth={2.2} />내 정보
+      </button>
+      <button type="button" onClick={onHome} className={tab(false)}>
+        <Plus className="size-[22px]" strokeWidth={2.2} />새 대화
+      </button>
+    </nav>
   );
 }

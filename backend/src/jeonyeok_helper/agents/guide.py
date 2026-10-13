@@ -50,10 +50,10 @@ def with_question(say: str, missing: str | None) -> str:
 
 
 SERVICE_REPLIES = [
-    ("🪖 의무복무 병사", "의무복무 병사로 전역했어요"),
-    ("🎖️ 단기 간부 (5년 미만)", "단기 간부로 5년 미만 복무했어요"),
-    ("⭐ 중·장기 복무 (5년 이상)", "중·장기 복무 간부로 5년 이상 복무했어요"),
-    ("🏅 보훈대상자", "국가유공자·보훈대상자예요"),
+    ("의무복무 병사", "의무복무 병사로 전역했어요"),
+    ("단기 간부 (5년 미만)", "단기 간부로 5년 미만 복무했어요"),
+    ("중·장기 복무 (5년 이상)", "중·장기 복무 간부로 5년 이상 복무했어요"),
+    ("보훈대상자", "국가유공자·보훈대상자예요"),
 ]
 REGIONS = [
     "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기",
@@ -117,7 +117,7 @@ def ask_replies(field: str, today: date | None = None) -> list[dict]:
     if field == "discharge_date":
         y = today.year
         return [
-            {"label": "📅 아직 복무 중 (전역 예정)", "message": f"{y + 1}년 초에 전역 예정이에요"},
+            {"label": "아직 복무 중 (전역 예정)", "message": f"{y + 1}년 초에 전역 예정이에요"},
             {"label": f"{y}년 전역", "message": f"{y}년에 전역했어요"},
             {"label": f"{y - 1}년 전역", "message": f"{y - 1}년에 전역했어요"},
             {"label": f"{y - 2}년 이전", "message": f"{y - 2}년에 전역했어요"},
@@ -148,13 +148,13 @@ def step_replies(item: dict) -> list[dict]:
     title, item_id = item["title"], item["id"]
     return [
         {
-            "label": "✅ 했어요",
+            "label": "했어요",
             "message": f"'{title}' 했어요",
             "action": {"type": "done", "item_id": item_id},
         },
         {"label": "어떻게 해요?", "message": f"{title}, 어떻게 신청해요?"},
         {
-            "label": "⏭ 나중에",
+            "label": "나중에 할게요",
             "message": "이건 나중에 할게요. 다음 거 알려줘요",
             "action": {"type": "later", "item_id": item_id},
         },

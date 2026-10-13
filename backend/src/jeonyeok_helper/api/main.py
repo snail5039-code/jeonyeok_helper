@@ -252,9 +252,9 @@ def create_app(
             return
         yield _sse("journey", {"added": added})
         first = guide_rules.next_item(added)
-        say = f"로드맵 완성! 할 일 {len(added)}개를 담았어요. 🗺️"
+        say = f"작전도 완성! 임무 {len(added)}개를 담았어요."
         if first:
-            say += f" 첫 번째는 '{first['title']}'이에요. {first['action']}"
+            say += f" 첫 임무는 '{first['title']}'이에요. {first['action']}"
         yield _sse(
             "guide",
             {

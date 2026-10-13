@@ -74,8 +74,8 @@ export async function* demoChat(
   yield { event: "step", data: { label: "복무 정보를 정리하고 있어요" } };
   await sleep(500);
   if (action?.type === "done") {
-    yield talk("좋아요, 하나 해치웠다! 🎖️ 로드맵에서 다음 할 일을 확인해 봐요.", [
-      { label: "🗺️ 로드맵 보기", open: "journey" },
+    yield talk("좋아요, 하나 끝냈어요. 작전도에서 다음 임무를 확인해 봐요.", [
+      { label: "작전도 보기", open: "journey" },
     ]);
     return;
   }
