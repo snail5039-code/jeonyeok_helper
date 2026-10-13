@@ -241,7 +241,10 @@ questions:
   - id: g01
     category: general
     question: 혜택 뭐 있어요?
-    should_ask: true
+    # 복무 형태를 몰라도 되묻지 않고 병사 기준으로 구체적인 혜택을 먼저 보여 준다
+    # ('정부24에서 조회해 보세요'로 떠넘기면 서비스를 쓸 이유가 없다)
+    should_ask: false
+    sources_any: [국민연금, 취업, 적금, 예비군, 전역]
   - id: g02
     category: general
     question: 전역했는데 이제 뭐부터 해야 돼요?

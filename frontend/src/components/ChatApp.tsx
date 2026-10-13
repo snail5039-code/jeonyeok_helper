@@ -20,6 +20,7 @@ import { JourneyView } from "./JourneyView";
 import { ProfileView } from "./ProfileView";
 import { MobileTabs, TopNav } from "./TopNav";
 import { TurnView } from "./TurnView";
+import { UndoToast } from "./UndoToast";
 import { useJourney } from "./useJourney";
 
 // 테마: 사용자가 고른 값(html[data-theme])이 있으면 그것, 없으면 시스템 설정을 따른다.
@@ -346,7 +347,7 @@ export function ChatApp() {
                 <Composer
                   id="chat-input"
                   compact
-                  placeholder={isHome ? "아무거나 물어봐도 돼요. 예) 병장으로 전역했고 서울 살아요" : "전역이에게 이어서 말해 보세요"}
+                  placeholder={isHome ? "전역이에게 아무거나 물어보세요" : "전역이에게 이어서 말해 보세요"}
                   busy={busy}
                   onStop={() => abort.current?.abort()}
                   onSubmit={ask}
@@ -363,6 +364,8 @@ export function ChatApp() {
           <div aria-hidden className="h-4 lg:h-6" />
         </main>
       )}
+
+      <UndoToast journey={journey} />
 
       <MobileTabs
         view={view}

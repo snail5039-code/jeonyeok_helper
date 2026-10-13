@@ -42,6 +42,8 @@ const LEVELS: { at: number; rank: string; line: string }[] = [
   { at: 4, rank: "상병", line: "상병 꺾였다. 이제 좀 한다는 소리 들음" },
   { at: 8, rank: "병장", line: "말년 병장 폼 미쳤다. 핵심만 끝내면 민간인!" },
 ];
+/** 완주(민간인)는 핵심 임무가 이만큼 이상 담겨 있을 때만. 1개 담고 끝내자마자 민간인이 되지 않게 */
+export const MIN_CORE = 3;
 const CIVILIAN = { rank: "민간인", line: "민간인 완성. 충성! (이제 진짜 끝)" };
 
 /** 완주 기준이 되는 할 일: 핵심 표시가 있으면 핵심만, 없으면 전부 */
@@ -69,9 +71,18 @@ export function progress(items: JourneyItem[]): {
   };
 }
 
+/** 민간인까지 남은 임무 수. 핵심 임무를 다 끝내고, 병장(마지막 계급) 수준만큼 끝냈거나 전부 끝냈어야 한다.
+    그래서 임무가 적게 담겨 있어도 이병에서 바로 민간인이 되지 않는다. 아직 판단할 수 없으면 null */
+export function toCivilian(items: JourneyItem[]): number | null {
+  const p = progress(items);
+  if (p.coreTotal < MIN_CORE) return null;
+  const sergeant = LEVELS[LEVELS.length - 1].at;
+  return Math.max(p.coreTotal - p.coreDone, Math.min(sergeant, p.total) - p.done, 0);
+}
+
 export function levelOf(items: JourneyItem[]): Level {
   const p = progress(items);
-  if (p.coreTotal > 0 && p.coreDone === p.coreTotal) return { ...CIVILIAN, next: 0, finished: true };
+  if (toCivilian(items) === 0) return { ...CIVILIAN, next: 0, finished: true };
   const i = LEVELS.findLastIndex((l) => p.done >= l.at);
   const after = LEVELS[i + 1];
   return { rank: LEVELS[i].rank, line: LEVELS[i].line, next: after ? after.at - p.done : 0, finished: false };
@@ -209,6 +220,24 @@ export async function markDone(userId: string, itemId: string, done: boolean): P
 
 export async function addItems(userId: string, items: Suggestion[], question: string): Promise<JourneyItem[]> {
   const res = await requestJson("POST", `journey/${enc(userId)}/items`, { items, question }, "로드맵에 담지 못했어요.");
+  return (await res.json()).added;
+}
+
+/** 뺀 임무를 되돌린다: 완료 여부와 어디서 담겼는지까지 그대로 다시 담는다 (id는 새로 만들어짐) */
+export async function restoreItems(userId: string, gone: JourneyItem[]): Promise<JourneyItem[]> {
+  const items = gone.map((g) => ({
+    stage: g.stage,
+    title: g.title,
+    action: g.action,
+    detail: g.detail,
+    sources: g.sources,
+    core: g.core,
+    deadline: g.deadline,
+    due_months: g.due_months,
+    done: g.done,
+    origin: g.origin,
+  }));
+  const res = await requestJson("POST", `journey/${enc(userId)}/items`, { items, question: "" }, "되돌리지 못했어요.");
   return (await res.json()).added;
 }
 

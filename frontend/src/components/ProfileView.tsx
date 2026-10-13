@@ -198,7 +198,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             </Field>
           </Section>
 
-          <div className="sticky bottom-2 z-10 grid gap-2 rounded-xl border-2 border-edge bg-soft/95 px-4 py-3 shadow-[3px_3px_0_rgb(0_0_0_/_0.15)] backdrop-blur">
+          <div className="sticky bottom-2 z-10 grid w-fit max-w-full gap-2 rounded-xl border-2 border-edge bg-soft/95 px-4 py-3 shadow-[3px_3px_0_rgb(0_0_0_/_0.15)] backdrop-blur">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="submit"

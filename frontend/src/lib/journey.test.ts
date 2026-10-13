@@ -9,6 +9,7 @@ import {
   ddayLabel,
   dueDate,
   levelOf,
+  toCivilian,
   nextItem,
   profileCompleteness,
   progress,
@@ -54,15 +55,28 @@ describe("계급: 끝낸 개수로 오르고, 핵심을 다 끝내면 민간인"
     expect(levelOf(after).rank).toBe(levelOf(before).rank);
   });
 
-  it("핵심만 다 끝내면 민간인 (보너스 할 일이 남아도)", () => {
-    const items = [item("job", true, { core: true }), item("study", true, { core: true }), item("life")];
-    expect(levelOf(items)).toMatchObject({ rank: "민간인", finished: true, next: 0 });
-    expect(progress(items)).toMatchObject({ done: 2, total: 3, coreDone: 2, coreTotal: 2, percent: 100 });
+  it("핵심을 다 끝내고 병장 수준(8개)까지 끝내야 민간인 (보너스 할 일이 남아도)", () => {
+    const core = [1, 2, 3].map(() => item("job", true, { core: true }));
+    const bonus = (n: number, done: boolean) => Array.from({ length: n }, () => item("life", done));
+    // 핵심 3개만 끝낸 직후: 일병~병장을 건너뛰고 민간인이 되면 안 된다
+    expect(levelOf([...core, ...bonus(8, false)])).toMatchObject({ rank: "일병", finished: false });
+    expect(toCivilian([...core, ...bonus(8, false)])).toBe(5);
+    const all = [...core, ...bonus(5, true), ...bonus(3, false)];
+    expect(levelOf(all)).toMatchObject({ rank: "민간인", finished: true, next: 0 });
+    expect(progress(all)).toMatchObject({ done: 8, total: 11, coreDone: 3, coreTotal: 3, percent: 100 });
   });
 
   it("핵심 표시가 없는 옛 할 일은 전부 끝내야 완주", () => {
     expect(levelOf([item("job", true), item("job")]).finished).toBe(false);
-    expect(levelOf([item("job", true), item("job", true)]).finished).toBe(true);
+    expect(levelOf(many(3, true)).finished).toBe(true); // 3개뿐이면 전부 끝낸 것
+  });
+
+  it("핵심 임무가 적게 담겼을 때는 끝내도 민간인이 되지 않는다", () => {
+    // 1개 담고 끝낸 직후 민간인이 되던 버그
+    const one = [item("job", true, { core: true })];
+    expect(levelOf(one)).toMatchObject({ rank: "일병", finished: false });
+    expect(levelOf([...one, item("job", true, { core: true })]).finished).toBe(false);
+    expect(levelOf([...one, ...many(2, true).map((i) => ({ ...i, core: true }))]).finished).toBe(true);
   });
 });
 
@@ -158,6 +172,7 @@ describe("첫 화면 길잡이 인사", () => {
   });
 
   it("완주하면 축하", () => {
-    expect(greeting({ service_type: "conscript" }, [item("job", true, { core: true })]).say).toContain("민간인 완성");
+    const done = [1, 2, 3].map(() => item("job", true, { core: true }));
+    expect(greeting({ service_type: "conscript" }, done).say).toContain("민간인 완성");
   });
 });

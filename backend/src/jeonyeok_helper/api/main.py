@@ -132,10 +132,13 @@ class NewItem(BaseModel):
     core: bool = False
     deadline: str = Field(default="", max_length=60)
     due_months: int | None = Field(default=None, ge=-24, le=120)
+    # 빼기를 되돌릴 때 원래 상태(완료 여부, 어디서 담겼는지)를 그대로 복원하기 위한 값
+    done: bool = False
+    origin: Literal["plan", "chat"] = "chat"
 
 
 class AddItems(BaseModel):
-    items: list[NewItem] = Field(min_length=1, max_length=5)
+    items: list[NewItem] = Field(min_length=1, max_length=20)
     question: str = Field(default="", max_length=500)
 
 

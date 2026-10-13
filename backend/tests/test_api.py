@@ -373,3 +373,33 @@ def test_feedback_rejects_unknown_rating():
     with make_client([Route(next="answer")]) as client:
         body = {"rating": "meh", "question": "q", "answer": "a"}
         assert client.post("/feedback", json=body).status_code == 422
+
+
+def test_removed_item_can_be_restored_with_its_state():
+    with journey_client() as client:
+        client.put("/profile/u1", json={"service_type": "conscript"})
+        item = client.post("/journey/u1/generate").json()["items"][0]
+        client.patch(f"/journey/u1/items/{item['id']}", json={"done": True})
+        done = client.get("/journey/u1").json()["items"][0]
+        client.delete(f"/journey/u1/items/{item['id']}")
+        # 되돌리기: 빼기 전 상태(완료, 원래 출처) 그대로 다시 담는다
+        body = {
+            k: done[k]
+            for k in (
+                "stage",
+                "title",
+                "action",
+                "detail",
+                "sources",
+                "core",
+                "deadline",
+                "due_months",
+                "done",
+                "origin",
+            )
+        }
+        restored = client.post("/journey/u1/items", json={"items": [body]}).json()["added"][0]
+        assert (
+            restored["title"] == done["title"] and restored["done"] is True and restored["done_at"]
+        )
+        assert restored["origin"] == "plan"

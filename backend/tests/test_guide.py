@@ -114,7 +114,31 @@ def test_questions_about_how_or_eligibility_always_search():
     assert needs_research("예비군 훈련, 어떻게 신청해요?")
     assert needs_research("국민취업지원제도 받을 수 있어요?")
     assert needs_research("서류는 뭐가 필요해요?")
+    assert needs_research("혜택 알려줘")
+    assert needs_research("전역했는데 뭐 받을 수 있어?")
     assert not needs_research("안녕하세요")
     assert not needs_research("서울 살아요")
+    assert not needs_research("전역했는데 이제 뭐부터 해야 돼요?")  # 다음 임무 안내 요청
     assert not needs_research("국가유공자·보훈대상자예요")  # 첫 시작 버튼 말
     assert not needs_research("'예비군 훈련' 했어요")
+
+
+def test_tasks_backed_only_by_portal_guides_are_dropped():
+    # '정부24에서 혜택 조회하기'처럼 기관 안내만 근거인 할 일은 구체적인 제도가 아니다
+    sources = [
+        {"type": "institution", "title": "정부24 (보조금24)", "url": "https://www.gov.kr"},
+        *SOURCES,
+    ]
+    draft = GuideDraft(
+        say="",
+        items=[
+            PlanItemDraft(
+                stage="right_after", title="정부24 혜택 조회", action="조회하세요", sources=[1]
+            ),
+            PlanItemDraft(
+                stage="job", title="국민취업지원제도", action="신청하세요", sources=[1, 2]
+            ),
+        ],
+    )
+    picked = pick_items(draft, answer="", sources=sources, existing=[])
+    assert [p["title"] for p in picked] == ["국민취업지원제도"]

@@ -90,7 +90,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
     }`;
 
   return (
-    <header className="relative z-20 shrink-0 border-b-[3px] border-olive-dark bg-[linear-gradient(#f3ead2,#e9dfc0)] shadow-[0_3px_0_rgb(0_0_0_/_0.2)] dark:bg-[linear-gradient(#2c3122,#23271b)]">
+    <header className="relative z-20 shrink-0 border-b-[3px] border-olive-dark bg-[linear-gradient(var(--bar-1),var(--bar-2))] shadow-[0_3px_0_rgb(0_0_0_/_0.2)]">
       <div className="mx-auto flex h-[60px] max-w-[1320px] items-center gap-3 px-3 sm:px-6">
         <button
           type="button"
@@ -217,7 +217,7 @@ export function MobileTabs({
   return (
     <nav
       aria-label="메뉴"
-      className="z-30 flex shrink-0 border-t-[3px] border-olive-dark bg-[#f3ead2] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] lg:hidden dark:bg-[#2c3122]"
+      className="z-30 flex shrink-0 border-t-[3px] border-olive-dark bg-[var(--bar-1)] px-1 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom,0px))] lg:hidden"
     >
       <button type="button" onClick={onChat} aria-current={view === "home" || view === "chat" ? "page" : undefined} className={tab(view === "home" || view === "chat")}>
         <MessageSquare className="size-[22px]" strokeWidth={2.2} />

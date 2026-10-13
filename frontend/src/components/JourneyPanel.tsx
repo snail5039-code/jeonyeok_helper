@@ -3,7 +3,7 @@
 import { Check, ChevronRight, Star } from "lucide-react";
 import { useState } from "react";
 
-import { STAGE_BY_KEY, badges as badgesOf, levelOf, nextItem, progress, sortItems } from "@/lib/journey";
+import { MIN_CORE, STAGE_BY_KEY, toCivilian, badges as badgesOf, levelOf, nextItem, progress, sortItems } from "@/lib/journey";
 import type { JourneyItem, Profile } from "@/lib/types";
 
 import { Stamp } from "./Book";
@@ -18,7 +18,7 @@ const RANKS = ["이병", "일병", "상병", "병장"] as const;
 export function RankCard({ items }: { items: JourneyItem[] }) {
   const p = progress(items);
   const level = levelOf(items);
-  const left = p.coreTotal - p.coreDone;
+  const left = toCivilian(items) ?? 0;
   return (
     <section className="grid grid-cols-[84px_minmax(0,1fr)] items-center gap-3.5 rounded-xl border-[2.5px] border-ink bg-soft p-3 shadow-[4px_4px_0_var(--olive-dark)]">
       <div className="grid place-items-center rounded-lg border-2 border-edge bg-sunken pt-1">
@@ -45,6 +45,8 @@ export function RankCard({ items }: { items: JourneyItem[] }) {
         <p className="text-[13.5px] text-fg-2">
           {!items.length ? (
             "대화하면서 임무를 담아 보세요."
+          ) : p.coreTotal < MIN_CORE ? (
+            `핵심 임무를 ${MIN_CORE}개 이상 담으면 민간인에 도전할 수 있어요.`
           ) : level.finished ? (
             "핵심 임무 완료. 민간인 됐어요!"
           ) : (

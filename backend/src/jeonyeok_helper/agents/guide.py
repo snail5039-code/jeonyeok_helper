@@ -65,7 +65,8 @@ REGIONS = [
 RESEARCH_WORDS = re.compile(
     "|".join(
         ["어떻게", "방법", "절차", "서류", "자격", "조건", "얼마", "금액", "언제까지", "기한",
-         "어디서", "어디에", "신청", "받을 수", "되나요", r"돼요\?"]
+         "어디서", "어디에", "신청", "받을 수", "받을수", "되나요", "혜택", "지원금",
+         "뭐 받", "뭐가 있", "뭐 있"]
     )
 )  # fmt: skip
 
@@ -193,9 +194,9 @@ COACH_PROMPT = ChatPromptTemplate.from_messages(
             "2. 진행 보고 ('~ 했어요', '나중에 할게요')\n"
             "3. 복무 형태·지역·전역일 같은 자기 정보만 말하고 따로 묻는 것이 없을 때\n"
             "4. 다음 할 일 안내 요청 ('다음 뭐 해요?', '뭐부터 해야 돼요?', '로드맵 만들어 줘')\n"
-            "5. '혜택 뭐 있어요?'처럼 맞춤 혜택을 묻는데 복무 형태를 모를 때 (먼저 물어보기)\n"
-            "그 밖에 제도·법령·혜택·자격·금액·기한·서류·신청 방법('어떻게 신청해요?')·기관을 "
-            "묻는 질문은 복무 형태를 몰라도 모두 research. 애매하면 research.\n\n"
+            "그 밖에 혜택·제도·법령·자격·금액·기한·서류·신청 방법('어떻게 신청해요?')·기관을 "
+            "묻는 질문은 모두 research ('혜택 뭐 있어요?'처럼 복무 형태를 몰라도: 병사 기준으로 "
+            "찾고 화면이 따로 유형을 묻습니다). 애매하면 research.\n\n"
             "talk일 때 say에 사용자에게 할 말을 쓰세요.\n"
             "- 2~3문장, 짧고 친근한 반말 섞인 해요체 ('~했군요' 같은 딱딱한 말 대신 "
             "'오, 좋아요!', '굿!'). 군대 농담은 가끔 한 번만 (예: '충성!', '말년 병장 폼').\n"
@@ -231,10 +232,12 @@ GUIDE_PROMPT = ChatPromptTemplate.from_messages(
             "당신은 전역자의 길잡이 전역이입니다. 아래 상담 답변은 길어서, 그 위에 보일 "
             "짧은 한마디와 로드맵에 담을 할 일을 정합니다.\n"
             "say: 답변에서 사용자가 '지금 가장 먼저 할 일' 하나를 짚는 1~2문장, 친근한 해요체. "
+            "구체적인 혜택·제도 이름을 말할 것 ('정부24에서 조회하세요' 같은 일반 안내는 금지). "
             "답변에 없는 사실은 쓰지 말 것. 빠진 정보가 있으면 끝에 그것을 묻는 질문 하나.\n"
             "items: 사용자가 직접 해야 할 일(신청, 등록, 확인, 준비) 0~3개.\n"
             "- 답변에 있는 내용만, 근거 출처 번호(sources)를 반드시 넣기\n"
             "- 사용자에게 해당하지 않거나 정보일 뿐이면 빼기 (빈 목록 가능)\n"
+            "- '사이트에서 혜택 조회하기'처럼 특정 제도가 아닌 일반 할 일은 빼기\n"
             "- '이미 로드맵에 있는 할 일'과 같은 일은 빼기\n"
             "- stage: before(전역 전), right_after(전역 직후), job(취업·창업), study(학업), "
             "life(주거·생활), later(나중에). 사용자의 전역 시기를 고려\n"
@@ -286,7 +289,9 @@ def pick_items(
     for item in draft.items[:3]:
         refs = [sources[i - 1] for i in item.sources if 1 <= i <= len(sources)]
         title = item.title.strip()[:120]
-        if not refs or not title or any(same_task(title, k) for k in known):
+        # 근거가 기관 안내(사이트·연락처)뿐이면 구체적인 제도가 아니다 ('정부24에서 조회' 같은 것)
+        grounded = any(r.get("type") in ("regulation", "benefit") for r in refs)
+        if not grounded or not title or any(same_task(title, k) for k in known):
             continue
         known.add(title)
         deadline, due = ground_deadline(item.deadline, item.due_months, [answer])
