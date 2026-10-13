@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from typing import Any, Literal
@@ -65,6 +66,22 @@ TOPICS_BY_TYPE = {
 
 STUDY_KEYWORDS = ["국가장학금", "학자금"]
 
+# 학부 재학생 전용 장학금 (대학원생·졸업생은 대상이 아니다).
+# 학자금 '대출'은 대학원생도 받을 수 있어 넣지 않는다.
+UNDERGRAD_ONLY = re.compile(
+    r"국가장학금|국가근로|반값등록금|대학자체노력|희망사다리|다자녀\s*국가장학"
+)
+
+
+def fits_education(text: str, education: str | None, goals: list[str] | None = None) -> bool:
+    """학부 전용 장학금을 대학원생·(복학·진학 계획 없는) 대졸자에게 권하지 않는다. 모르면 통과."""
+    if not education or not UNDERGRAD_ONLY.search(text):
+        return True
+    if "대학원" in education:
+        return False
+    returning = any(w in g for g in goals or [] for w in ("복학", "진학"))
+    return not ("졸업" in education and "대학" in education and not returning)
+
 
 # '내 정보'의 전역 후 계획에 따라 더 찾아볼 주제
 TOPICS_BY_GOAL = {
@@ -84,6 +101,7 @@ class RoadmapProfile(BaseModel):
     age: int | None = Field(default=None, ge=15, le=100)
     region: str | None = Field(default=None, max_length=30)
     goals: list[str] = Field(default_factory=list, max_length=8)
+    education: str | None = Field(default=None, max_length=60)
     # 계급·특기·학력·자격증·메모 등 그 밖의 '내 정보'를 한 줄로 (정리 단계에서 참고)
     notes: str = Field(default="", max_length=1500)
 
@@ -117,11 +135,15 @@ ROADMAP_PROMPT = ChatPromptTemplate.from_messages(
             "- 단계: before(전역 전), right_after(전역 직후), job(취업·창업), study(학업), "
             "life(주거·생활), later(나중에 챙길 것). 해당하는 할 일이 없는 단계는 빼세요.\n"
             "- 오늘은 {today}입니다. 사용자가 이미 전역했으면 before(전역 전) 단계와 복무 중에만 "
-            "할 수 있는 일(복무 중 적금 가입, 군 원격강좌 등)은 빼세요.\n"
+            "할 수 있는 일(복무 중 적금 가입, 군 원격강좌, 전역예정장병 대상 프로그램 등)은 "
+            "빼세요. 자료의 신청 기간이 오늘보다 앞서 끝났으면 그 날짜를 기한으로 쓰지 마세요.\n"
+            "- 특정 집단만 받는 혜택(자립준비청년, 국가대표, 북한이탈주민, 특정 전공, "
+            "국가유공자 자녀 등)은 사용자 정보에 그 사실이 있을 때만 넣으세요.\n"
             "- 할 일마다 근거 자료 번호(source_ids)를 반드시 넣고, 자료에 없는 혜택·금액·기한은 "
             "쓰지 마세요.\n"
             "- 사용자의 복무 형태·나이·지역에 맞지 않는 항목은 빼세요 (예: 다른 지역 혜택, "
-            "장기복무자 전용 혜택을 병사에게).\n"
+            "장기복무자 전용 혜택을 병사에게). 학력이 대학원이면 국가장학금 같은 학부 재학생 "
+            "전용 장학금도 뺍니다.\n"
             "- 단계마다 중요한 순서로 최대 4개, 전체 12개 이내. 같은 제도는 한 번만.\n"
             "- core: 단계마다 1~2개, 놓치면 손해이거나 기한이 있는 핵심 할 일만 true. "
             "사용자는 핵심 할 일을 다 끝내면 로드맵을 완주한 것으로 봅니다.\n"
@@ -145,7 +167,13 @@ def _profile_text(p: RoadmapProfile) -> str:
     if p.service_years:
         parts.append(f"{p.service_years:g}년 복무")
     if p.discharge_date:
-        parts.append(f"전역 {p.discharge_date}")
+        from jeonyeok_helper.agents.prompts import discharge_status, reserve_status
+
+        status = discharge_status(p.discharge_date)
+        parts.append(status or f"전역 {p.discharge_date}")
+        if p.service_type == "conscript" and status and "복무 중" not in status:
+            if reserve := reserve_status(p.discharge_date):
+                parts.append(f"예비군 {reserve}")
     if p.age:
         parts.append(f"{p.age}세")
     if p.region:
@@ -154,6 +182,8 @@ def _profile_text(p: RoadmapProfile) -> str:
         parts.append(f"전역 후 계획: {', '.join(p.goals)}")
     if p.notes:
         parts.append(p.notes)
+    elif p.education:
+        parts.append(f"학력={p.education}")
     return ", ".join(parts)
 
 
@@ -164,6 +194,8 @@ def gather(services: Any, profile: RoadmapProfile) -> list[dict]:
 
     def add(kind: str, title: str, url: str, text: str) -> None:
         if not title or (kind, title) in seen:
+            return
+        if not fits_education(title, profile.education, profile.goals):
             return
         seen.add((kind, title))
         evidence.append(

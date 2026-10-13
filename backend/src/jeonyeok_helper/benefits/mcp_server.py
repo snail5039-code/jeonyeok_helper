@@ -30,7 +30,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from jeonyeok_helper.benefits.common import BenefitApiError
+from jeonyeok_helper.benefits.common import CLOSED_NOTE, BenefitApiError, period_closed
 from jeonyeok_helper.benefits.gov24 import Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
@@ -215,7 +215,12 @@ def create_server(services: Services | None = None) -> FastMCP:
         다른 혜택(예: 병사에게 중·장기복무 전용)은 뺀다.
         """
         try:
-            benefits = svc.gov24.search(keywords=keywords, region=region, limit=limit * 2)
+            benefits = svc.gov24.search(
+                keywords=keywords,
+                region=region,
+                limit=limit * 2,
+                prefer_youth=service_type in (None, "conscript", "short_term_officer"),
+            )
         except BenefitApiError as e:
             return {"benefits": [], "error": str(e), "fallback": fallback(" ".join(keywords or []))}
         benefits = [b for b in benefits if fits_service_type(b, service_type)][:limit]
@@ -238,6 +243,8 @@ def create_server(services: Services | None = None) -> FastMCP:
             )
             if inst := svc.directory.for_agency(b.agency):
                 item["institution"] = _institution_dict(inst)
+            if period_closed(b.deadline):
+                item["deadline"] += CLOSED_NOTE
             results.append(item)
         return {"benefits": results}
 
@@ -307,11 +314,13 @@ def create_server(services: Services | None = None) -> FastMCP:
             policies = svc.youth.search(keyword=keyword, region=region, age=age, limit=limit)
         except BenefitApiError as e:
             return {"policies": [], "error": str(e), "fallback": fallback("청년")}
-        return {
-            "policies": [
-                p.model_dump(exclude={"sido_codes", "business_end", "policy_id"}) for p in policies
-            ]
-        }
+        found = []
+        for p in policies:
+            item = p.model_dump(exclude={"sido_codes", "business_end", "policy_id"})
+            if period_closed(p.apply_period):
+                item["apply_period"] += CLOSED_NOTE
+            found.append(item)
+        return {"policies": found}
 
     @server.tool()
     @threaded

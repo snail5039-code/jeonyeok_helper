@@ -155,3 +155,16 @@ def test_build_roadmap_passes_profile_and_evidence_to_organizer():
     assert seen["evidence"].startswith("[E1]")
     assert out["stages"][0]["title"] == "전역 직후"
     assert out["profile"]["region"] == "서울"
+
+
+def test_fits_education_drops_undergrad_scholarships_for_graduate_students():
+    from jeonyeok_helper.agents.roadmap import fits_education
+
+    title = "국가장학금 II유형(대학자체노력연계형)"
+    assert not fits_education(title, "대학원")
+    assert fits_education(title, "대학 재학·휴학")
+    assert fits_education(title, None)
+    assert fits_education("청년 월세 지원", "대학원")
+    # 대졸자는 복학·진학 계획이 없을 때만 뺀다
+    assert not fits_education(title, "대학 졸업", ["취업"])
+    assert fits_education(title, "대학 졸업", ["복학·진학"])

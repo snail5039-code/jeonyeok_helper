@@ -199,7 +199,7 @@ class FakeGov24:
     def __init__(self, fail: bool = False):
         self.fail = fail
 
-    def search(self, keywords=None, region=None, limit=10):
+    def search(self, keywords=None, region=None, limit=10, prefer_youth=False):
         if self.fail:
             raise BenefitApiError("서비스키가 설정되지 않았습니다")
         return [Benefit.from_api(api_item("1", "제대군인 전직지원금", "국가보훈부 제대군인정책과"))]
@@ -555,3 +555,14 @@ def test_veteran_jobs_use_place_codes_and_drop_closed():
 
     VeteranJobClient().search(today=date(2026, 10, 12))  # 지역을 모르면 전국
     assert route.calls[-1].request.url.params["place"] == "z"
+
+
+@respx.mock
+def test_search_puts_youth_programs_first_on_ties_for_young_users():
+    respx.get(f"{BASE_URL}/serviceList").mock(
+        return_value=page(api_item("loan", "주택 월세대출"), api_item("youth", "청년월세 지원"))
+    )
+    client = Gov24Client("KEY")
+    assert [b.service_id for b in client.search(keywords=["월세"])] == ["loan", "youth"]
+    young = client.search(keywords=["월세"], prefer_youth=True)
+    assert [b.service_id for b in young] == ["youth", "loan"]

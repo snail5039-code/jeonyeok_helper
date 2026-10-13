@@ -147,10 +147,13 @@ class Gov24Client:
         keywords: list[str] | None = None,
         region: str | None = None,
         limit: int = 20,
+        prefer_youth: bool = False,
     ) -> list[Benefit]:
         """키워드별로 조회해 합치고, 관련도 순으로 정렬한다.
 
         region을 주면 다른 지역 지자체의 혜택은 뺀다 (중앙부처·공공기관 혜택은 유지).
+        prefer_youth: 병사·단기 간부처럼 대부분 청년인 사용자면 관련도가 같을 때 이름에
+        '청년'이 든 혜택을 앞에 둔다 ('월세'로 찾으면 '청년월세 지원'이 대출 상품에 밀려 잘렸다).
         일부 요청만 실패하면 나머지 결과로 진행하고, 전부 실패하면 예외를 낸다.
         """
         keywords = keywords or DEFAULT_KEYWORDS
@@ -177,5 +180,11 @@ class Gov24Client:
 
         # 지역을 모르면 어느 지역 사람에게도 맞는 전국 혜택을 먼저 둔다
         # (주제어로 찾으면 '성남시 등록금 지원' 같은 지자체 혜택이 수십 건 섞인다)
-        results.sort(key=lambda b: (not keys and b.is_local, -relevance(b)))
+        results.sort(
+            key=lambda b: (
+                not keys and b.is_local,
+                -relevance(b),
+                not (prefer_youth and "청년" in b.name),
+            )
+        )
         return results[:limit]

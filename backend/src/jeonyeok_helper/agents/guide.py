@@ -26,7 +26,7 @@ from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
 from jeonyeok_helper.agents.prompts import COMMON
-from jeonyeok_helper.agents.roadmap import STAGE_TITLES, StageKey
+from jeonyeok_helper.agents.roadmap import STAGE_TITLES, StageKey, fits_education
 from jeonyeok_helper.journey import ground_deadline
 
 STAGE_ORDER = {key: i for i, key in enumerate(STAGE_TITLES)}
@@ -71,8 +71,21 @@ RESEARCH_WORDS = re.compile(
 )  # fmt: skip
 
 
+# '했어요'를 잘못 눌렀다는 말 (이건 신청 방법을 묻는 게 아니라 완료를 되돌려 달라는 것)
+REOPEN_WORDS = re.compile(r"실수로|잘못 눌|잘못눌|되돌|취소|아직 안 ?했|안 했는데|놓쳤|다시 해")
+
+
 def needs_research(text: str) -> bool:
-    return bool(RESEARCH_WORDS.search(text))
+    return bool(RESEARCH_WORDS.search(text)) and not REOPEN_WORDS.search(text)
+
+
+def find_done(items: list[dict], title: str) -> dict | None:
+    """완료한 할 일 중 이 제목과 같은 것 (LLM이 제목을 조금 다르게 적어도 찾는다)."""
+    title = title.strip()
+    if not title:
+        return None
+    done = [i for i in items if i.get("done")]
+    return next((i for i in done if same_task(i["title"], title)), None)
 
 
 def missing_field(profile: dict | None) -> str | None:
@@ -194,6 +207,9 @@ COACH_PROMPT = ChatPromptTemplate.from_messages(
             "2. 진행 보고 ('~ 했어요', '나중에 할게요')\n"
             "3. 복무 형태·지역·전역일 같은 자기 정보만 말하고 따로 묻는 것이 없을 때\n"
             "4. 다음 할 일 안내 요청 ('다음 뭐 해요?', '뭐부터 해야 돼요?', '로드맵 만들어 줘')\n"
+            "5. 완료 표시를 되돌려 달라는 말 ('실수로 했어요 눌렀어', '그거 아직 안 했어', "
+            "'놓쳤어 다시 해줘'): reopen에 로드맵에서 ✓ 표시된 그 할 일 제목을 그대로 쓰고, say로 "
+            "되돌렸다고 알려 주세요\n"
             "그 밖에 혜택·제도·법령·자격·금액·기한·서류·신청 방법('어떻게 신청해요?')·기관을 "
             "묻는 질문은 모두 research ('혜택 뭐 있어요?'처럼 복무 형태를 몰라도: 병사 기준으로 "
             "찾고 화면이 따로 유형을 묻습니다). 애매하면 research.\n\n"
@@ -217,6 +233,9 @@ COACH_PROMPT = ChatPromptTemplate.from_messages(
 class CoachDecision(BaseModel):
     mode: Literal["research", "talk"]
     say: str = Field(default="", description="talk일 때 사용자에게 할 말 (2~3문장)")
+    reopen: str = Field(
+        default="", description="완료를 되돌려 달라는 할 일의 제목 (로드맵의 ✓ 할 일). 아니면 빈 칸"
+    )
 
 
 def make_coach(llm) -> Runnable:
@@ -233,7 +252,11 @@ GUIDE_PROMPT = ChatPromptTemplate.from_messages(
             "짧은 한마디와 로드맵에 담을 할 일을 정합니다.\n"
             "say: 답변에서 사용자가 '지금 가장 먼저 할 일' 하나를 짚는 1~2문장, 친근한 해요체. "
             "구체적인 혜택·제도 이름을 말할 것 ('정부24에서 조회하세요' 같은 일반 안내는 금지). "
-            "답변에 없는 사실은 쓰지 말 것. 빠진 정보가 있으면 끝에 그것을 묻는 질문 하나.\n"
+            "답변에 없는 사실은 쓰지 말 것. 빠진 정보가 있으면 끝에 그것을 묻는 질문 하나 "
+            "(프로필에 이미 있는 정보는 묻지 말 것).\n"
+            "오늘은 {today}입니다. 신청 기간이 지난 공고, 이미 지나간 일, 그리고 프로필의 "
+            "'전역 상태'가 이미 전역함이면 복무 중에만 할 수 있는 일(전역예정장병 프로그램, "
+            "적금 가입, 전역 전 교육)은 say에서 권하지도, items에 담지도 말 것.\n"
             "items: 사용자가 직접 해야 할 일(신청, 등록, 확인, 준비) 0~3개.\n"
             "- 답변에 있는 내용만, 근거 출처 번호(sources)를 반드시 넣기\n"
             "- 사용자에게 해당하지 않거나 정보일 뿐이면 빼기 (빈 목록 가능)\n"
@@ -255,7 +278,7 @@ GUIDE_PROMPT = ChatPromptTemplate.from_messages(
             "질문: {question}\n\n답변:\n{answer}\n\n근거 출처:\n{sources}",
         ),
     ]
-)
+).partial(today=lambda: date.today().isoformat())
 
 
 class PlanItemDraft(BaseModel):
@@ -281,10 +304,16 @@ def make_guide(llm) -> Runnable:
 
 
 def pick_items(
-    draft: GuideDraft, *, answer: str, sources: list[dict], existing: list[str]
+    draft: GuideDraft,
+    *,
+    answer: str,
+    sources: list[dict],
+    existing: list[str],
+    profile: dict | None = None,
 ) -> list[dict]:
     """근거 출처가 있는 새 할 일만, 출처 번호는 실제 출처로 바꾸고 기한은 답변에 있을 때만."""
     known = {t.strip() for t in existing}
+    p = profile or {}
     items = []
     for item in draft.items[:3]:
         refs = [sources[i - 1] for i in item.sources if 1 <= i <= len(sources)]
@@ -293,6 +322,8 @@ def pick_items(
         grounded = any(r.get("type") in ("regulation", "benefit") for r in refs)
         if not grounded or not title or any(same_task(title, k) for k in known):
             continue
+        if not fits_education(title, p.get("education"), p.get("goals")):
+            continue  # 대학원생에게 국가장학금 같은 학부 전용 장학금은 담지 않는다
         known.add(title)
         deadline, due = ground_deadline(item.deadline, item.due_months, [answer])
         items.append(

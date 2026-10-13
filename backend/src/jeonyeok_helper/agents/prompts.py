@@ -1,5 +1,6 @@
 """에이전트 프롬프트와 프롬프트에 넣을 상태 포맷터."""
 
+import re
 from datetime import date
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -76,7 +77,8 @@ WORKER_PROMPTS = {
     "'전역하면 뭐 받아요?'처럼 혜택 전반을 넓게 물으면 한 번에 찾지 말고 대표 제도를 하나씩 "
     "search_regulations로 찾으세요. 병사(복무 형태를 모를 때 포함): 군복무 크레딧, "
     "장병내일준비적금, "
-    "국민취업지원제도 청년 나이 병역 가산, 예비군 편성, 복학 국가장학금. 간부: 전직지원금, "
+    "국민취업지원제도 청년 나이 병역 가산, 예비군 편성, 복학 국가장학금(학업 계획이 있거나 "
+    "모를 때만). 간부: 전직지원금, "
     "군인연금(퇴직급여), 제대군인 채용시험 응시연령 연장. 보훈대상자: 국가유공자 등록, 보훈급여금."
     + GROUNDING,
     "benefit": COMMON + "\n\n당신은 혜택 담당입니다. search_benefits, get_benefit_detail 도구로 "
@@ -84,10 +86,15 @@ WORKER_PROMPTS = {
     "프로필의 service_type과 region을 알면 search_benefits에 꼭 넣으세요. 복무 형태를 "
     "모르면 service_type='conscript'(의무복무 병사, 전역자 대부분)로 찾으세요. "
     "keywords를 비우면 전역·보훈 관련 혜택만 찾으므로, 질문이 특정 분야면 그 분야 단어를 "
-    "keywords에 넣으세요 (예: 복학·등록금 → ['국가장학금', '학자금'], 집·월세 → ['주거', '월세'], "
-    "창업 → ['창업']). 프로필에 전역 후 계획·희망 분야·자격증이 있으면 그에 맞는 단어도 "
+    "keywords에 넣으세요 (예: 복학·등록금 → ['국가장학금', '학자금'], 월세 → ['월세'], "
+    "집·주거 전반 → ['주거', '월세'], 창업 → ['창업']). 넓은 단어를 같이 넣으면 대출·취약계층 "
+    "사업이 앞에 와서 질문에 딱 맞는 혜택이 밀리니, 질문에 나온 말을 그대로 쓰세요. "
+    "프로필에 전역 후 계획·희망 분야·자격증이 있으면 그에 맞는 단어도 "
     "keywords와 search_youth_policies·search_jobs의 keyword에 넣으세요. "
-    "대상이 맞지 않는 혜택은 빼세요. 의무복무 병사나 34세 이하 사용자에게는 "
+    "대상이 맞지 않는 혜택은 빼세요. 혜택을 찾을 때는 반드시 search_benefits부터 "
+    "부르세요: 정부·지자체가 돈을 주는 지원(청년월세 지원 같은 보조금)은 정부24에 있고, "
+    "온통청년에는 대출·프로그램이 많아 search_youth_policies만으로 끝내면 핵심 지원이 "
+    "빠집니다. 의무복무 병사나 34세 이하 사용자에게는 그다음 "
     "search_youth_policies로 청년정책도 함께 찾으세요(지역·나이를 알면 넣을 것). "
     "채용공고나 일자리를 물으면 search_jobs로 "
     "사용자 지역의 제대군인지원센터 공고를 찾으세요. 보훈특별고용, 공무원·군무원 특별채용, "
@@ -139,6 +146,33 @@ RESPOND_PROMPT = ChatPromptTemplate.from_messages(
             "- 찾은 내용에 없는 금액, 기한, 자격 조건은 지어내지 말 것\n"
             "- 사용자 프로필과 대상이 다른 혜택은 넣지 말 것 (예: 병사에게 '중·장기복무' 전용 "
             "혜택, 다른 지역 혜택, 나이가 맞지 않는 청년정책)\n"
+            "- 블록을 쓰기 전에 그 혜택의 대상을 프로필과 하나씩 대조할 것. 특정 집단만 받는 "
+            "혜택(자립준비청년, 국가대표 선수, 북한이탈주민, 특정 전공·학과·학회 회원, "
+            "국가유공자·그 자녀, 장애인, 다자녀 가구 등)은 프로필에 그 사실이 있을 때만 넣을 것. "
+            "제목이 그럴듯해도 대상 조건이 맞지 않으면 빼는 것이 이 서비스의 신뢰입니다\n"
+            "- 구·군 단위 혜택(예: 동대문구, 관악구)은 사용자가 그 구·군에 산다고 했을 때만 "
+            "블록으로 쓸 것. 지역이 '서울'처럼 시·도만 있으면 쓰지 말고 마지막에 "
+            "'사는 구를 알려 주면 "
+            "구청 혜택도 찾아 드려요'라고 한 줄만\n"
+            "- '혜택 다 알려줘'처럼 넓은 질문이면 이 사용자에게 중요한 순서로 블록 6개까지만. "
+            "전역 후 계획이 있으면 그 계획에 맞는 것을 앞에 두고, 학력·계획에 학업(복학·진학)이 "
+            "없으면 장학금·학자금은 넣지 말 것\n"
+            "- 프로필의 '전역 상태'를 꼭 볼 것. 이미 전역한 사람에게 복무 중에만 할 수 있는 일"
+            "(전역예정장병·현역 대상 프로그램, 적금 가입, 군 원격강좌, 전역 전 교육 입교)을 "
+            "할 일로 권하지 말 것. 이미 지나간 일(예: 장병내일준비적금 만기 수령)은 '전역할 때 "
+            "받았을 거예요'처럼 지난 일로 말할 것\n"
+            "- 전역 시기·복무 기간에 따라 기준이 다른 제도(군복무 크레딧 인정 기간, 전직지원금 "
+            "등)는 사용자의 전역 시기·복무 기간에 맞는 기준만 쓰고, 원문에 그 사람 기준이 없으면 "
+            "기준이 다를 수 있다고 밝힐 것\n"
+            "- 프로필에 '예비군' 연차가 있으면 직접 세지 말고 그 값을 그대로 쓸 것\n"
+            "- 사용자가 대상인지 프로필로 판단할 수 있으면 첫 문단에 분명히 말할 것 "
+            "(예: '4년 복무라 전직지원금 대상(5년 이상)은 아니에요')\n"
+            "- '지난 공고'로 표시된 신청 기간은 앞으로의 기한처럼 쓰지 말고 '지난 공고 기준이라 "
+            "올해 일정은 확인이 필요해요'라고 쓸 것. 오늘({today})보다 이전 날짜를 '놓치지 "
+            "마세요'처럼 권하지 말 것\n"
+            "- 병사(의무복무)에게는 '전역간부 안내서'나 간부 전용 제도를 근거로 쓰지 말 것 "
+            "(병사에게도 똑같이 해당한다고 원문에 있을 때만)\n"
+            "- 프로필에 이미 있는 정보(전역일, 복무 형태 등)를 다시 묻지 말 것\n"
             "- 혜택 안내가 아닌 단순 질문이면 블록 없이 문단으로만 답할 것\n"
             "- '정부24·온통청년에서 조회해 보세요'처럼 사이트로 떠넘기는 말로 답을 끝내지 말 것. "
             "도구 원문에 있는 구체적인 혜택·제도를 이름과 내용으로 보여 주는 것이 이 서비스의 "
@@ -157,7 +191,7 @@ RESPOND_PROMPT = ChatPromptTemplate.from_messages(
         ),
         MessagesPlaceholder("messages"),
     ]
-)
+).partial(today=lambda: date.today().isoformat())
 
 VERIFY_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -182,13 +216,66 @@ VERIFY_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
+def discharge_status(discharge_date: str | None, today: date | None = None) -> str:
+    """전역일('2020-04', '2027-03-15', '2026')을 오늘과 비교한 한 줄. 모르면 빈 문자열.
+
+    LLM이 전역일만 보고는 '이미 전역했는지'를 자주 놓쳐서(6년 전 전역자에게 전역 전 교육·적금
+    가입을 권함) 계산해서 알려 준다."""
+    m = re.match(r"\s*(\d{4})(?:\D+(\d{1,2}))?", discharge_date or "")
+    if not m:
+        return ""
+    today = today or date.today()
+    year, month = int(m[1]), int(m[2] or 0)
+    if not 1 <= month <= 12:
+        # 연도만 알면: 지난해 이전이면 전역, 내년 이후면 복무 중, 올해면 알 수 없음
+        if year < today.year:
+            return f"{year}년 전역 (이미 전역함, 약 {today.year - year}년 전)"
+        if year > today.year:
+            return f"{year}년 전역 예정 (아직 복무 중)"
+        return f"{year}년 전역 (올해)"
+    months = (today.year - year) * 12 + today.month - month
+    if months > 0:
+        ago = f"약 {months // 12}년 전" if months >= 12 else f"{months}개월 전"
+        return f"{year}-{month:02d} 전역 (이미 전역함, {ago})"
+    if months < 0:
+        return f"{year}-{month:02d} 전역 예정 (아직 복무 중, {-months}개월 남음)"
+    return f"{year}-{month:02d} 전역 (이번 달)"
+
+
+def reserve_status(discharge_date: str | None, today: date | None = None) -> str:
+    """병사의 예비군 연차. 전역 다음 해가 1년차, 1~6년차 훈련, 7~8년차 훈련 면제
+    (비상소집 점검), 8년차 해 12월 31일까지 편성. LLM이 연차를 잘못 세서 계산해 준다."""
+    m = re.match(r"\s*(\d{4})", discharge_date or "")
+    if not m:
+        return ""
+    today = today or date.today()
+    year = int(m[1])
+    n, last = today.year - year, year + 8
+    if n < 0:
+        return ""
+    if n == 0:
+        return f"올해 전역해 내년이 1년차 ({last}년 12월 31일까지 편성)"
+    if n <= 6:
+        return f"{n}년차, 올해 훈련 대상 ({last}년 12월 31일까지 편성)"
+    if n <= 8:
+        return f"{n}년차, 훈련 면제·비상소집 점검만 (밀린 훈련은 해야 함, {last}년까지 편성)"
+    return f"편성 끝남 ({last}년 12월 31일)"
+
+
 def format_profile(profile: dict | None) -> str:
     from jeonyeok_helper.agents.state import PROFILE_LABELS
 
     def show(v) -> str:
         return ", ".join(map(str, v)) if isinstance(v, list) else str(v)
 
-    parts = [f"{PROFILE_LABELS.get(k, k)}={show(v)}" for k, v in (profile or {}).items() if v]
+    p = profile or {}
+    parts = [f"{PROFILE_LABELS.get(k, k)}={show(v)}" for k, v in p.items() if v]
+    if status := discharge_status(p.get("discharge_date")):
+        parts.append(f"전역 상태={status}")
+        # 간부는 계급·나이에 따라 예비군 기간이 달라 병사만 계산한다
+        if p.get("service_type") == "conscript" and "복무 중" not in status:
+            if reserve := reserve_status(p.get("discharge_date")):
+                parts.append(f"예비군={reserve}")
     return "; ".join(parts) or "(아직 모름)"
 
 

@@ -367,3 +367,39 @@ def test_profile_extraction_schema_stays_small():
     assert set(Profile.model_fields) == {
         "service_type", "service_years", "discharge_date", "age", "region", "merit_status",
     }  # fmt: skip
+
+
+def test_discharge_status_tells_whether_user_already_left_the_army():
+    from datetime import date
+
+    from jeonyeok_helper.agents.prompts import discharge_status, format_profile
+
+    today = date(2026, 10, 13)
+    assert discharge_status("2020-04", today) == "2020-04 전역 (이미 전역함, 약 6년 전)"
+    assert discharge_status("2027-03", today) == "2027-03 전역 예정 (아직 복무 중, 5개월 남음)"
+    assert discharge_status("2026-08-15", today) == "2026-08 전역 (이미 전역함, 2개월 전)"
+    assert discharge_status("2024", today) == "2024년 전역 (이미 전역함, 약 2년 전)"
+    assert discharge_status("", today) == ""
+    assert discharge_status("unknown", today) == ""
+    assert "전역 상태=" in format_profile({"discharge_date": "2020-04"})
+    assert "전역 상태" not in format_profile({"region": "서울"})
+
+
+def test_reserve_status_counts_years_from_the_year_after_discharge():
+    from datetime import date
+
+    from jeonyeok_helper.agents.prompts import format_profile, reserve_status
+
+    today = date(2026, 10, 13)
+    assert reserve_status("2020-04", today).startswith("6년차, 올해 훈련 대상")
+    assert reserve_status("2019-04", today).startswith("7년차, 훈련 면제")
+    assert reserve_status("2017-01", today) == "편성 끝남 (2025년 12월 31일)"
+    assert reserve_status("2026-03", today).startswith("올해 전역해 내년이 1년차")
+    # 간부와 아직 복무 중인 병사에게는 붙이지 않는다
+    assert "예비군=" in format_profile({"service_type": "conscript", "discharge_date": "2020-04"})
+    assert "예비군=" not in format_profile(
+        {"service_type": "short_term_officer", "discharge_date": "2020-04"}
+    )
+    assert "예비군=" not in format_profile(
+        {"service_type": "conscript", "discharge_date": "2027-03"}
+    )

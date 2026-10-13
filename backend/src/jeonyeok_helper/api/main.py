@@ -156,6 +156,7 @@ def roadmap_profile(profile: dict) -> RoadmapProfile:
         age=profile.get("age"),
         region=profile.get("region"),
         goals=profile.get("goals") or [],
+        education=profile.get("education") or None,
         notes="" if notes == "(아직 모름)" else notes,
     )
 
@@ -352,6 +353,12 @@ def create_app(
                 pending.update({"answer", "guide"} - sent)
                 for event in flush(state):
                     yield event
+                if req.user_id and (reopen := state.get("guide", {}).get("reopen")):
+                    undone = await asyncio.to_thread(
+                        journey.set_done, db, req.user_id, reopen, False
+                    )
+                    if undone:
+                        yield _sse("journey", {"added": [], "done": undone})
                 talked = state.get("guide", {}).get("mode") == "talk"
                 if not state.get("draft") and not talked:  # respond를 거치지 않았다면 되묻기
                     yield _sse(

@@ -138,6 +138,10 @@ def build_graph(
         if decision.mode != "talk" or not decision.say.strip():
             return {"guide": {"mode": "research"}}
         say = guide_rules.with_question(decision.say, missing)
+        # '실수로 했어요 눌렀어' → 그 할 일을 미완료로 되돌리고(API가 저장) 바로 다시 권한다
+        reopened = guide_rules.find_done(items, decision.reopen)
+        if reopened:
+            nxt = {**reopened, "done": False}
         # 길잡이는 늘 다음 걸음을 이끈다: 물을 것이 없으면 다음 할 일을 버튼과 함께 권한다
         step = nxt if (nxt and not missing) else None
         if step:
@@ -158,6 +162,7 @@ def build_graph(
                 "step": step,
                 "quick_replies": replies,
                 "suggest": [],
+                "reopen": reopened["id"] if reopened else None,
             },
         }
 
@@ -299,8 +304,9 @@ def build_graph(
         out["say"] = guide_rules.with_question(draft.say, missing) if draft.say.strip() else ""
         if sources:
             out["suggest"] = guide_rules.pick_items(
-                draft, answer=answer, sources=sources, existing=existing
-            )
+                draft, answer=answer, sources=sources, existing=existing,
+                profile=state.get("profile"),
+            )  # fmt: skip
         return {"guide": out}
 
     g = StateGraph(AgentState)

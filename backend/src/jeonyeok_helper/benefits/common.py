@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Hashable
+from datetime import date
 from typing import Any
 
 DATA_GO_KR_KEY_MISSING = "공공데이터포털 서비스키(DATA_GO_KR_SERVICE_KEY)가 설정되지 않았습니다."
@@ -27,6 +29,24 @@ class TimedCache:
         value = load()
         self._entries[key] = (time.monotonic(), value)
         return value
+
+
+# '20250306 ~ 20250313', '2025.05.01~2025.05.20', '2025-03-13까지' 같은 날짜
+_DATE = re.compile(r"(20\d{2})[.\-/]?\s?(\d{1,2})[.\-/]?\s?(\d{1,2})")
+
+
+def period_closed(text: str, today: date | None = None) -> bool:
+    """신청 기간 문구의 날짜가 모두 오늘 이전이면 True (지난 공고). 날짜가 없으면('상시') False."""
+    days = []
+    for y, m, d in _DATE.findall(text or ""):
+        try:
+            days.append(date(int(y), int(m), int(d)))
+        except ValueError:
+            continue
+    return bool(days) and max(days) < (today or date.today())
+
+
+CLOSED_NOTE = " (지난 공고로 신청 기간이 끝났음. 올해 일정은 기관에 확인)"
 
 
 def fetch_all_pages[T](fetch_page: Callable[[int], tuple[list[T], int]], page_size: int) -> list[T]:

@@ -79,3 +79,16 @@ def test_region_filter_finds_ordinances_saved_under_merged_name():
 
     sido_filters = [f for f in region_filter("전남")["$or"] if "sido" in f]
     assert "전남광주통합" in sido_filters[0]["sido"]["$in"]
+
+
+def test_period_closed_reads_past_application_periods():
+    from datetime import date
+
+    from jeonyeok_helper.benefits.common import period_closed
+
+    today = date(2026, 10, 13)
+    assert period_closed("20250306 ~ 20250313", today)
+    assert period_closed("2025.05.01~2025.05.20", today)
+    assert not period_closed("20260901 ~ 20261231", today)
+    assert not period_closed("상시 신청", today)  # 날짜가 없으면 마감으로 보지 않는다
+    assert not period_closed("", today)

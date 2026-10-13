@@ -15,7 +15,12 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from jeonyeok_helper.benefits.common import BenefitApiError, TimedCache, fetch_all_pages
+from jeonyeok_helper.benefits.common import (
+    BenefitApiError,
+    TimedCache,
+    fetch_all_pages,
+    period_closed,
+)
 from jeonyeok_helper.benefits.regions import region_keys, short_province
 
 BASE_URL = "https://www.youthcenter.go.kr/go/ythip/getPlcy"
@@ -198,5 +203,10 @@ class YouthPolicyClient:
 
         # 같은 정책이 연도·차수별로 여러 건 올라온 경우가 있어 이름·기관이 같으면 하나만.
         unique = {(p.name, p.agency): p for p in self.all() if ok(p)}
-        found = sorted(unique.values(), key=lambda p: (not p.military_related, p.nationwide))
+        # 신청 기간이 지난 공고는 뒤로 (매년 다시 열리는 사업이 있어 빼지는 않는다)
+        found = sorted(
+            unique.values(),
+            key=lambda p: (period_closed(p.apply_period, today), not p.military_related,
+                           p.nationwide),
+        )  # fmt: skip
         return found[:limit]

@@ -142,3 +142,18 @@ def test_tasks_backed_only_by_portal_guides_are_dropped():
     )
     picked = pick_items(draft, answer="", sources=sources, existing=[])
     assert [p["title"] for p in picked] == ["국민취업지원제도"]
+
+
+def test_reopen_words_skip_research_and_find_done_item():
+    from jeonyeok_helper.agents.guide import find_done, needs_research
+
+    # '신청'이 들어 있어도 완료를 되돌려 달라는 말이면 검색으로 보내지 않는다
+    assert not needs_research("실수로 했어요 눌렀어, 아직 신청 안 했어")
+    assert needs_research("재취업 지원 어떻게 신청해요?")
+    items = [
+        {"id": "a", "title": "전역예정군인 재취업 지원", "done": True},
+        {"id": "b", "title": "서울시 청년수당", "done": False},
+    ]
+    assert find_done(items, "전역예정군인 재취업 지원")["id"] == "a"
+    assert find_done(items, "서울시 청년수당") is None  # 안 끝낸 일은 되돌릴 게 없다
+    assert find_done(items, "") is None
