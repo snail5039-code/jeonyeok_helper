@@ -150,6 +150,53 @@ body {
   border-radius: 6px;
 }
 
+/* 누를 수 있는 것은 마우스를 올리면 살짝 떠오르고(호버), 누르면 꾹 눌린다.
+   Tailwind v4의 translate·rotate 유틸리티는 transform과 따로 동작해서 겹쳐도 깨지지 않는다. */
+@layer base {
+  button:not(:disabled),
+  a[href],
+  summary,
+  select,
+  label:has(> input[type="checkbox"]:not(:disabled)) {
+    cursor: pointer;
+  }
+  button:not(:disabled),
+  a[href],
+  summary {
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      filter 0.15s ease;
+  }
+  @media (hover: hover) {
+    button:not(:disabled):hover,
+    summary:hover {
+      transform: translateY(-3px);
+      filter: brightness(1.05) drop-shadow(2px 4px 0 rgb(31 36 22 / 0.28));
+    }
+    a[href]:hover {
+      transform: translateY(-1px);
+    }
+  }
+  button:not(:disabled):active,
+  summary:active {
+    transform: translateY(1px) scale(0.97);
+    filter: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):hover,
+  button:not(:disabled):active,
+  summary:hover,
+  summary:active,
+  a[href]:hover {
+    transform: none;
+  }
+}
+
 /* 진행 단계 표시: 진행 중에는 도는 원, 끝나면 체크 */
 .step-dot {
   width: 14px;

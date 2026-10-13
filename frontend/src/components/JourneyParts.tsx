@@ -38,7 +38,7 @@ export function StageTrack({
               onClick={() => onSelect?.(s.key)}
               aria-label={`${s.title} ${list.filter((i) => i.done).length}/${list.length}`}
               aria-pressed={isSelected}
-              className={`relative grid size-[44px] place-items-center rounded-full border-[2.5px] border-ink transition-transform hover:-translate-y-0.5 ${
+              className={`relative grid size-[44px] place-items-center rounded-full border-[2.5px] border-ink ${
                 done ? "bg-done text-[#1f2416]" : current ? "bg-[#ffe066] text-[#1f2416]" : "bg-soft text-fg-2"
               } ${isSelected ? "shadow-[3px_3px_0_var(--ink)]" : ""}`}
             >
