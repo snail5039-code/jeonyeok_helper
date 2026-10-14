@@ -175,4 +175,11 @@ describe("첫 화면 길잡이 인사", () => {
     const done = [1, 2, 3].map(() => item("job", true, { core: true }));
     expect(greeting({ service_type: "conscript" }, done).say).toContain("민간인 완성");
   });
+
+  it("담은 임무를 다 끝냈지만 민간인은 아직이면 임무를 더 찾자고 한다 (화면이 죽던 경우)", () => {
+    const g = greeting({ service_type: "short_term_officer" }, [item("right_after", true)]);
+    expect(g.say).toContain("다 끝냈어요");
+    expect(g.replies[0].message).toBe("내 로드맵 만들어 줘");
+    expect(g.replies.at(-1)?.open).toBe("journey");
+  });
 });

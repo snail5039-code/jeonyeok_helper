@@ -50,7 +50,14 @@ export function greeting(profile: Profile, items: JourneyItem[]): { say: string;
       replies: [OPEN_JOURNEY],
     };
   }
-  const next = nextItem(items)!;
+  const next = nextItem(items);
+  // 담은 임무를 다 끝냈지만 민간인 조건(핵심 임무 3개 이상)은 아직인 경우
+  if (!next) {
+    return {
+      say: `어서 와요, ${level.rank}님! 담아 둔 임무는 다 끝냈어요. 임무를 더 찾아서 이어 가 볼까요?`,
+      replies: [{ label: "임무 더 찾아 줘", message: "내 로드맵 만들어 줘" }, OPEN_JOURNEY],
+    };
+  }
   return {
     say: `어서 와요, ${level.rank}님! 다음 임무는 '${next.title}'이에요. ${next.action}${dueNote(next, profile)}`,
     replies: [...stepReplies(next), OPEN_JOURNEY],
