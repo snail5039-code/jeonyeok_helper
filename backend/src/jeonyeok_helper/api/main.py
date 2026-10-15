@@ -39,6 +39,7 @@ from typing import Annotated, Literal
 import uvicorn
 from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -48,7 +49,8 @@ from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
-from jeonyeok_helper.agents.state import cadre_of
+from jeonyeok_helper.agents.state import cadre_of, merge_profile
+from jeonyeok_helper.api.cache import AnswerCache
 from jeonyeok_helper.api.limits import RateLimiter
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
@@ -221,6 +223,7 @@ def create_app(
         app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
         app.state.limiter = RateLimiter(get_settings().chat_rate_limit_per_minute)
+        app.state.answers = AnswerCache()
         app.state.roadmap = roadmap_builder
         app.state.warm_roadmap = warm_roadmap
         app.state.background = set()  # 미리 모으기 작업이 끝나기 전에 사라지지 않게 붙들어 둔다
@@ -336,33 +339,62 @@ def create_app(
             items = await asyncio.to_thread(journey.list_items, db, req.user_id)
             config["configurable"]["journey"] = items
 
+        # 같은 질문·같은 조건이면 저장해 둔 답 (버튼 동작은 저장하지 않는다)
+        cache: AnswerCache = request.app.state.answers
+        profile_before = await stored_profile(agent, req.user_id) if req.user_id else {}
+        cache_key = None if req.action else cache.key(req.message, profile_before, items)
+        cached = cache.get(cache_key)
+
+        async def replay(hit: dict) -> AsyncIterator[str]:
+            """저장한 답을 보내고, 대화 기록과 내 정보에도 정상 실행과 같이 남긴다."""
+            yield _sse("answer", hit["answer"])
+            if hit.get("guide"):
+                yield _sse("guide", hit["guide"])
+            await agent.aupdate_state(
+                config,
+                {
+                    "messages": [HumanMessage(req.message), AIMessage(hit["answer"]["text"])],
+                    "profile": hit["answer"].get("profile", {}),
+                },
+                as_node="verify",
+            )
+            if req.user_id and agent.store is not None:
+                merged = merge_profile(profile_before, hit["answer"].get("profile", {}))
+                await agent.store.aput(PROFILE_NAMESPACE, req.user_id, merged)
+
         async def events() -> AsyncIterator[str]:
             yield _sse("thread", {"thread_id": thread_id})
             if done_item:
                 yield _sse("journey", {"added": [], "done": done_item})
+            if cached:
+                try:
+                    async for event in replay(cached):
+                        yield event
+                except Exception:
+                    log.exception("저장한 답 보내기 실패")
+                yield _sse("done", {})
+                return
             # 답변·길잡이는 해당 단계가 끝난 직후의 전체 상태(values)로 보낸다
             pending: set[str] = set()
             state: dict = {}
             sent: set[str] = set()
+            payloads: dict[str, dict] = {}
 
             def flush(values: dict) -> list[str]:
                 out = []
                 if "answer" in pending and values.get("draft"):
-                    out.append(
-                        _sse(
-                            "answer",
-                            {
-                                "text": values["messages"][-1].text,
-                                "profile": values.get("profile", {}),
-                                "sources": values.get("sources", []),
-                                "follow_ups": values.get("follow_ups", []),
-                            },
-                        )
-                    )
+                    payloads["answer"] = {
+                        "text": values["messages"][-1].text,
+                        "profile": values.get("profile", {}),
+                        "sources": values.get("sources", []),
+                        "follow_ups": values.get("follow_ups", []),
+                    }
+                    out.append(_sse("answer", payloads["answer"]))
                     sent.add("answer")
                 if "guide" in pending and (g := values.get("guide")) and g.get("mode"):
                     if g["mode"] == "talk" or "answer" in sent:
-                        out.append(_sse("guide", {**g, "profile": values.get("profile", {})}))
+                        payloads["guide"] = {**g, "profile": values.get("profile", {})}
+                        out.append(_sse("guide", payloads["guide"]))
                         sent.add("guide")
                 pending.clear()
                 return out
@@ -400,6 +432,10 @@ def create_app(
                     if undone:
                         yield _sse("journey", {"added": [], "done": undone})
                 talked = state.get("guide", {}).get("mode") == "talk"
+                # 자료를 찾아 답한 것만 저장한다 (짧은 대화·되묻기·되돌리기는 상황마다 다르다)
+                if state.get("draft") and not talked and "answer" in payloads:
+                    if not state.get("guide", {}).get("reopen"):
+                        cache.put(cache_key, dict(payloads))
                 if not state.get("draft") and not talked:  # respond를 거치지 않았다면 되묻기
                     yield _sse(
                         "question",

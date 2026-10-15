@@ -145,11 +145,21 @@ class Route(BaseModel):
     question: str = Field(default="", description="ask_user일 때 사용자에게 할 질문")
 
 
+class TextEdit(BaseModel):
+    find: str = Field(description="초안에 있는 그대로의 문장 또는 줄")
+    replace: str = Field(default="", description="고친 문장. 통째로 지우려면 빈 칸")
+
+
 class Verification(BaseModel):
     supported: bool = Field(description="초안의 모든 주장이 근거 자료로 뒷받침되는지")
     issues: list[str] = Field(default_factory=list, description="근거가 없거나 틀린 부분")
+    # 답변 전체를 다시 쓰면 고칠 데가 있을 때 약 7초가 걸렸다. 고칠 부분만 받아 코드가 바꾼다.
+    edits: list[TextEdit] = Field(
+        default_factory=list,
+        description="supported=false일 때: 고칠 부분만 (찾을 문장 → 바꿀 문장)",
+    )
     # 문제가 없을 때 답변 전체를 다시 쓰게 하면 그만큼 시간이 든다(약 3초). 고칠 때만 채운다.
-    answer: str = Field(default="", description="supported=false일 때만: 문제를 고친 최종 답변")
+    answer: str = Field(default="", description="쓰지 마세요 (edits를 쓰세요)")
     # 답변을 이미 읽는 단계라 따로 LLM을 부르지 않고 같이 만든다.
     follow_ups: list[str] = Field(
         default_factory=list,

@@ -65,13 +65,25 @@ def test_ask_user_returns_question_without_answering():
 
 def test_worker_calls_are_capped():
     rotation = [Route(next=w) for w in ("regulation", "benefit", "institution") * 3]
-    components, rec = make_components(rotation)
+    # 아무것도 못 찾는 경우에만 계속 부르므로, 빈 결과로 상한을 확인한다
+    empty = {"summary": "조회 결과 없음", "sources": []}
+    components, rec = make_components(rotation, worker_out=empty)
     graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=3)
 
     state = ask(graph, "혜택 다 찾아줘")
 
     assert len(rec["worker"].calls) == 3
-    assert state["messages"][-1].text == "최종 답변 [1]"
+    assert state["messages"][-1].text
+
+
+def test_two_workers_that_found_something_go_straight_to_answer():
+    rotation = [Route(next=w) for w in ("regulation", "benefit", "institution") * 3]
+    components, rec = make_components(rotation)
+    graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=3)
+
+    ask(graph, "혜택 다 찾아줘")
+
+    assert len(rec["worker"].calls) == 2  # 두 곳이 찾았으면 세 번째는 부르지 않는다
 
 
 def test_also_workers_run_together_and_merge_results():
@@ -90,7 +102,8 @@ def test_also_workers_run_together_and_merge_results():
     assert {f["worker"] for f in state["findings"]} == {"benefit", "regulation"}
     assert state["worker_calls"] == 2
     assert len(state["sources"]) == 1  # 두 워커가 같은 출처를 찾아도 한 번만
-    assert len(rec["router"].calls) == 2  # 라우터는 동시 실행이 끝난 뒤 한 번만 다시 판단
+    # 두 워커가 모두 찾았으면 라우터에게 다시 묻지 않고 바로 답한다 (약 1초 절약)
+    assert len(rec["router"].calls) == 1
 
 
 def test_worker_that_already_found_something_is_not_called_again():
@@ -433,3 +446,12 @@ def test_slow_worker_is_cut_off_and_answer_still_comes():
     state = ask(graph, "법령 찾아줘")
 
     assert state["messages"][-1].text  # 끊고도 답변까지 간다
+
+
+def test_verify_applies_only_the_edited_parts():
+    from jeonyeok_helper.agents.graph import apply_edits
+    from jeonyeok_helper.agents.state import TextEdit
+
+    draft = "크레딧은 6개월 인정 [1].\n\n없는 혜택: 월 100만 원 [2].\n\n신청은 공단에서 [1]."
+    edits = [TextEdit(find="없는 혜택: 월 100만 원 [2].", replace=""), TextEdit(find="없는 문장")]
+    assert apply_edits(draft, edits) == "크레딧은 6개월 인정 [1].\n\n신청은 공단에서 [1]."

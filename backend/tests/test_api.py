@@ -74,7 +74,8 @@ def test_chat_streams_steps_then_answer_with_sources():
     names = [e for e, _ in events]
     assert names[0] == "thread" and names[-1] == "done"
     steps = [d["node"] for e, d in events if e == "step"]
-    assert steps == ["profile", "regulation", "respond", "verify", "guide"]
+    assert steps[:3] == ["profile", "regulation", "respond"]
+    assert sorted(steps[3:]) == ["guide", "verify"]  # 검증과 말풍선은 동시에
     answer = next(d for e, d in events if e == "answer")
     assert answer["text"] == "최종 답변 [1]"
     assert answer["sources"][0]["title"] == "국민연금법 제18조"
@@ -435,3 +436,34 @@ def test_chat_returns_429_with_a_message_when_over_the_limit():
     assert ok.status_code == 200 and other.status_code == 200
     assert blocked.status_code == 429
     assert "너무 많아요" in blocked.json()["detail"]
+
+
+def test_answer_cache_keys_skip_contextual_questions_and_expire():
+    from jeonyeok_helper.api.cache import AnswerCache
+
+    cache = AnswerCache(ttl=10)
+    key = cache.key("군복무 크레딧이 뭐예요?", {"service_type": "conscript"}, [])
+    assert key == cache.key("군복무  크레딧이 뭐예요? ", {"service_type": "conscript"}, [])
+    assert key != cache.key("군복무 크레딧이 뭐예요?", {"service_type": "long_term"}, [])
+    assert cache.key("그거 신청 어디서 해요?", {}, []) is None  # 앞 대화에 기대는 질문
+    cache.put(key, {"answer": {"text": "a"}}, now=0)
+    assert cache.get(key, now=5) == {"answer": {"text": "a"}}
+    assert cache.get(key, now=11) is None
+
+
+def test_same_question_with_same_conditions_is_answered_from_cache():
+    with make_client(
+        [Route(next="regulation"), Route(next="answer")],
+        profile=Profile(service_type="conscript"),
+    ) as client:
+        ask = {"message": "군복무 크레딧?", "user_id": "u1"}
+        first = parse_sse(client.post("/chat", json=ask).text)
+        # 조건이 같은 다른 사람(처음 온 사람)이 같은 질문을 하면 저장한 답
+        second = parse_sse(client.post("/chat", json={**ask, "user_id": "u2"}).text)
+        profile = client.get("/profile/u2").json()["profile"]
+
+    answer1 = next(d for e, d in first if e == "answer")
+    answer2 = next(d for e, d in second if e == "answer")
+    assert answer2["text"] == answer1["text"] and answer2["sources"] == answer1["sources"]
+    assert not any(e == "step" for e, _ in second)  # 모델·검색을 다시 돌지 않았다
+    assert profile["service_type"] == "conscript"  # 내 정보도 정상 실행처럼 남는다

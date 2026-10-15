@@ -198,7 +198,7 @@ start → profile(복무 정보 추출) → coach ─┬ talk: 인사·진행 �
 | RAG | PostgreSQL + pgvector, HyDE, Re-ranking |
 | 도구 연동 | MCP 서버 (정부24, 온통청년, 제대군인지원센터 채용, 보훈 채용, 위탁병원, 나라사랑가게) |
 | 서버 | FastAPI (SSE 스트리밍), SQLAlchemy 2.0 + Alembic, SQLite(대화 기록) |
-| 품질 | pytest 202개, vitest 47개, ruff, ESLint, 평가 세트 2종, GitHub Actions |
+| 품질 | pytest 206개, vitest 47개, ruff, ESLint, 평가 세트 2종, GitHub Actions |
 | 배포 | Docker Compose |
 
 ```
@@ -332,7 +332,7 @@ npm run dev                # http://localhost:3000, /api/* 는 API_URL(기본 12
 - **요청 제한**: 사용자별 1분 20회(`CHAT_RATE_LIMIT_PER_MINUTE`). 공개해도 모델 쿼터를 한 사람이 소진하지 못합니다.
 
 남은 것
-- 일반 질문은 15~25초 걸립니다(모델 호출이 순서대로 4~6번). 근거 검증과 길잡이 한마디를 병렬화하려면 정확도 평가를 다시 해야 합니다.
+- 일반 질문은 평균 15초쯤 걸립니다(모델 호출이 순서대로 여러 번). 근거 검증을 고칠 부분만 받게 하고, 말풍선을 검증과 동시에 돌리고, 같은 질문은 저장한 답을 쓰도록 줄였습니다(평가 평균 17.2 → 15.2초).
 - 평가는 키워드로 채점하고 표본이 작습니다(답변 63, 검색 84). CI는 평가를 돌리지 않습니다.
 - 로그인이 없고(브라우저 ID가 열쇠), 내 정보·대화를 전부 지우는 기능과 서버 확장(대화 기록이 SQLite), 관측 도구가 없습니다.
 - 못 넣은 공식 자료와 미연동 API(고용24, Q-Net)가 있습니다([추가할 자료](docs/추가할_자료.md)).

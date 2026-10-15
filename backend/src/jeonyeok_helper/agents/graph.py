@@ -45,6 +45,19 @@ from jeonyeok_helper.agents.state import (
 log = logging.getLogger(__name__)
 
 PROFILE_NAMESPACE = ("profiles",)
+
+
+def apply_edits(draft: str, edits) -> str:
+    """검증이 알려 준 부분만 바꾼다. 초안에 없는 문장은 건너뛴다(모델이 살짝 다르게 옮긴 경우)."""
+    text = draft
+    for e in edits:
+        if e.find and e.find in text:
+            text = text.replace(e.find, e.replace, 1)
+        elif e.find:
+            log.warning("검증 수정 위치를 초안에서 찾지 못함: %s", e.find[:60])
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 MAX_CALLS_PER_WORKER = 2
 # 같은 워커를 다시 부르는 것은 앞에서 아무것도 못 찾았을 때만 (이미 찾았는데 한 번 더 돌면
 # 질문 하나에 8~10초가 더 걸렸다: '15년 복무, 부산' 질문이 혜택·규정을 두 번씩 돌았음)
@@ -183,6 +196,13 @@ def build_graph(
         calls = state.get("worker_calls", 0)
         if calls >= max_worker_calls:
             return {"next": "answer"}
+        # 워커 두 곳 이상이 이미 무언가를 찾았으면 라우터에게 다시 묻지 않고 답한다
+        # (거의 항상 'answer'를 고르는 데 1초를 썼다)
+        found = {
+            f["worker"] for f in state.get("findings", []) if not EMPTY_FINDING.search(f["summary"])
+        }
+        if len(found) >= 2:
+            return {"next": "answer"}
         try:
             route: Route = await c.router.ainvoke(
                 {
@@ -287,8 +307,14 @@ def build_graph(
                     "evidence": format_evidence(state.get("evidence")),
                 }
             )
-            # 문제가 없으면 초안을 그대로 쓴다. 다시 쓰게 하면 줄바꿈 같은 형식이 깨질 수 있다.
-            answer = draft if checked.supported else (checked.answer or draft)
+            # 문제가 없으면 초안을 그대로 쓴다. 고칠 데가 있으면 그 부분만 바꾼다
+            # (답 전체를 다시 쓰게 하면 7초쯤 더 걸리고 줄바꿈 같은 형식도 깨질 수 있다).
+            if checked.supported:
+                answer = draft
+            elif checked.edits:
+                answer = apply_edits(draft, checked.edits)
+            else:
+                answer = checked.answer or draft
             follow_ups = [q.strip() for q in checked.follow_ups if q.strip()][:3]
         except Exception:
             log.warning("근거 검증 실패, 초안을 그대로 씁니다.", exc_info=True)
@@ -312,7 +338,8 @@ def build_graph(
         if c.guide is None:
             return {"guide": out}
         sources = state.get("sources") or []
-        answer = state["messages"][-1].text
+        # 검증과 동시에 돌아서 초안을 본다 (검증은 문장 몇 개만 고친다)
+        answer = state.get("draft") or state["messages"][-1].text
         existing = [i["title"] for i in _journey(config)]
         try:
             draft = await c.guide.ainvoke(
@@ -368,8 +395,10 @@ def build_graph(
 
     g.add_conditional_edges("supervisor", after_supervisor, [*c.workers, "ask_user", "respond"])
     g.add_edge("ask_user", END)
+    # 검증과 말풍선은 서로 기다릴 필요가 없어 같이 돌린다 (약 2~3초 절약)
     g.add_edge("respond", "verify")
-    g.add_edge("verify", "guide")
+    g.add_edge("respond", "guide")
+    g.add_edge("verify", END)
     g.add_edge("guide", END)
 
     return g.compile(checkpointer=checkpointer, store=store)
