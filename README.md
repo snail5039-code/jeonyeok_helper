@@ -198,7 +198,7 @@ start → profile(복무 정보 추출) → coach ─┬ talk: 인사·진행 �
 | RAG | PostgreSQL + pgvector, HyDE, Re-ranking |
 | 도구 연동 | MCP 서버 (정부24, 온통청년, 제대군인지원센터 채용, 보훈 채용, 위탁병원, 나라사랑가게) |
 | 서버 | FastAPI (SSE 스트리밍), SQLAlchemy 2.0 + Alembic, SQLite(대화 기록) |
-| 품질 | pytest 191개, vitest 43개, ruff, ESLint, 평가 세트 2종, GitHub Actions |
+| 품질 | pytest 202개, vitest 47개, ruff, ESLint, 평가 세트 2종, GitHub Actions |
 | 배포 | Docker Compose |
 
 ```

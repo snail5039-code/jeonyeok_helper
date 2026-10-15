@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { greeting } from "./guide";
+import { cadreOf } from "./types";
 import {
   badges,
   byStage,
@@ -181,5 +182,14 @@ describe("첫 화면 길잡이 인사", () => {
     expect(g.say).toContain("다 끝냈어요");
     expect(g.replies[0].message).toBe("내 로드맵 만들어 줘");
     expect(g.replies.at(-1)?.open).toBe("journey");
+  });
+});
+
+describe("cadreOf", () => {
+  it("계급이나 말로 장교·부사관을 가른다", () => {
+    expect(cadreOf("중사")).toBe("부사관");
+    expect(cadreOf("대위")).toBe("장교");
+    expect(cadreOf("준위")).toBe("준사관");
+    expect(cadreOf("병장")).toBeUndefined();
   });
 });

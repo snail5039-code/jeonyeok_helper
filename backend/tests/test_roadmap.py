@@ -226,3 +226,10 @@ def test_assemble_drops_policy_bodies_that_are_not_actionable():
     )
     titles = [i["title"] for s in assemble(draft, evidence)["stages"] for i in s["items"]]
     assert titles == ["국민취업지원제도"]
+
+
+def test_roadmap_profile_text_names_the_cadre():
+    from jeonyeok_helper.agents.roadmap import _profile_text
+
+    text = _profile_text(RoadmapProfile(service_type="long_term", cadre="부사관", service_years=9))
+    assert text.startswith("중·장기복무 간부(부사관)")

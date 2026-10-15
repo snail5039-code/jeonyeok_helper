@@ -4,7 +4,7 @@ import { BookOpen, Building2, ChevronDown, CircleHelp, Map, MessageSquare, Moon,
 import { useEffect, useRef, useState } from "react";
 
 import { levelOf, progress } from "@/lib/journey";
-import { SERVICE_TYPE_LABELS, type JourneyItem, type Profile } from "@/lib/types";
+import { cadreOf, SERVICE_TYPE_LABELS, type JourneyItem, type Profile } from "@/lib/types";
 
 import { Mascot } from "./Doodle";
 
@@ -22,7 +22,14 @@ const PROFILE_ROWS: [keyof Profile, string, (v: NonNullable<Profile[keyof Profil
 
 /** 위에 늘 보이는 내 조건: 병사 · 서울 · 25년 전역 */
 export function profileSummary(p: Profile): string {
-  const type = p.service_type && SERVICE_TYPE_LABELS[p.service_type].replace("의무복무 ", "");
+  const officer = p.service_type === "short_term_officer" || p.service_type === "long_term";
+  const cadre = officer ? (cadreOf(p.rank) ?? p.cadre) : undefined;
+  // '단기 간부' → '단기 부사관'처럼 장교·부사관을 구분해 보여 준다
+  const type =
+    p.service_type &&
+    (cadre
+      ? SERVICE_TYPE_LABELS[p.service_type].replace(/간부|복무$/, cadre)
+      : SERVICE_TYPE_LABELS[p.service_type].replace("의무복무 ", ""));
   const year = p.discharge_date?.match(/^\d{4}/)?.[0];
   const parts = [type, p.region?.split(" ")[0], year && `${year.slice(2)}년 전역`].filter(Boolean);
   return parts.length ? parts.join(" · ") : "내 조건 알려 주기";

@@ -34,7 +34,7 @@ from jeonyeok_helper.benefits.common import CLOSED_NOTE, BenefitApiError, period
 from jeonyeok_helper.benefits.gov24 import Gov24Client
 from jeonyeok_helper.benefits.hospitals import HospitalClient
 from jeonyeok_helper.benefits.institutions import Institution, InstitutionDirectory
-from jeonyeok_helper.benefits.jobs import VnetJobClient
+from jeonyeok_helper.benefits.jobs import NATIONWIDE, VnetJobClient
 from jeonyeok_helper.benefits.offices import find_offices, load_offices
 from jeonyeok_helper.benefits.stores import StoreClient
 from jeonyeok_helper.benefits.veteran_jobs import VeteranJobClient
@@ -269,7 +269,14 @@ def create_server(services: Services | None = None) -> FastMCP:
             jobs = svc.jobs.search(region=region, keyword=keyword, limit=limit)
         except BenefitApiError as e:
             return {"jobs": [], "error": str(e), "fallback": fallback("취업")}
-        return {"jobs": [j.model_dump() for j in jobs]}
+        # 전국 공고는 따로 둔다: 목록 끝에 섞어 두면 답변에서 빠지는 일이 많았다
+        nationwide = [j.model_dump() for j in jobs if NATIONWIDE.search(f"{j.area} {j.title}")]
+        local = [j.model_dump() for j in jobs if not NATIONWIDE.search(f"{j.area} {j.title}")]
+        out: dict = {"jobs": local}
+        if nationwide:
+            out["nationwide_jobs"] = nationwide
+            out["nationwide_note"] = "지역과 관계없이 어디서나 지원할 수 있는 전국 공고"
+        return out
 
     @server.tool()
     @threaded

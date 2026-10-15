@@ -77,6 +77,8 @@ REOPEN_WORDS = re.compile(r"실수로|잘못 눌|잘못눌|되돌|취소|아직 
 
 # ---------- 프로필 보정 ----------
 
+CONSCRIPT_WORDS = re.compile(r"이병|일병|상병|병장|병사")
+LONG_YEARS = re.compile(r"(\d{1,2})\s*년\s*(?:넘게|이상|간|동안|차)?\s*복무")
 MERIT_WORDS = re.compile(r"유공자|보훈대상|보훈보상|상이등급|등록(했|됐|되었|돼)|등록자")
 
 
@@ -85,9 +87,23 @@ def repair_profile(user_text: str, new: dict) -> dict:
 
     '의병전역했는데 보훈 등록 가능한가요?'를 이미 보훈대상자로 등록한 사람으로 읽은 적이 있다
     (등록을 물은 것이지 등록했다고 한 것이 아니다). 등록했다고 말해야만 인정한다."""
+    from jeonyeok_helper.agents.state import cadre_of
+
     out = dict(new)
+    if out.get("service_type") == "unknown":
+        out.pop("service_type")
     if out.get("service_type") == "merit" and not MERIT_WORDS.search(user_text):
         out.pop("service_type")
+    last = user_text.strip().splitlines()[-1] if user_text.strip() else ""
+    # 모델이 분명한 말도 '모름'으로 비우는 일이 있어(평가 c08·l03·t01) 확실한 경우만 채운다
+    if not out.get("service_type"):
+        if CONSCRIPT_WORDS.search(last):
+            out["service_type"] = "conscript"
+        elif (m := LONG_YEARS.search(last)) and int(m[1]) >= 5:
+            out["service_type"] = "long_term"  # 병사는 5년을 복무하지 않는다
+    # 장교·부사관 구분은 이번에 한 말에서만 읽는다 (앞 대화의 다른 계급과 섞이지 않게)
+    if (cadre := cadre_of(last)) and out.get("service_type") != "conscript":
+        out["cadre"] = cadre
     return out
 
 
@@ -280,7 +296,12 @@ GUIDE_PROMPT = ChatPromptTemplate.from_messages(
             "system",
             "당신은 전역자의 길잡이 전역이입니다. 아래 상담 답변은 길어서, 그 위에 보일 "
             "짧은 한마디와 로드맵에 담을 할 일을 정합니다.\n"
-            "say: 답변에서 사용자가 '지금 가장 먼저 할 일' 하나를 짚는 1~2문장, 친근한 해요체. "
+            "say: 1~2문장, 친근한 해요체. "
+            "질문이 차이·뜻·가능 여부·조건을 묻는 설명 질문이면 "
+            "('차이가 뭐예요?', '받을 수 있어요?', '~인가요?') "
+            "답변의 결론을 먼저 그대로 요약하세요 "
+            "(예: '크레딧은 연금 가입 기간을 늘려 주는 거고, 전직지원금은 5년 이상 복무자의 구직 "
+            "지원금이에요'). 그 밖의 질문이면 답변에서 '지금 가장 먼저 할 일' 하나를 짚으세요. "
             "구체적인 혜택·제도 이름을 말할 것 ('정부24에서 조회하세요' 같은 일반 안내는 금지). "
             "답변에 없는 사실은 쓰지 말 것. 빠진 정보가 있으면 끝에 그것을 묻는 질문 하나 "
             "(프로필에 이미 있는 정보는 묻지 말 것).\n"

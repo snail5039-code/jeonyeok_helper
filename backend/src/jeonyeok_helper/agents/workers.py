@@ -53,7 +53,7 @@ def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
             add("benefit", data["name"], data.get("url", ""))
         for p in data.get("policies", []):
             add("benefit", p.get("name", ""), p.get("url", ""))
-        for j in data.get("jobs", []):
+        for j in [*data.get("jobs", []), *data.get("nationwide_jobs", [])]:
             add("benefit", f"{j.get('company', '')} 채용", j.get("url", ""))
         for v in data.get("vacancies", []):
             add("benefit", f"{v.get('company', '')} {v.get('section', '채용')}", v.get("url", ""))

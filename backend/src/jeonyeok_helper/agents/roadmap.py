@@ -134,6 +134,7 @@ TOPICS_BY_GOAL = {
 class RoadmapProfile(BaseModel):
     service_type: Literal["conscript", "short_term_officer", "long_term", "merit"]
     service_years: float | None = Field(default=None, ge=0, le=50)
+    cadre: str | None = Field(default=None, max_length=10)  # 간부 구분: 장교·부사관·준사관
     discharge_date: str | None = Field(default=None, max_length=20)
     age: int | None = Field(default=None, ge=15, le=100)
     region: str | None = Field(default=None, max_length=30)
@@ -200,7 +201,7 @@ def _profile_text(p: RoadmapProfile) -> str:
         "long_term": "중·장기복무 간부",
         "merit": "보훈대상자",
     }
-    parts = [names[p.service_type]]
+    parts = [names[p.service_type] + (f"({p.cadre})" if p.cadre else "")]
     if p.service_years:
         parts.append(f"{p.service_years:g}년 복무")
     if p.discharge_date:

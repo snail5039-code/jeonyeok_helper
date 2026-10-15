@@ -48,6 +48,7 @@ from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
+from jeonyeok_helper.agents.state import cadre_of
 from jeonyeok_helper.api.limits import RateLimiter
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
@@ -65,6 +66,8 @@ STEP_LABELS = {
 }
 
 AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
+# 첫 작전도를 자동으로 만들었다는 표시. 사용자가 그 임무들을 되돌려 비워도 다시 만들지 않는다.
+ROADMAP_MADE_NAMESPACE = ("roadmap_made",)
 RoadmapBuilder = Callable[[RoadmapProfile], Awaitable[dict]]
 
 UserId = Annotated[str, Path(pattern=r"^[\w-]{1,64}$")]
@@ -153,6 +156,11 @@ def roadmap_profile(profile: dict) -> RoadmapProfile:
     return RoadmapProfile(
         service_type=profile["service_type"],
         service_years=profile.get("service_years"),
+        cadre=(
+            (cadre_of(str(profile.get("rank") or "")) or profile.get("cadre"))
+            if profile["service_type"] in ("short_term_officer", "long_term")
+            else None
+        ),
         discharge_date=(profile.get("discharge_date") or None),
         age=profile.get("age"),
         region=profile.get("region"),
@@ -268,6 +276,9 @@ def create_app(
         첫 할 일을 권한다."""
         if request.app.state.roadmap is None:
             return
+        store = getattr(request.app.state.agent, "store", None)
+        if store is not None and await store.aget(ROADMAP_MADE_NAMESPACE, user_id):
+            return  # 이미 한 번 만들었다 (되돌려 비운 것은 사용자의 선택)
         yield _sse("step", {"node": "roadmap", "label": "내 전역 로드맵을 만들고 있어요"})
         try:
             roadmap = await request.app.state.roadmap(roadmap_profile(profile))
@@ -280,6 +291,8 @@ def create_app(
         )
         if not added:
             return
+        if store is not None:
+            await store.aput(ROADMAP_MADE_NAMESPACE, user_id, {"count": len(added)})
         yield _sse("journey", {"added": added})
         first = guide_rules.next_item(added)
         say = f"작전도 완성! 임무 {len(added)}개를 담았어요."

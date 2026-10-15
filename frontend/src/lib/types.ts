@@ -17,6 +17,8 @@ export interface Profile {
   age?: number;
   region?: string;
   merit_status?: string;
+  // 간부 구분 (대화에서 '중사', '단기복무 장교' 같은 말로 읽은 값)
+  cadre?: string;
   // '내 정보' 화면에서 채우는 자세한 정보
   branch?: string;
   rank?: string;
@@ -129,3 +131,12 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   long_term: "중·장기 복무",
   merit: "보훈대상자",
 };
+
+/** 간부 구분: 계급이나 말로 장교·부사관·준사관을 가른다 (백엔드 agents/state.py의 cadre_of와 같은 규칙) */
+export function cadreOf(text?: string): string | undefined {
+  const t = text ?? "";
+  if (/준위|준사관/.test(t)) return "준사관";
+  if (/소위|중위|대위|소령|중령|대령|장교|학군|ROTC|학사장교|사관학교/.test(t)) return "장교";
+  if (/하사|중사|상사|원사|부사관/.test(t)) return "부사관";
+  return undefined;
+}

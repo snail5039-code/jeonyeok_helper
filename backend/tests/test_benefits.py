@@ -337,7 +337,33 @@ def test_jobs_use_verified_location_code_and_hide_closed():
     assert [j.company for j in client.search(region="부산", keyword="경비", today=today)] == [
         "A공사"
     ]
-    assert route.call_count == 1  # 지역별 캐시
+    assert route.call_count == 2  # 지역 조회 + 전국 공고 조회, 각각 캐시
+
+
+NATIONWIDE_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<root><articles>
+<item><company>정부청사관리본부</company><link>https://vnet.go.kr/9</link>
+<contents>방호직 공무원 경력경쟁채용</contents><area>전국</area><pay/>
+<regdate>2026-10-08</regdate><enddate>2026-10-28</enddate></item>
+<item><company>대구 D</company><link>https://vnet.go.kr/8</link><contents>대구 공고</contents>
+<area>대구</area><pay/><regdate>2026-10-09</regdate><enddate>2026-10-28</enddate></item>
+</articles></root>"""
+
+
+@respx.mock
+def test_jobs_add_nationwide_postings_to_a_region_search():
+    def reply(request):
+        everywhere = "location" not in request.url.params
+        return httpx.Response(200, text=NATIONWIDE_XML if everywhere else JOBS_XML)
+
+    respx.get(JOBS_URL).mock(side_effect=reply)
+    jobs = VnetJobClient().search(region="부산", today=date(2026, 10, 12))
+    assert [j.company for j in jobs] == [
+        "B",
+        "A공사",
+        "정부청사관리본부",
+    ]  # 다른 지역 공고는 안 붙임
+    assert jobs[-1].area == "전국"
 
 
 # ---------- 나라사랑가게 ----------
@@ -566,3 +592,45 @@ def test_search_puts_youth_programs_first_on_ties_for_young_users():
     assert [b.service_id for b in client.search(keywords=["월세"])] == ["loan", "youth"]
     young = client.search(keywords=["월세"], prefer_youth=True)
     assert [b.service_id for b in young] == ["youth", "loan"]
+
+
+@respx.mock
+def test_jobs_keyword_that_matches_nothing_falls_back_to_all():
+    respx.get(JOBS_URL).mock(return_value=httpx.Response(200, text=JOBS_XML))
+    jobs = VnetJobClient().search(region="부산", keyword="슈퍼바이저", today=date(2026, 10, 12))
+    assert [j.company for j in jobs] == ["B", "A공사"]  # 검색어로 0건이면 검색어 없이
+
+
+@respx.mock
+def test_nationwide_postings_stay_when_the_keyword_is_a_place_name():
+    def reply(request):
+        everywhere = "location" not in request.url.params
+        return httpx.Response(200, text=NATIONWIDE_XML if everywhere else JOBS_XML)
+
+    respx.get(JOBS_URL).mock(side_effect=reply)
+    jobs = VnetJobClient().search(region="부산", keyword="해운대", today=date(2026, 10, 12))
+    assert jobs[-1].company == "정부청사관리본부"  # 지명 검색어로 전국 공고가 사라지지 않는다
+
+
+def test_search_jobs_tool_puts_nationwide_postings_in_their_own_list():
+    from jeonyeok_helper.benefits.jobs import Job
+
+    class FakeJobs:
+        def search(self, region=None, keyword=None, limit=10):
+            return [
+                Job(company="부산교통공사", title="역무원", area="부산"),
+                Job(company="정부청사관리본부", title="방호직 채용", area="전국"),
+            ]
+
+    server = create_server(
+        Services(
+            gov24_factory=lambda: FakeGov24(),
+            retriever_factory=FakeRetriever,
+            directory_factory=InstitutionDirectory.from_yaml,
+            jobs_factory=FakeJobs,
+        )
+    )
+    out = call(server, "search_jobs", {"region": "부산"})
+    assert [j["company"] for j in out["jobs"]] == ["부산교통공사"]
+    assert [j["company"] for j in out["nationwide_jobs"]] == ["정부청사관리본부"]
+    assert "어디서나" in out["nationwide_note"]

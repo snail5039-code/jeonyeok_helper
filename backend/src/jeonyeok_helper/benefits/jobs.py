@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from datetime import date
 
@@ -40,6 +41,10 @@ LOCATION_CODES = {
     "제주": "17",
     "해외": "18",
 }
+
+
+# 지역과 관계없이 지원할 수 있는 공고 (area가 '전국'이거나 제목에 [전국])
+NATIONWIDE = re.compile(r"전국")
 
 
 class Job(BaseModel):
@@ -95,12 +100,41 @@ class VnetJobClient:
         limit: int = 10,
         today: date | None = None,
     ) -> list[Job]:
-        """마감이 안 지난 공고를 최신순으로. region은 시도 단위(예: '부산', '경기도 포천')."""
+        """마감이 안 지난 공고를 최신순으로. region은 시도 단위(예: '부산', '경기도 포천').
+
+        지역을 주면 그 지역 공고에 '전국' 공고(정부청사 방호직, 군무원 등 어디서나 지원하는
+        공고)를 몇 개 붙인다. 지역 코드로만 조회하면 전국 공고 대부분이 빠진다."""
         codes = (LOCATION_CODES.get(short_province(k)) for k in region_keys(region))
         code = next((c for c in codes if c), "")
         today_str = (today or date.today()).isoformat()
-        jobs = [j for j in self._fetch(code) if not j.deadline or j.deadline >= today_str]
-        if keyword:
-            jobs = [j for j in jobs if keyword in j.title or keyword in j.company]
-        jobs.sort(key=lambda j: j.posted, reverse=True)
-        return jobs[:limit]
+
+        def alive(found: list[Job]) -> list[Job]:
+            return sorted(
+                (j for j in found if not j.deadline or j.deadline >= today_str),
+                key=lambda j: j.posted,
+                reverse=True,
+            )
+
+        def matching(jobs: list[Job]) -> list[Job]:
+            # 검색어로 하나도 안 남으면 검색어 없이 보여 준다 (모델이 사용자가 말하지 않은
+            # 직종이나 '수원' 같은 지명을 검색어로 넣어 '공고 없음'이 된 적이 있다)
+            if not keyword:
+                return jobs
+            return [j for j in jobs if keyword in j.title or keyword in j.company] or jobs
+
+        jobs = matching(alive(self._fetch(code)))
+        if not code:
+            return jobs[:limit]
+        try:
+            everywhere = alive(self._fetch(""))
+        except BenefitApiError:
+            everywhere = []  # 전국 조회가 실패해도 지역 공고는 보여 준다
+        seen = {(j.company, j.title) for j in jobs}
+        national = matching(
+            [
+                j
+                for j in everywhere
+                if NATIONWIDE.search(f"{j.area} {j.title}") and (j.company, j.title) not in seen
+            ]
+        )[: max(1, limit // 3)]
+        return jobs[: limit - len(national)] + national

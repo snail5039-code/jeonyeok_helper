@@ -14,7 +14,9 @@ coach·guide는 사용자를 로드맵을 따라 안내하는 길잡이 (agents/
 # 주의: `from __future__ import annotations`를 쓰면 LangGraph가 노드의 `store` 인자를
 # 알아보지 못해 장기 메모리가 주입되지 않는다. 이 파일에서는 쓰지 않는다.
 
+import asyncio
 import logging
+import re
 from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage
@@ -44,6 +46,9 @@ log = logging.getLogger(__name__)
 
 PROFILE_NAMESPACE = ("profiles",)
 MAX_CALLS_PER_WORKER = 2
+# 같은 워커를 다시 부르는 것은 앞에서 아무것도 못 찾았을 때만 (이미 찾았는데 한 번 더 돌면
+# 질문 하나에 8~10초가 더 걸렸다: '15년 복무, 부산' 질문이 혜택·규정을 두 번씩 돌았음)
+EMPTY_FINDING = re.compile(r"조회 결과 없음|조회 실패|조회 시간 초과|찾지 못|결과가 없")
 
 
 @dataclass
@@ -76,6 +81,7 @@ def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
     store: BaseStore | None = None,
     max_worker_calls: int = 4,
+    worker_timeout: float = 45,
 ) -> CompiledStateGraph:
     c = components
 
@@ -110,7 +116,7 @@ def build_graph(
             log.warning("프로필 추출 실패, 기존 프로필로 진행합니다.", exc_info=True)
             return {}
         new = guide_rules.repair_profile(
-            " ".join(m.text for m in state["messages"] if getattr(m, "type", "") == "human"),
+            "\n".join(m.text for m in state["messages"] if getattr(m, "type", "") == "human"),
             extracted.model_dump(exclude_none=True),
         )
         if store is not None and (uid := _user_id(config)):
@@ -205,8 +211,14 @@ def build_graph(
             wanted.append("regulation")
         batch: list[str] = []
         for name in wanted:
-            used = sum(f["worker"] == name for f in findings)
-            if name in c.workers and name not in batch and used < MAX_CALLS_PER_WORKER:
+            mine = [f for f in findings if f["worker"] == name]
+            found_before = any(not EMPTY_FINDING.search(f["summary"]) for f in mine)
+            if (
+                name in c.workers
+                and name not in batch
+                and len(mine) < MAX_CALLS_PER_WORKER
+                and not found_before
+            ):
                 batch.append(name)
         batch = batch[: max_worker_calls - calls]
         if not batch:
@@ -219,13 +231,21 @@ def build_graph(
         async def worker(state: AgentState):
             instruction = state.get("instruction", "") if state.get("next") == name else ""
             try:
-                out = await c.workers[name].ainvoke(
-                    {
-                        "messages": state["messages"],
-                        "instruction": instruction,
-                        "profile": state.get("profile", {}),
-                    }
+                # 모델 응답이 가끔 1분 넘게 늦어져 화면이 계속 도는 일이 있었다 (같은 질문이
+                # 평소 30초, 한 번은 101초). 상한을 넘기면 끊고 다른 워커가 찾은 것으로 답한다.
+                out = await asyncio.wait_for(
+                    c.workers[name].ainvoke(
+                        {
+                            "messages": state["messages"],
+                            "instruction": instruction,
+                            "profile": state.get("profile", {}),
+                        }
+                    ),
+                    timeout=worker_timeout,
                 )
+            except TimeoutError:
+                log.warning("%s 워커 %s초 초과, 찾은 것까지로 답합니다", name, worker_timeout)
+                out = {"summary": "(조회 시간 초과)", "sources": []}
             except Exception as e:  # 폴백: 실패를 기록하고 다른 경로로 계속 진행
                 log.warning("%s 워커 실패", name, exc_info=True)
                 out = {"summary": f"(조회 실패: {e})", "sources": []}

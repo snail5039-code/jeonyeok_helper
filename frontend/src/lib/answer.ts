@@ -46,6 +46,11 @@ export function parseAnswer(text: string): ParsedAnswer {
       continue;
     }
 
+    // 제목 바로 아래 문장은 그 블록의 설명이다 (예: '경기도 지역 채용 정보' 아래 안내 문장과 공고 목록)
+    if (current && !current.fields.length && !current.extra.length) {
+      current.extra.push(line);
+      continue;
+    }
     if (current) {
       current = null; // 블록 밖의 문단이 나오면 블록이 끝난 것
       tail.push(line);
@@ -64,12 +69,13 @@ export type InlinePart =
 /** **굵게**와 [n] 출처 번호를 나눠서, 컴포넌트가 안전하게 그릴 수 있게 한다. */
 export function splitInline(text: string): InlinePart[] {
   const parts: InlinePart[] = [];
-  const re = /\*\*(.+?)\*\*|\[(\d+)\]/g;
+  // [1]뿐 아니라 [2, 3]처럼 여러 번호를 묶은 것도 번호마다 배지로 (묶음은 글자 그대로 보였음)
+  const re = /\*\*(.+?)\*\*|\[(\d+(?:\s*,\s*\d+)*)\]/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     if (m.index > last) parts.push({ kind: "text", value: text.slice(last, m.index) });
     if (m[1] !== undefined) parts.push({ kind: "bold", value: m[1] });
-    else parts.push({ kind: "cite", index: Number(m[2]) });
+    else for (const n of m[2].split(",")) parts.push({ kind: "cite", index: Number(n.trim()) });
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push({ kind: "text", value: text.slice(last) });

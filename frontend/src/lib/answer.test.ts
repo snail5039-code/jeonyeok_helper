@@ -90,3 +90,28 @@ describe("citedCount", () => {
     expect(citedCount("번호 없는 답", 4)).toBe(4);
   });
 });
+
+describe("parseAnswer 채용 목록 블록", () => {
+  it("제목 아래 안내 문장과 공고 목록이 카드 안에 들어간다", () => {
+    const text = [
+      "요약 문장",
+      "### 경기도 지역 채용 정보",
+      "현재 경기도 여러 시군에 공고가 있습니다.",
+      "• (재단)파주시청소년재단 기간제 직원 채용 (~2026.10.23.) [11]",
+      "• 안성시청 결원 채용 (~2026.10.19.) [14]",
+      "정확한 자격과 기한은 소관 기관에 꼭 확인하세요.",
+    ].join("\n");
+    const { benefits, tail } = parseAnswer(text);
+    expect(benefits[0].extra).toHaveLength(3);
+    expect(benefits[0].extra[1]).toContain("파주시청소년재단");
+    expect(tail).toEqual(["정확한 자격과 기한은 소관 기관에 꼭 확인하세요."]);
+  });
+});
+
+describe("splitInline 묶음 번호", () => {
+  it("[2, 3]을 번호 배지 두 개로 나눈다", () => {
+    const parts = splitInline("최대 12개월 [2, 3].");
+    expect(parts.filter((p) => p.kind === "cite").map((p) => (p.kind === "cite" ? p.index : 0))).toEqual([2, 3]);
+    expect(parts.some((p) => p.kind === "text" && p.value.includes("["))).toBe(false);
+  });
+});

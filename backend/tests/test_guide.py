@@ -191,3 +191,45 @@ def test_repair_profile_does_not_invent_merit_status():
     assert done["service_type"] == "merit"
     other = repair_profile("병장으로 전역했어요", {"service_type": "conscript", "region": "서울"})
     assert other == {"service_type": "conscript", "region": "서울"}
+
+
+def test_cadre_is_read_from_rank_or_words():
+    from jeonyeok_helper.agents.state import cadre_of
+
+    assert cadre_of("중사") == "부사관" and cadre_of("부사관으로 8년 했어요") == "부사관"
+    assert cadre_of("대위") == "장교" and cadre_of("단기복무 장교로 전역") == "장교"
+    assert cadre_of("준위") == "준사관"
+    assert cadre_of("병장") is None and cadre_of(None) is None
+
+
+def test_repair_profile_reads_cadre_from_the_latest_message_only():
+    from jeonyeok_helper.agents.guide import repair_profile
+
+    text = "하사로 4년 복무했어요\n단기복무 장교로 전역했는데 취업 지원 받을 수 있나요?"
+    assert repair_profile(text, {"service_type": "short_term_officer"})["cadre"] == "장교"
+    assert "cadre" not in repair_profile("병장으로 전역", {"service_type": "conscript"})
+
+
+def test_profile_text_shows_cadre_for_officers_only():
+    from jeonyeok_helper.agents.prompts import format_profile
+
+    officer = format_profile({"service_type": "long_term", "rank": "중사"})
+    assert "간부 구분=부사관" in officer
+    said = format_profile({"service_type": "short_term_officer", "cadre": "장교"})
+    assert "간부 구분=장교" in said
+    assert "간부 구분" not in format_profile({"service_type": "conscript", "rank": "병장"})
+
+
+def test_repair_profile_fills_service_type_only_when_the_words_are_clear():
+    from jeonyeok_helper.agents.guide import repair_profile
+
+    def kind(text):
+        return repair_profile(text, {"service_type": "unknown"}).get("service_type")
+
+    assert kind("24살이고 부산 사는 병장 전역자예요") == "conscript"
+    assert kind("병사 복무 기간이 공무원 호봉에 반영되나요?") == "conscript"
+    assert kind("20년 넘게 복무하고 전역하면 군인연금은 어떻게 되나요?") == "long_term"
+    assert kind("하사로 3년 복무했어요") is None  # 5년 미만 간부인지 확실하지 않으면 비워 둔다
+    assert kind("안녕하세요") is None
+    # 모델이 읽은 값이 있으면 건드리지 않는다
+    assert repair_profile("병장", {"service_type": "long_term"})["service_type"] == "long_term"

@@ -326,6 +326,12 @@ def test_onboarding_complete_builds_first_roadmap_and_suggests_first_step():
         # 로드맵이 이미 있으면 다시 만들지 않는다
         client.post("/chat", json={"message": "또", "user_id": "u1"})
         assert len(client.seen_profiles) == 1
+        # 담긴 임무를 모두 되돌려 비워도 다시 만들지 않는다 (사용자가 고른 것)
+        for item in client.get("/journey/u1").json()["items"]:
+            client.delete(f"/journey/u1/items/{item['id']}")
+        events = parse_sse(client.post("/chat", json={"message": "다시", "user_id": "u1"}).text)
+        assert not any(e == "journey" for e, _ in events)
+        assert len(client.seen_profiles) == 1
 
 
 def test_done_button_marks_item_and_coach_moves_to_next():

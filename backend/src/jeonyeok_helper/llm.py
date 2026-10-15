@@ -22,6 +22,9 @@ def get_chat_model(
         google_api_key=_require_key(),
         temperature=temperature,
         thinking_budget=thinking_budget,
+        # 응답이 늦어지면 계속 기다리지 않고 한 번 다시 시도한다 (화면이 무한히 도는 것 방지)
+        timeout=60,
+        max_retries=2,
     )
 
 

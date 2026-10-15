@@ -18,8 +18,6 @@ PROFILE_PROMPT = ChatPromptTemplate.from_messages(
             COMMON + "\n\n대화에서 사용자의 복무 정보를 추출하세요. "
             "사용자가 직접 말한 것만 채우고, 추측하지 말고 모르는 값은 비워 두세요. "
             "단, 계급이 이병·일병·상병·병장이면 의무복무 병사이므로 service_type=conscript입니다. "
-            "국가유공자·보훈보상대상자로 등록했다고 말하지 않았다면 merit으로 하지 마세요 "
-            "(의병전역·부상은 merit이 아닙니다). "
             "제도·할 일 이름(예: '제대군인 취업지원 했어요')은 복무 정보가 아닙니다. 이미 알려진 "
             "값과 다르게 채우는 것은 사용자가 자기 복무를 분명히 고쳐 말했을 때만.\n"
             "오늘은 {today}입니다. '작년', '지난달'처럼 말하면 오늘을 기준으로 날짜를 계산하세요.\n"
@@ -51,6 +49,9 @@ ROUTER_PROMPT = ChatPromptTemplate.from_messages(
             "- '어떻게 신청해요?', '어떻게 받아요?'처럼 특정 제도의 신청 방법·절차·서류를 물으면 "
             "기관(institution)만 찾지 말고 regulation과 benefit도 함께 찾으세요. 신청 방법은 "
             "규정·안내 자료와 혜택 정보에 들어 있습니다.\n"
+            "- '어디서 받아요?', '어디서 해요?'처럼 교육·상담·검사를 받을 곳을 물어도 "
+            "institution만 찾지 마세요. 어떤 과정이 어디서 열리는지는 안내서(regulation)에 "
+            "있습니다(예: 전직 교육 → 국방전직교육원). next=regulation, also=[institution].\n"
             "- 한 질문에 워커가 여러 개 필요하면 next에 하나, also에 나머지를 넣어 동시에 "
             "돌리세요. 예: 자격을 묻는 혜택 질문 → next=benefit, also=[regulation].\n"
             "- 인사, 잡담, 서비스 소개 질문에는 ask_user를 고르지 말고 바로 answer.\n"
@@ -99,7 +100,11 @@ WORKER_PROMPTS = {
     "빠집니다. 의무복무 병사나 34세 이하 사용자에게는 그다음 "
     "search_youth_policies로 청년정책도 함께 찾으세요(지역·나이를 알면 넣을 것). "
     "채용공고나 일자리를 물으면 search_jobs로 "
-    "사용자 지역의 제대군인지원센터 공고를 찾으세요. 보훈특별고용, 공무원·군무원 특별채용, "
+    "사용자 지역의 제대군인지원센터 공고를 찾으세요(keyword는 사용자가 직종을 말했을 때만). "
+    "'제대군인 채용'처럼 넓게 물으면 search_jobs와 search_veteran_jobs를 둘 다 부르세요. "
+    "결과 끝의 area가 '전국'인 공고는 "
+    "지역과 관계없이 지원할 수 있으니 요약에 '전국 공고'로 따로 남기세요. "
+    "보훈특별고용, 공무원·군무원 특별채용, "
     "국가유공자·장기복무 제대군인의 취업 공고를 물으면 search_veteran_jobs를 쓰세요. "
     "예비군 훈련 이수자·현역병 할인이나 "
     "나라사랑가게를 물으면 find_stores로 사용자 지역 가게를 찾으세요(지역을 모르면 쓰지 말 것)."
@@ -182,10 +187,16 @@ RESPOND_PROMPT = ChatPromptTemplate.from_messages(
             "더 찾을 수 있는지 한 문장으로\n"
             "- 사용자 프로필에 복무 형태가 없으면 첫 문단에 '의무복무 병사 기준으로 정리했어요. "
             "간부나 보훈대상자면 알려 주세요'라고 밝힐 것\n"
+            "- 프로필에 간부 구분(장교·부사관)이 있으면 첫 문단에 '부사관 기준으로 정리했어요'처럼 "
+            "밝히고, 다른 구분만 받는 제도(예: 장교 전용 과정)는 빼거나 "
+            "'장교만 해당'이라고 적을 것\n"
             "- 전역·혜택과 관계없는 질문(잡담, 투자, 맛집 등)이면 도울 수 없다고 짧게 말하고, "
             "도울 수 있는 일(혜택·근거 법령·신청 기관 안내)을 한 문장으로 알려 줄 것. "
             "이때 마지막 확인 문단은 쓰지 말 것\n"
             "- 신청처·연락처 같은 기관 안내는 블록 대신 '- 기관명: 사이트, 전화' 목록으로 쓸 것\n"
+            "- 채용 공고는 '### 지역 채용 공고'와 '### 전국 공고'(area가 전국인 것, "
+            "지역과 관계없이 지원 가능) 블록으로 나눠 "
+            "'- 회사: 공고 제목 (~마감일)' 목록으로 쓸 것\n"
             "- 조회 실패나 시스템 오류 같은 내부 사정은 말하지 말고, "
             "확인할 수 있는 기관을 안내할 것\n\n"
             "사용자 프로필: {profile}\n\n도구 원문:\n{evidence}\n\n"
@@ -208,7 +219,7 @@ VERIFY_PROMPT = ChatPromptTemplate.from_messages(
             "- 문제가 없으면 supported=true로 하고 answer는 비워 두세요.\n"
             "- follow_ups: 이 답변을 읽은 전역자가 이어서 물어볼 만한 질문 2~3개. 사용자 말투로 "
             "짧게(30자 이내), 답변에 이미 있는 내용은 빼고 신청 방법·자격·지역 혜택처럼 "
-            "다음 단계를 묻는 질문으로.",
+            "다음 단계를 묻는 질문으로. 답변에서 사용자가 대상이 아니라고 한 제도는 묻지 마세요.",
         ),
         (
             "human",
@@ -270,8 +281,17 @@ def format_profile(profile: dict | None) -> str:
     def show(v) -> str:
         return ", ".join(map(str, v)) if isinstance(v, list) else str(v)
 
-    p = profile or {}
+    from jeonyeok_helper.agents.state import cadre_of
+
+    p = dict(profile or {})
+    # 간부 구분: 내 정보의 계급이 있으면 그것으로, 없으면 대화에서 읽은 값
+    cadre = cadre_of(str(p.get("rank") or "")) or p.get("cadre")
+    p.pop("cadre", None)
+    if p.get("service_type") not in ("short_term_officer", "long_term"):
+        cadre = None
     parts = [f"{PROFILE_LABELS.get(k, k)}={show(v)}" for k, v in p.items() if v]
+    if cadre:
+        parts.insert(1, f"간부 구분={cadre}")
     if status := discharge_status(p.get("discharge_date")):
         parts.append(f"전역 상태={status}")
         # 간부는 계급·나이에 따라 예비군 기간이 달라 병사만 계산한다

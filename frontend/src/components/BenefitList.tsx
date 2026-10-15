@@ -56,17 +56,20 @@ function BenefitCard({ benefit, sources }: { benefit: BenefitBlock; sources: Sou
           </div>
         )}
         {(target.length > 0 || basis.length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
+          // 길면 여러 줄로 감싼다 (높이를 고정하면 줄끼리 겹쳐 글자가 깨짐)
+          <div className="grid gap-1.5">
             {target.map(([, v]) => (
-              <span key={v} className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs font-semibold text-accent">
-                <Check className="size-[13px]" strokeWidth={2.2} />
-                <InlineText text={v} sources={sources} />
-              </span>
+              <p key={v} className="flex items-start gap-1.5 rounded-md bg-accent-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-accent">
+                <Check className="mt-0.5 size-[13px] shrink-0" strokeWidth={2.2} />
+                <span className="min-w-0">
+                  <InlineText text={v} sources={sources} />
+                </span>
+              </p>
             ))}
             {basis.map(([, v]) => (
-              <span key={v} className="inline-flex h-6 items-center rounded-md bg-law-soft px-2 text-xs font-semibold text-law">
+              <p key={v} className="rounded-md bg-law-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-law">
                 <InlineText text={v} sources={sources} />
-              </span>
+              </p>
             ))}
           </div>
         )}

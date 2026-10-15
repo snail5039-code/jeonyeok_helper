@@ -93,14 +93,26 @@ def test_also_workers_run_together_and_merge_results():
     assert len(rec["router"].calls) == 2  # 라우터는 동시 실행이 끝난 뒤 한 번만 다시 판단
 
 
-def test_same_worker_is_called_at_most_twice():
+def test_worker_that_already_found_something_is_not_called_again():
     components, rec = make_components([Route(next="regulation", instruction="또 찾아")])
     graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=10)
 
     state = ask(graph, "법령 찾아줘")
 
-    assert len(rec["worker"].calls) == 2
+    assert len(rec["worker"].calls) == 1  # 한 번에 찾았으면 다시 돌지 않는다 (속도)
     assert state["messages"][-1].text == "최종 답변 [1]"
+
+
+def test_worker_that_found_nothing_is_retried_at_most_twice():
+    empty = {"summary": "조회 결과 없음", "sources": []}
+    components, rec = make_components(
+        [Route(next="regulation", instruction="다르게 찾아")], worker_out=empty
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver(), max_worker_calls=10)
+
+    ask(graph, "법령 찾아줘")
+
+    assert len(rec["worker"].calls) == 2
 
 
 # ---------- 폴백 ----------
@@ -403,3 +415,21 @@ def test_reserve_status_counts_years_from_the_year_after_discharge():
     assert "예비군=" not in format_profile(
         {"service_type": "conscript", "discharge_date": "2027-03"}
     )
+
+
+def test_slow_worker_is_cut_off_and_answer_still_comes():
+    import asyncio
+
+    from langchain_core.runnables import RunnableLambda
+
+    async def slow(_):
+        await asyncio.sleep(5)
+        return {"summary": "늦은 결과", "sources": []}
+
+    components, _ = make_components([Route(next="regulation"), Route(next="answer")])
+    components.workers["regulation"] = RunnableLambda(slow)
+    graph = build_graph(components, checkpointer=InMemorySaver(), worker_timeout=0.2)
+
+    state = ask(graph, "법령 찾아줘")
+
+    assert state["messages"][-1].text  # 끊고도 답변까지 간다
