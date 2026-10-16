@@ -104,7 +104,7 @@ export function Composer({
       {compact ? (
         sendButton
       ) : (
-        <div className="flex items-center justify-between gap-2">
+        <div className={`flex items-center gap-2 ${footer ? "justify-between" : "justify-end"}`}>
           {footer}
           {sendButton}
         </div>

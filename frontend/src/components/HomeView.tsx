@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { dischargeMoment } from "@/lib/discharge";
 import { greeting } from "@/lib/guide";
+import { nextItem } from "@/lib/journey";
 import type { JourneyItem, Profile, QuickReply } from "@/lib/types";
 
 import { Composer } from "./Composer";
@@ -36,6 +37,13 @@ export function HomeView({ profile, items, ready, busy, onAsk, onReply, onJourne
   const moment = selectedMoment ?? dischargeMoment(profile.discharge_date);
 
   const { replies } = greeting(profile, items);
+  // 버튼이 무엇에 대한 것인지 앞에 밝힌다 (다시 온 사람에게 "내 상황부터"는 맞지 않음)
+  const next = nextItem(items);
+  const repliesLabel = !profile.service_type
+    ? "내 상황부터 알려줄까요?"
+    : next
+      ? `다음 임무: ${next.title}`
+      : items.length ? "이어서 해 볼까요?" : "작전도를 만들어 볼까요?";
   const before = moment === "before";
   const image = before ? "/images/soldier-female-before.png" : "/images/soldier-female-after.png";
 
@@ -69,13 +77,12 @@ export function HomeView({ profile, items, ready, busy, onAsk, onReply, onJourne
                   : "예: 지난달 전역했는데, 지금 신청할 수 있는 취업·교육 지원이 뭐가 있나요?"}
                 busy={busy}
                 onSubmit={onAsk}
-                footer={<div className="home-chips"><span>전역 후 혜택</span><span>복학·취업</span><span>신청 방법</span></div>}
               />
             </div>
 
             <div className="home-hint"><span>✳</span><p><b>날짜나 복무 형태를 몰라도 괜찮아요.</b> 질문을 주시면 필요한 정보를 하나씩 함께 정리해요.</p></div>
             {ready && replies.length > 0 && (
-              <div className="home-guide"><b>내 상황부터 알려줄까요?</b><QuickReplies replies={replies} onReply={onReply} /></div>
+              <div className="home-guide"><b>{repliesLabel}</b><QuickReplies replies={replies} onReply={onReply} /></div>
             )}
 
             <section className="home-popular" aria-label="예시 질문">

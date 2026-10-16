@@ -33,12 +33,14 @@ function splitRegion(region = ""): [string, string] {
   return [sido, rest];
 }
 
-function caption(percent: number, hasType: boolean): string {
-  if (!hasType) return "복무 형태부터 골라 주세요. 그것만 알아도 찾을 수 있는 게 확 늘어요.";
+function caption(percent: number, profile: Profile): string {
+  if (!profile.service_type) return "복무 형태부터 골라 주세요. 그것만 알아도 찾을 수 있는 게 확 늘어요.";
+  // 비어 있는 칸만 말한다 (지역을 이미 적었는데 지역을 달라고 하지 않게)
+  const missing = [!profile.region && "지역", !profile.discharge_date && "전역일"].filter(Boolean);
+  if (missing.length) return `복무 형태 확인했어요. ${missing.join("과 ")}도 알려 주세요.`;
   if (percent >= 90) return "거의 다 적었어요. 이제 딱 맞는 임무만 골라 드릴게요.";
   if (percent >= 60) return "좋아요. 희망 직무나 자격증까지 적으면 더 정확해져요.";
-  if (percent >= 30) return "지역이랑 전역 후 계획을 알려 주면 찾는 범위가 좁혀져요.";
-  return "복무 형태 확인했어요. 지역과 전역일도 알려 주세요.";
+  return "좋아요. 나이나 전역 후 계획을 알려 주면 찾는 범위가 좁혀져요.";
 }
 
 interface Props {
@@ -94,7 +96,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
         <section className="grid grid-cols-[56px_minmax(0,1fr)] items-start gap-3">
           <Mascot rank={percent >= 90 ? "병장" : percent >= 50 ? "상병" : "이병"} size={56} />
           <div className="grid gap-2.5">
-            <Say>{caption(percent, Boolean(current.service_type))}</Say>
+            <Say>{caption(percent, current)}</Say>
             <div className="flex items-center gap-2 text-[13px] font-bold">
               <span className="text-fg-2">채운 정도</span>
               <div className="h-3 flex-1 overflow-hidden rounded-full border-2 border-ink bg-white">
@@ -126,7 +128,7 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
               <Field label="복무 기간(년)">
                 <input type="number" inputMode="decimal" min={0} max={50} step={0.5} placeholder="예: 1.5" value={form.service_years ?? ""} onChange={(e) => set({ service_years: num(e.target.value) })} className={field} />
               </Field>
-              <Field label="전역(예정)일">
+              <Field label="전역(예정)일" hint={/^\d{4}$/.test(form.discharge_date ?? "") ? `${form.discharge_date}년으로 알고 있어요. 월까지 고르면 기한이 정확해져요` : undefined}>
                 <input type="month" value={form.discharge_date?.slice(0, 7) ?? ""} onChange={(e) => set({ discharge_date: e.target.value || undefined })} className={field} />
               </Field>
             </div>
