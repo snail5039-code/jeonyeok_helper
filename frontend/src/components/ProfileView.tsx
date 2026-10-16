@@ -7,7 +7,7 @@ import { profileCompleteness } from "@/lib/journey";
 import { SERVICE_TYPE_LABELS, type Profile, type ServiceType } from "@/lib/types";
 
 import { Book, BookTitle } from "./Book";
-import { Mascot } from "./Doodle";
+import { PhotoAvatar as Mascot } from "./PhotoAvatar";
 import { Say } from "./Guide";
 
 export const REGIONS = [

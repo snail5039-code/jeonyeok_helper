@@ -7,7 +7,8 @@ import { MIN_CORE, STAGE_BY_KEY, toCivilian, badges as badgesOf, levelOf, nextIt
 import type { JourneyItem, Profile } from "@/lib/types";
 
 import { Stamp } from "./Book";
-import { Mascot, Medal, RankStripes } from "./Doodle";
+import { Medal, RankStripes } from "./Doodle";
+import { PhotoAvatar as Mascot } from "./PhotoAvatar";
 import { DeadlineChip } from "./JourneyParts";
 import { StageIcon } from "./StageIcon";
 import type { Journey } from "./useJourney";

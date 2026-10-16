@@ -15,10 +15,10 @@ import { Book, BookTitle } from "./Book";
 import { Composer } from "./Composer";
 import { HelpView } from "./HelpView";
 import { HomeView } from "./HomeView";
-import { JourneyPanel } from "./JourneyPanel";
 import { DeadlineChip } from "./JourneyParts";
 import { JourneyView } from "./JourneyView";
 import { ProfileView } from "./ProfileView";
+import { StatusPanel } from "./StatusPanel";
 import { MobileTabs, TopNav } from "./TopNav";
 import { TurnView } from "./TurnView";
 import { UndoToast } from "./UndoToast";
@@ -293,7 +293,18 @@ export function ChatApp() {
         onAsk={ask}
       />
 
-      {page === "help" ? (
+      {page === "chat" && isHome ? (
+        <HomeView
+          profile={profile}
+          items={journey.items}
+          ready={ready}
+          busy={busy}
+          onAsk={ask}
+          onReply={reply}
+          onJourney={openJourney}
+          onProfile={() => setPage("profile")}
+        />
+      ) : page === "help" ? (
         <HelpView onAsk={ask} onJourney={openJourney} onProfile={() => setPage("profile")} />
       ) : page === "journey" ? (
         <JourneyView journey={journey} profile={profile} onAsk={ask} onProfile={() => setPage("profile")} />
@@ -329,10 +340,7 @@ export function ChatApp() {
               )}
 
               <div className="grid flex-1 content-start gap-7 pt-1">
-                {isHome ? (
-                  <HomeView profile={profile} items={journey.items} rank={rank} ready={ready} onAsk={ask} onReply={reply} />
-                ) : (
-                  turns.map((t, i) => (
+                {turns.map((t, i) => (
                     <TurnView
                       key={t.id}
                       turn={t}
@@ -343,8 +351,7 @@ export function ChatApp() {
                       onAddSuggest={addSuggest}
                       onFeedback={feedback}
                     />
-                  ))
-                )}
+                ))}
               </div>
 
               <div className="sticky bottom-0 z-10 mt-6 -mr-4 -ml-2 grid gap-1.5 bg-bg pt-3 pr-4 pb-2.5 pl-2 shadow-[0_-16px_14px_-4px_var(--bg)] sm:-mr-7 sm:pr-7">
@@ -360,10 +367,13 @@ export function ChatApp() {
               </div>
             </Book>
 
-            {/* 오른쪽 수첩: 나의 전역 작전도 */}
-            <Book as="aside" label="나의 전역 작전도" rings={10} className="sticky top-6 hidden lg:block">
-              <JourneyPanel journey={journey} profile={profile} onOpen={openJourney} />
-            </Book>
+            <StatusPanel
+              className="sticky top-6 hidden lg:block"
+              profile={profile}
+              items={journey.items}
+              onJourney={openJourney}
+              onProfile={() => setPage("profile")}
+            />
           </div>
           <div aria-hidden className="h-4 lg:h-6" />
         </main>
@@ -400,20 +410,20 @@ function NowCard({
   return (
     <section
       aria-label="지금 할 일"
-      className="grid grid-cols-[minmax(0,1fr)] items-center gap-3 rounded-[14px] border-[2.5px] border-ink bg-soft px-3.5 py-3 shadow-[4px_4px_0_var(--olive-dark)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+      className="now-card rounded-[14px] border-[2.5px] border-ink bg-soft px-4 py-3.5 shadow-[4px_4px_0_var(--olive-dark)]"
     >
-      <span className="font-stencil justify-self-start -rotate-3 rounded-md bg-warn px-2 py-1 text-[13px] text-bg">지금 할 일</span>
+      <span className="now-card-label font-stencil justify-self-start -rotate-3 rounded-md bg-warn px-2 py-1 text-[13px] text-white">지금 할 일</span>
       <div className="min-w-0">
-        <h3 className="flex items-center gap-1.5 text-[16px] font-extrabold">
+        <h3 className="flex items-start gap-1.5 text-[17px] leading-[1.4] font-extrabold">
           {item.core && <Star aria-label="핵심" className="size-4 shrink-0 fill-[#e0a100] text-[#c98a00]" />}
-          <span className="truncate">{item.title}</span>
+          <span>{item.title}</span>
         </h3>
-        <p className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13.5px] text-fg-2">
+        <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] leading-[1.5] text-fg-2">
           <span className="min-w-0">{item.action}</span>
           <DeadlineChip item={item} dischargeDate={profile.discharge_date} />
         </p>
       </div>
-      <div className="flex gap-2">
+      <div className="now-card-actions flex gap-2">
         <button
           type="button"
           disabled={busy}

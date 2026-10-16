@@ -14,6 +14,7 @@ interface Props {
   /** 입력창 아래쪽 줄(첫 화면의 복무 형태 버튼 등) */
   footer?: ReactNode;
   compact?: boolean;
+  hero?: boolean;
   id: string;
 }
 
@@ -26,6 +27,7 @@ export function Composer({
   onSubmit,
   footer,
   compact,
+  hero,
   id,
 }: Props) {
   const disabled = disabledProp || busy;
@@ -63,9 +65,9 @@ export function Composer({
         type="submit"
         disabled={disabled}
         aria-label="질문 보내기"
-        className="grid h-10 w-11 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-ink disabled:opacity-50"
+        className={hero ? "home-send" : "grid h-10 w-11 shrink-0 place-items-center rounded-[10px] bg-accent text-accent-ink disabled:opacity-50"}
       >
-        <ArrowUp className="size-[18px]" strokeWidth={2.2} />
+        {hero ? <>질문하기 <span aria-hidden>↗</span></> : <ArrowUp className="size-[18px]" strokeWidth={2.2} />}
       </button>
     );
 
@@ -75,7 +77,7 @@ export function Composer({
         e.preventDefault();
         submit();
       }}
-      className={`grid gap-2.5 rounded-[16px] border-[2.5px] border-olive-dark bg-soft shadow-[3px_3px_0_rgb(0_0_0_/_0.16)] focus-within:border-ink ${
+      className={`grid gap-2.5 rounded-[16px] border-[2.5px] border-olive-dark bg-soft shadow-[3px_3px_0_rgb(0_0_0_/_0.16)] focus-within:border-ink ${hero ? "home-composer" : ""} ${
         compact ? "grid-cols-[1fr_auto] items-center py-[7px] pr-[7px] pl-4" : "pt-3.5 pr-3.5 pb-2.5 pl-[18px]"
       }`}
     >

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>전역도우미 · 군돌이 모티브 목업</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-state="before">
+  <header class="topbar">
+    <a class="brand" href="#"><span class="brand-mark">/</span><strong>전역도우미</strong><small>전역 후의 다음을 함께</small></a>
+    <nav aria-label="주 메뉴"><a class="active">작전실</a><a>나의 작전도</a><a>혜택 찾기</a><a>규정 찾기</a></nav>
+    <div class="top-actions"><button class="profile">내 복무 정보 <span>⌄</span></button><button class="new">＋ 새 질문</button></div>
+  </header>
+
+  <main class="page">
+    <div class="page-title"><span class="location">작전실 <b>/</b> 오늘의 질문</span><span class="preview-tag">DESIGN MOCKUP · 예시 화면</span></div>
+    <div class="dashboard">
+      <section class="main-panel" aria-label="질문하기">
+        <div class="intro">
+          <div class="intro-copy">
+            <span class="eyebrow">✳ 전역이, 질문 받을 준비 완료</span>
+            <h1>전역 후의 일,<br><em>일단 물어보세요.</em></h1>
+            <p>지금 상황을 평소 말하듯 적어 주세요.<br>맞는 지원과 다음 할 일을 같이 찾아드려요.</p>
+          </div>
+          <div class="photo" role="img" aria-label="군복을 입은 여성 군인이 앞날을 계획하는 사진"><span>다음 작전은<br><b>내가 정한다!</b></span></div>
+        </div>
+
+        <div class="ask-wrap">
+          <div class="ask-heading"><strong>궁금한 거, 던져주세요.</strong><span>길게 적어도 괜찮아요</span></div>
+          <div class="input-placeholder">예: 내년 6월에 전역하는데, 복학 전까지 받을 수 있는 취업·교육 지원이 뭐가 있나요?</div>
+          <div class="ask-footer"><div class="chips"><span>전역 후 혜택</span><span>복학·취업</span><span>신청 방법</span></div><button class="ask-button">질문하기 <span>↗</span></button></div>
+        </div>
+
+        <div class="helper-note"><span class="helper-icon">✳</span><p><b>날짜나 복무 형태를 몰라도 괜찮아요.</b> 질문을 주시면 필요한 정보를 하나씩 함께 정리해요.</p></div>
+
+        <section class="popular" aria-label="예시 질문">
+          <div class="section-heading"><div><small>START WITH A QUESTION</small><h2>다른 사람은 이렇게 물어봤어요</h2></div><a>질문 더 보기 ↗</a></div>
+          <div class="question-list">
+            <button><span class="number">01</span><b>전역하고 복학하면 받을 수 있는 학비 지원이 있나요?</b><span class="arrow">↗</span></button>
+            <button><span class="number">02</span><b>군복무 크레딧은 따로 신청해야 하나요?</b><span class="arrow">↗</span></button>
+            <button><span class="number">03</span><b>전역 전 취업 준비는 뭘 먼저 해야 하죠?</b><span class="arrow">↗</span></button>
+          </div>
+        </section>
+        <div class="trust"><span>✳ 답변마다 근거 표시</span><span>↗ 신청처까지 연결</span><span>○ 로그인 없이 질문</span></div>
+      </section>
+
+      <aside class="tracker" aria-label="내 상황에 맞는 작전도 예시">
+        <div class="tracker-top"><span>MY NEXT STEP</span><span class="example">상황별 예시 화면</span></div>
+        <div class="state-switch" aria-label="목업 상태 선택"><button type="button" class="selected" data-state="before">전역 전</button><button type="button" data-state="after">전역 후</button></div>
+        <div class="state-panel" data-panel="before">
+          <div class="profile-row"><div class="avatar" role="img" aria-label="군인 프로필 사진"></div><div><strong>김전역 님</strong><span>전역 준비 중 · 육군</span></div><span class="settings">···</span></div>
+          <div class="status-card"><span class="status-kicker">BEFORE DISCHARGE <i>✦ 준비 중</i></span><h2>전역 뒤의 계획,<br>지금부터 하나씩.</h2><p>전역 예정일 2027. 06. 01</p><span class="status-star">✳</span></div>
+          <div class="plan-progress"><div class="progress-title"><b>전역 후 준비</b><strong>1 / 5</strong></div><div class="progress-track"><i></i></div><p>준비할 일을 질문으로 찾아보세요.</p></div>
+          <div class="journey"><span class="done">상황 등록</span><span class="current">지원 찾기</span><span>신청 준비</span></div>
+          <div class="divider"></div>
+          <div class="next-mission"><div class="section-heading-small"><div><span>NEXT MISSION</span><b>지금 해볼 일</b></div></div><div class="mission-row"><span class="check">✓</span><div><b>전역 예정일 등록</b><small>내 상황에 맞게 시작하기</small></div></div><div class="mission-row"><span class="empty">2</span><div><b>전역 후 받을 지원 물어보기</b><small>취업·복학·생활, 편하게 질문하세요</small></div><span class="mission-arrow">↗</span></div><button class="mission-button">내 작전도 보기 <span>↗</span></button></div>
+        </div>
+        <div class="state-panel" data-panel="after" hidden>
+          <div class="profile-row"><div class="avatar" role="img" aria-label="프로필 사진"></div><div><strong>김전역 님</strong><span>전역 후 · 새 출발 중</span></div><span class="settings">···</span></div>
+          <div class="status-card"><span class="status-kicker">AFTER DISCHARGE <i>✦ 다음 장</i></span><h2>이제 내 차례.<br>다음 단계로 가보자.</h2><p>전역 2026. 09. 01</p><span class="status-star">✳</span></div>
+          <div class="plan-progress"><div class="progress-title"><b>전역 후 계획</b><strong>1 / 5</strong></div><div class="progress-track"><i></i></div><p>필요한 지원을 확인하고 신청해 보세요.</p></div>
+          <div class="journey"><span class="done">상황 등록</span><span class="current">지원 찾기</span><span>신청하기</span></div>
+          <div class="divider"></div>
+          <div class="next-mission"><div class="section-heading-small"><div><span>NEXT MISSION</span><b>지금 해볼 일</b></div></div><div class="mission-row"><span class="check">✓</span><div><b>전역 정보 확인</b><small>내 상황에 맞게 시작하기</small></div></div><div class="mission-row"><span class="empty">2</span><div><b>지금 받을 수 있는 지원 물어보기</b><small>취업·교육·생활 지원부터 확인</small></div><span class="mission-arrow">↗</span></div><button class="mission-button">내 작전도 보기 <span>↗</span></button></div>
+        </div>
+      </aside>
+    </div>
+    <div class="mock-footer">GOONDORI-INSPIRED VARIANT / 전역도우미 독립 목업</div>
+  </main>
+  <script>
+    const buttons = document.querySelectorAll('.state-switch button');
+    const panels = document.querySelectorAll('.state-panel');
+    function showState(state) {
+      document.body.dataset.state = state;
+      buttons.forEach(button => button.classList.toggle('selected', button.dataset.state === state));
+      panels.forEach(panel => { panel.hidden = panel.dataset.panel !== state; });
+      document.querySelector('.photo').setAttribute('aria-label', state === 'after'
+        ? '전역 후 사복 차림의 여성이 다음 계획을 세우는 사진'
+        : '군복을 입은 여성 군인이 앞날을 계획하는 사진');
+      document.querySelector('.photo span').innerHTML = state === 'after'
+        ? '다음 작전도<br><b>내가 정한다!</b>'
+        : '다음 작전은<br><b>내가 정한다!</b>';
+      document.querySelector('.input-placeholder').textContent = state === 'after'
+        ? '예: 지난달 전역했는데, 지금 신청할 수 있는 취업·교육 지원이 뭐가 있나요?'
+        : '예: 내년 6월에 전역하는데, 복학 전까지 받을 수 있는 취업·교육 지원이 뭐가 있나요?';
+      document.querySelector('.question-list button:nth-child(3) b').textContent = state === 'after'
+        ? '전역했는데 취업 지원은 어디서 신청하나요?'
+        : '전역 전 취업 준비는 뭘 먼저 해야 하죠?';
+    }
+    buttons.forEach(button => button.addEventListener('click', () => showState(button.dataset.state)));
+    showState(new URLSearchParams(location.search).get('state') === 'after' ? 'after' : 'before');
+  </script>
+</body>
+</html>

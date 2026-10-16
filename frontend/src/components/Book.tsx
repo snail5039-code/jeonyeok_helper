@@ -15,7 +15,7 @@ export function Book({
   as?: "section" | "aside" | "main" | "div";
 }) {
   return (
-    <Tag aria-label={label} className={`notebook pt-5 pr-4 pb-5 pl-[46px] sm:pt-6 sm:pr-7 sm:pl-[72px] ${className}`}>
+    <Tag aria-label={label} className={`notebook px-4 pt-5 pb-5 sm:px-7 sm:pt-6 ${className}`}>
       <span className="notebook-rings" aria-hidden>
         {Array.from({ length: rings }, (_, i) => (
           <i key={i} />
@@ -29,7 +29,7 @@ export function Book({
 /** 수첩 제목: 굵은 군대 글씨를 테두리 상자에 */
 export function BookTitle({ children, accent }: { children: ReactNode; accent?: string }) {
   return (
-    <h1 className="font-stencil inline-block -rotate-1 border-[3px] border-ink bg-soft px-3.5 pt-1 pb-0.5 text-[22px] leading-tight font-normal text-fg shadow-[4px_4px_0_var(--olive-dark)] sm:text-[27px]">
+    <h1 className="inline-block text-[22px] leading-tight font-black tracking-[-0.06em] text-fg sm:text-[27px]">
       {children}
       {accent && <span className="text-olive"> {accent}</span>}
     </h1>

@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Black_Han_Sans, Jua } from "next/font/google";
 import "./globals.css";
+import "./home.css";
+import "./home-dark.css";
 
 export const metadata: Metadata = {
   title: "전역도우미",
   description: "전역 후 받을 수 있는 혜택, 근거 조문, 신청할 곳을 한 번에 알려드려요.",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/images/brand-cap-chat.png" },
 };
 
 export const viewport: Viewport = {

@@ -5,14 +5,14 @@
    색은 토큰으로만 정의하고, 다크 모드('야간 작전')는 토큰 값만 바꾼다.
    (시스템 설정을 따르되, 사용자가 고르면 html[data-theme]가 우선) */
 :root {
-  --bg: #f6efdc; /* 종이 */
-  --bg-soft: #fffbee; /* 카드 */
-  --bg-sunken: #efe6cc;
-  --line: #ddd2b4;
-  --line-strong: #b5a67c;
-  --fg: #1f2416;
-  --fg-2: #4f4a3a;
-  --fg-3: #7a7055; /* 종이 바탕 대비 4.6:1 */
+  --bg: #edf0e9;
+  --bg-soft: #fffefa;
+  --bg-sunken: #f1f5e9;
+  --line: #dce6d9;
+  --line-strong: #b5c6af;
+  --fg: #283a32;
+  --fg-2: #536d5a;
+  --fg-3: #6d806e;
   --accent: #2a5fc4;
   --accent-soft: #e3ebfa;
   --accent-ink: #ffffff;
@@ -21,16 +21,16 @@
   --law: #4b48a8;
   --law-soft: #e5e4f7;
   --shadow: 3px 3px 0 rgb(31 36 22 / 0.14);
-  --ink: #1f2416; /* 굵은 테두리·밀린 그림자 */
-  --olive: #556b2f;
-  --olive-2: #6b7f3a;
-  --olive-dark: #3b4a22;
-  --olive-ink: #f6efdc;
-  --edge: #8a7b55; /* 종이 가장자리·보조 테두리 */
+  --ink: #334633;
+  --olive: #4b7655;
+  --olive-2: #6b9974;
+  --olive-dark: #365943;
+  --olive-ink: #fffefa;
+  --edge: #b8cbb8;
   --bubble: #fbeaa9; /* 전역이 말풍선 */
   --done: #c9e48a;
   --desk-1: #52613a; --desk-2: #3a4721; --desk-3: #66743b; --desk-4: #2f3a1b; --desk-5: #6f6243;
-  --bar-1: #f3ead2; --bar-2: #e9dfc0; /* 위 메뉴·아래 탭바 바탕 */
+  --bar-1: #fcfcf8; --bar-2: #fcfcf8;
   --rule: #ddd2b4; /* 노트 줄 */
   --margin: rgb(184 50 42 / 0.3); /* 노트 빨간 여백선 */
   color-scheme: light;
@@ -127,15 +127,9 @@ body {
   height: 100%;
 }
 body {
-  /* 위장 무늬 책상 */
-  background:
-    radial-gradient(60px 40px at 10% 20%, var(--desk-2) 60%, transparent 61%),
-    radial-gradient(80px 50px at 30% 70%, var(--desk-4) 60%, transparent 61%),
-    radial-gradient(70px 45px at 70% 30%, var(--desk-3) 60%, transparent 61%),
-    radial-gradient(90px 55px at 85% 80%, var(--desk-4) 60%, transparent 61%),
-    radial-gradient(50px 35px at 55% 55%, var(--desk-5) 60%, transparent 61%),
-    var(--desk-1);
-  background-size: 260px 220px;
+  background: var(--bg);
+  background-image: radial-gradient(#849d8527 1px, transparent 1px);
+  background-size: 25px 25px;
   color: var(--fg);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -255,24 +249,13 @@ body {
 @layer components {
 .notebook {
   position: relative;
-  border-radius: 6px 14px 14px 6px;
-  background:
-    repeating-linear-gradient(transparent 0 31px, var(--rule) 31px 32px),
-    linear-gradient(90deg, transparent 54px, var(--margin) 54px 56px, transparent 56px),
-    var(--bg);
-  background-position: 0 14px, 0 0, 0 0;
-  border: 2px solid var(--edge);
-  box-shadow: 0 2px 0 var(--edge), 8px 10px 0 rgb(0 0 0 / 0.26), inset 0 0 40px rgb(120 95 40 / 0.14);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  border: 1.5px solid var(--edge);
+  box-shadow: 5px 6px 0 #c4d0bd;
 }
 .notebook-rings {
-  position: absolute;
-  left: 13px;
-  top: 26px;
-  bottom: 26px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  pointer-events: none;
+  display: none;
 }
 .notebook-rings i {
   width: 32px;

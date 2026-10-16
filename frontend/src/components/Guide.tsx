@@ -6,7 +6,7 @@ import { useState } from "react";
 import { STAGE_BY_KEY } from "@/lib/journey";
 import type { QuickReply, Suggestion } from "@/lib/types";
 
-import { Mascot } from "./Doodle";
+import { PhotoAvatar as Mascot } from "./PhotoAvatar";
 import { StageIcon } from "./StageIcon";
 
 /** 길잡이 전역이의 말풍선 줄. children에는 말풍선·버튼·제안 등을 넣는다. */

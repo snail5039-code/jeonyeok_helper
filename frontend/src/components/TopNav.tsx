@@ -1,12 +1,12 @@
 "use client";
 
 import { BookOpen, Building2, ChevronDown, CircleHelp, Map, MessageSquare, Moon, Plus, Sun, UserRound, UserRoundPen } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
 import { levelOf, progress } from "@/lib/journey";
 import { cadreOf, SERVICE_TYPE_LABELS, type JourneyItem, type Profile } from "@/lib/types";
 
-import { Mascot } from "./Doodle";
 
 const SHORTCUTS = [
   { icon: BookOpen, label: "규정 찾기", ask: "전역자 지원과 관련된 주요 법령을 알려주세요" },
@@ -93,20 +93,20 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
   const rank = levelOf(journey).rank;
 
   const link = (on: boolean) =>
-    `inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[14.5px] font-bold ${
-      on ? "bg-olive text-olive-ink shadow-[inset_0_-3px_0_var(--olive-dark)]" : "text-fg-2 hover:bg-olive/10 hover:text-fg"
+    `inline-flex h-full items-center gap-1.5 border-b-2 px-3 text-[13px] font-bold ${
+      on ? "border-olive text-olive-dark" : "border-transparent text-fg-3 hover:text-fg"
     }`;
 
   return (
-    <header className="relative z-20 shrink-0 border-b-[3px] border-olive-dark bg-[linear-gradient(var(--bar-1),var(--bar-2))] shadow-[0_3px_0_rgb(0_0_0_/_0.2)]">
-      <div className="mx-auto flex h-[60px] max-w-[1320px] items-center gap-3 px-3 sm:px-6">
+    <header className="app-topbar relative z-20 shrink-0 border-b border-line bg-soft">
+      <div className="mx-auto flex h-[68px] max-w-[1440px] items-center gap-3 px-3 sm:px-6">
         <button
           type="button"
           onClick={onHome}
           aria-label="전역도우미 처음으로"
-          className="font-stencil flex shrink-0 -rotate-2 items-center gap-2 rounded-[10px_22px_22px_10px] border-[2.5px] border-[#1f2416] bg-[linear-gradient(135deg,#ececE6,#bcbdb3)] py-1 pr-3.5 pl-2.5 text-[19px] text-[#1f2416] shadow-[3px_3px_0_var(--ink)] sm:text-[21px]"
+          className="app-brand flex shrink-0 items-center gap-2 text-[20px] font-black tracking-[-0.08em] text-fg"
         >
-          <span aria-hidden className="size-2 rounded-full border-2 border-[#1f2416] bg-[#f3ead2]" />
+          <span aria-hidden className="app-brand-mark"><Image src="/images/brand-cap-chat.png" alt="" width={44} height={44} priority /></span>
           전역도우미
         </button>
 
@@ -146,7 +146,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
 
         <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
           {demo && (
-            <span title="Gemini 키가 없어 예시 응답을 보여줘요" className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-bold whitespace-nowrap text-warn">
+            <span title="백엔드 대신 예시 데이터와 답변으로 둘러보는 중이에요" className="rounded-full bg-warn-soft px-2.5 py-1 text-xs font-bold whitespace-nowrap text-warn">
               데모
             </span>
           )}
@@ -157,11 +157,8 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
               onClick={() => setOpen(!open)}
               aria-expanded={open}
               aria-label={`내 조건: ${profileSummary(profile)}`}
-              className="inline-flex h-10 max-w-[240px] min-w-0 items-center gap-1.5 rounded-full border-2 border-ink bg-soft py-0 pr-2.5 pl-1 text-[13.5px] font-extrabold"
+              className="inline-flex h-9 max-w-[240px] min-w-0 items-center gap-1.5 rounded-md border border-line bg-sunken px-3 text-[12px] font-extrabold text-olive-dark"
             >
-              <span className="grid size-7 shrink-0 place-items-end overflow-hidden rounded-full bg-sunken">
-                <Mascot rank={rank} size={26} />
-              </span>
               <span className="truncate">{profileSummary(profile)}</span>
               <ChevronDown className="size-3.5 shrink-0" />
             </button>
@@ -189,7 +186,7 @@ export function TopNav({ view, profile, journey, demo, dark, onToggleTheme, onHo
           <button
             type="button"
             onClick={onHome}
-            className="hidden h-10 shrink-0 items-center gap-1 rounded-[10px] border-2 border-edge bg-soft px-3 text-[13.5px] font-bold text-fg-2 hover:border-ink md:inline-flex"
+            className="hidden h-9 shrink-0 items-center gap-1 rounded-md border-[1.5px] border-ink bg-[#eac257] px-3 text-[12px] font-black text-[#293c2f] shadow-[3px_3px_0_var(--ink)] md:inline-flex"
           >
             <Plus className="size-4" strokeWidth={2.4} />새 대화
           </button>
