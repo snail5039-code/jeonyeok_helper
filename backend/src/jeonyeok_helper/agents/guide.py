@@ -97,7 +97,10 @@ def repair_profile(user_text: str, new: dict) -> dict:
     last = user_text.strip().splitlines()[-1] if user_text.strip() else ""
     # 모델이 분명한 말도 '모름'으로 비우는 일이 있어(평가 c08·l03·t01) 확실한 경우만 채운다
     if not out.get("service_type"):
-        if CONSCRIPT_WORDS.search(last):
+        if MERIT_WORDS.search(str(out.get("merit_status") or "")):
+            # '국가유공자인데'를 보훈 칸에만 넣고 복무 형태는 비운 경우 (평가 m04)
+            out["service_type"] = "merit"
+        elif CONSCRIPT_WORDS.search(last):
             out["service_type"] = "conscript"
         elif (m := LONG_YEARS.search(last)) and int(m[1]) >= 5:
             out["service_type"] = "long_term"  # 병사는 5년을 복무하지 않는다

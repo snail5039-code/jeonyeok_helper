@@ -233,3 +233,11 @@ def test_repair_profile_fills_service_type_only_when_the_words_are_clear():
     assert kind("안녕하세요") is None
     # 모델이 읽은 값이 있으면 건드리지 않는다
     assert repair_profile("병장", {"service_type": "long_term"})["service_type"] == "long_term"
+
+
+def test_repair_profile_reads_merit_from_the_merit_status_field():
+    from jeonyeok_helper.agents.guide import repair_profile
+
+    out = repair_profile("국가유공자인데 취업 지원 받을 수 있나요?", {"merit_status": "국가유공자"})
+    assert out["service_type"] == "merit"
+    assert "service_type" not in repair_profile("의병전역했는데 보훈 등록 가능한가요?", {})

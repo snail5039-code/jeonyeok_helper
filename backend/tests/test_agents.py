@@ -455,3 +455,16 @@ def test_verify_applies_only_the_edited_parts():
     draft = "크레딧은 6개월 인정 [1].\n\n없는 혜택: 월 100만 원 [2].\n\n신청은 공단에서 [1]."
     edits = [TextEdit(find="없는 혜택: 월 100만 원 [2].", replace=""), TextEdit(find="없는 문장")]
     assert apply_edits(draft, edits) == "크레딧은 6개월 인정 [1].\n\n신청은 공단에서 [1]."
+
+
+def test_verify_never_returns_an_empty_answer():
+    from jeonyeok_helper.agents.state import TextEdit, Verification
+
+    draft_all = "초안 답변 [1]"
+    components, _ = make_components(
+        [Route(next="regulation"), Route(next="answer")],
+        verifier=Verification(supported=False, edits=[TextEdit(find=draft_all, replace="")]),
+    )
+    graph = build_graph(components, checkpointer=InMemorySaver())
+    state = ask(graph, "법령 찾아줘")
+    assert state["messages"][-1].text == draft_all  # 다 지우라는 수정이면 초안을 쓴다

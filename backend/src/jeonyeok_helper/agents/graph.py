@@ -312,7 +312,8 @@ def build_graph(
             if checked.supported:
                 answer = draft
             elif checked.edits:
-                answer = apply_edits(draft, checked.edits)
+                # 고친 결과가 비면(답 전체를 지우라는 수정) 빈 답 대신 초안을 쓴다
+                answer = apply_edits(draft, checked.edits) or draft
             else:
                 answer = checked.answer or draft
             follow_ups = [q.strip() for q in checked.follow_ups if q.strip()][:3]
