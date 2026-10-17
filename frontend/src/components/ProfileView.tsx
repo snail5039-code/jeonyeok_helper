@@ -52,9 +52,11 @@ interface Props {
   onExport: () => Promise<void>;
   onImport: (file: File) => Promise<string>;
   recordsNotice?: string;
+  userId: string;
+  onResume: (code: string) => Promise<string>;
 }
 
-export function ProfileView({ profile, demo, onSave, onFillJourney, onExport, onImport, recordsNotice }: Props) {
+export function ProfileView({ profile, demo, onSave, onFillJourney, onExport, onImport, recordsNotice, userId, onResume }: Props) {
   const [form, setForm] = useState<Profile>(profile);
   const [initialSido, initialRest] = splitRegion(profile.region);
   const [sido, setSido] = useState(initialSido);
@@ -229,7 +231,14 @@ export function ProfileView({ profile, demo, onSave, onFillJourney, onExport, on
           </div>
         </form>
 
-        <KeepRecords demo={demo} onExport={onExport} onImport={onImport} notice={recordsNotice} />
+        <KeepRecords
+          demo={demo}
+          userId={userId}
+          onExport={onExport}
+          onImport={onImport}
+          onResume={onResume}
+          notice={recordsNotice}
+        />
       </Book>
     </main>
   );

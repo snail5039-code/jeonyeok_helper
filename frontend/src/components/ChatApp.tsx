@@ -5,11 +5,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 
 import { downloadBackup, fetchBackup, makeBackup, parseBackup, restoreBackup } from "@/lib/backup";
 import { demoChat } from "@/lib/demo";
+import { findByCode, takeResumeParam } from "@/lib/resume";
 import { sendFeedback, type Rating } from "@/lib/feedback";
 import { stepReplies } from "@/lib/guide";
 import { addItems, levelOf, nextItem, saveDemoJourney, saveProfile } from "@/lib/journey";
 import { streamChat } from "@/lib/sse";
-import { getUserId, readStorage, writeStorage } from "@/lib/storage";
+import { getUserId, readStorage, USER_ID_KEY, writeStorage } from "@/lib/storage";
 import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Suggestion, Turn } from "@/lib/types";
 
 import { Book, BookTitle } from "./Book";
@@ -258,12 +259,37 @@ export function ChatApp() {
     return done;
   };
 
+  /** 다른 기기에서 받은 코드로 이 브라우저를 그 기록으로 바꾸고 작전도를 연다 */
+  const resumeWithCode = async (code: string): Promise<string> => {
+    const found = await findByCode(code);
+    if (found === userId) return "이미 이 기록을 쓰고 있어요.";
+    const hasNow = journey.items.length > 0 || Boolean(profile.service_type);
+    if (hasNow && !confirm("이 브라우저의 지금 기록 대신 코드의 기록으로 바꿀까요? 지금 기록은 파일로 저장해 두지 않으면 다시 열 수 없어요.")) {
+      return "이어 하기를 취소했어요.";
+    }
+    writeStorage(USER_ID_KEY, found);
+    // 익명 ID가 바뀌었으니 화면 상태를 처음부터 다시 읽는다 (작전도 화면으로)
+    history.replaceState(null, "", "/?page=journey");
+    location.reload();
+    return "기록을 여는 중…";
+  };
+
   // 시작: 서버 에이전트가 준비됐는지 보고, 아니면 데모 모드로 연다.
   useEffect(() => {
-    const id = getUserId();
     const params = new URLSearchParams(location.search);
     let useDemo = params.has("demo");
     (async () => {
+      // QR(?resume=코드)로 들어오면 그 기록으로 바꾸고 주소에서는 코드를 지운다
+      const { code, cleaned } = takeResumeParam(new URL(location.href));
+      if (code) {
+        history.replaceState(null, "", cleaned);
+        try {
+          writeStorage(USER_ID_KEY, await findByCode(code));
+        } catch {
+          // 틀린 코드면 이 브라우저의 기록 그대로 연다
+        }
+      }
+      const id = getUserId();
       try {
         const health = await (await fetch("/api/health")).json();
         if (!health.agent_ready) useDemo = true;
@@ -353,6 +379,8 @@ export function ChatApp() {
           onExport={exportRecords}
           onImport={importRecords}
           recordsNotice={recordsNotice}
+          userId={userId}
+          onResume={resumeWithCode}
           onFillJourney={() => {
             setPage("journey");
             void journey.generate();

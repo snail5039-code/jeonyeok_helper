@@ -16,11 +16,14 @@ export function writeStorage(key: string, value: string): void {
   }
 }
 
-/** 브라우저마다 한 번 만든 익명 ID. 서버가 프로필을 기억하는 데 쓴다. */
+export const USER_ID_KEY = "jeonyeok.userId";
+
+/** 브라우저마다 한 번 만든 익명 ID. 서버가 프로필을 기억하는 데 쓴다.
+    이어 하기 코드로 다른 기기의 기록을 열면 그 ID로 바뀐다. */
 export function getUserId(): string {
-  const saved = readStorage("jeonyeok.userId");
+  const saved = readStorage(USER_ID_KEY);
   if (saved) return saved;
   const id = crypto.randomUUID();
-  writeStorage("jeonyeok.userId", id);
+  writeStorage(USER_ID_KEY, id);
   return id;
 }

@@ -3,8 +3,12 @@
 import { Download, FolderOpen, ShieldCheck } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ResumeCode } from "./ResumeCode";
+
 interface Props {
   demo: boolean;
+  userId: string;
+  onResume: (code: string) => Promise<string>;
   onExport: () => Promise<void>;
   onImport: (file: File) => Promise<string>;
   /** 기록을 되살린 뒤 화면을 다시 그려도 결과 안내가 남도록 바깥에서 받는다 */
@@ -12,7 +16,7 @@ interface Props {
 }
 
 /** 내 기록 지키기: 로그인이 없으니 기록을 파일로 내려받아 두고, 다른 곳에서 되살린다. */
-export function KeepRecords({ demo, onExport, onImport, notice }: Props) {
+export function KeepRecords({ demo, userId, onExport, onImport, onResume, notice }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<"" | "export" | "import">("");
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
@@ -77,12 +81,15 @@ export function KeepRecords({ demo, onExport, onImport, notice }: Props) {
           }}
         />
       </div>
-      {demo && <p className="text-[12.5px] text-fg-3">데모 모드: 이 브라우저에 저장된 데모 기록을 저장·불러와요</p>}
+      {demo ? (
+        <p className="text-[12.5px] text-fg-3">데모 모드: 이 브라우저에 저장된 데모 기록을 저장·불러와요 (이어 하기 코드는 서버가 있을 때만)</p>
+      ) : null}
       {message && (
         <p role={message.ok ? "status" : "alert"} className={`text-[13px] font-semibold ${message.ok ? "text-olive" : "text-warn"}`}>
           {message.text}
         </p>
       )}
+      {!demo && <ResumeCode userId={userId} onResume={onResume} />}
     </fieldset>
   );
 }

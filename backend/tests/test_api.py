@@ -525,3 +525,41 @@ def test_backup_rejects_files_from_other_apps():
     with make_client([Route(next="answer")]) as client:
         res = client.put("/backup/u1", json={"app": "other", "version": 1, "items": []})
     assert res.status_code == 422
+
+
+# ---------- 이어 하기 코드 ----------
+
+
+def test_resume_code_opens_the_same_records_on_another_device():
+    with make_client([Route(next="answer")]) as client:
+        assert client.get("/resume-code/pc").json() == {"code": None}
+        code = client.post("/resume-code/pc").json()["code"]
+        # 사람이 소문자·띄어쓰기로 적어도 찾는다
+        typed = code.lower().replace("-", " ")
+        found = client.post("/resume", json={"code": typed}).json()
+        assert client.get("/resume-code/pc").json() == {"code": code}
+
+        # 새 코드를 만들면 이전 코드는 못 쓴다
+        newer = client.post("/resume-code/pc").json()["code"]
+        old = client.post("/resume", json={"code": code})
+
+    assert found == {"user_id": "pc"}
+    assert newer != code and old.status_code == 404
+
+
+def test_resume_code_format_and_normalize():
+    from jeonyeok_helper import resume
+
+    assert resume.normalize("jy-7k3q-9xpa") == "7K3Q9XPA"
+    assert resume.normalize("7K3Q 9XPA") == "7K3Q9XPA"
+    assert resume.normalize("JY-0OIL-9XPA") is None  # 코드에 없는 글자
+    assert resume.normalize("short") is None
+    assert resume.display("7K3Q9XPA") == "JY-7K3Q-9XPA"
+
+
+def test_guessing_resume_codes_is_rate_limited():
+    with make_client([Route(next="answer")]) as client:
+        codes = [
+            client.post("/resume", json={"code": "JY-2222-2222"}).status_code for _ in range(25)
+        ]
+    assert codes[0] == 404 and 429 in codes
