@@ -3,10 +3,11 @@
 import { Check, CircleHelp, Star } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { downloadBackup, fetchBackup, makeBackup, parseBackup, restoreBackup } from "@/lib/backup";
 import { demoChat } from "@/lib/demo";
 import { sendFeedback, type Rating } from "@/lib/feedback";
 import { stepReplies } from "@/lib/guide";
-import { addItems, levelOf, nextItem, saveProfile } from "@/lib/journey";
+import { addItems, levelOf, nextItem, saveDemoJourney, saveProfile } from "@/lib/journey";
 import { streamChat } from "@/lib/sse";
 import { getUserId, readStorage, writeStorage } from "@/lib/storage";
 import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Suggestion, Turn } from "@/lib/types";
@@ -63,6 +64,9 @@ export function ChatApp() {
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState<Page>("chat");
   const [userId, setUserId] = useState("");
+  // 기록을 되살리면 '내 정보' 입력칸을 새 값으로 다시 그린다
+  const [profileVersion, setProfileVersion] = useState(0);
+  const [recordsNotice, setRecordsNotice] = useState("");
   const threadId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const { dark, toggle } = useTheme();
@@ -227,6 +231,33 @@ export function ChatApp() {
     setProfile(await saveProfile(userId, next));
   };
 
+  /** 내 기록 파일로 내려받기. 서버 기록이 기준이고, 데모 모드면 이 브라우저의 기록 */
+  const exportRecords = async () => {
+    downloadBackup(demo ? makeBackup(profile, journey.items) : await fetchBackup(userId));
+  };
+
+  /** 기록 파일로 이 브라우저의 기록을 바꾼다. 지금 기록이 있으면 먼저 묻는다 */
+  const importRecords = async (file: File): Promise<string> => {
+    const backup = parseBackup(await file.text());
+    const hasNow = journey.items.length > 0 || Boolean(profile.service_type);
+    if (hasNow && !confirm(`지금 기록을 이 파일 내용(임무 ${backup.items.length}개)으로 바꿀까요? 지금 기록은 사라져요.`)) {
+      return "불러오기를 취소했어요.";
+    }
+    let restored = { profile: backup.profile, items: backup.items };
+    if (demo) {
+      writeStorage(DEMO_PROFILE_KEY, JSON.stringify(backup.profile));
+      saveDemoJourney(backup.items);
+    } else {
+      restored = await restoreBackup(userId, backup);
+    }
+    setProfile(restored.profile);
+    journey.replaceAll(restored.items);
+    const done = `기록을 되살렸어요. 임무 ${restored.items.length}개, 완료 ${restored.items.filter((i) => i.done).length}개.`;
+    setRecordsNotice(done);
+    setProfileVersion((v) => v + 1);
+    return done;
+  };
+
   // 시작: 서버 에이전트가 준비됐는지 보고, 아니면 데모 모드로 연다.
   useEffect(() => {
     const id = getUserId();
@@ -257,6 +288,11 @@ export function ChatApp() {
       setReady(true);
     })();
   }, []);
+
+  // 되살린 결과 안내는 '내 정보' 화면을 떠나면 지운다 (다시 왔을 때 지난 안내가 보이지 않게)
+  useEffect(() => {
+    if (page !== "profile") setRecordsNotice("");
+  }, [page]);
 
   // 공유 링크: ?q=질문 으로 들어오면 서버 상태를 확인한 뒤 한 번 물어본다.
   const sharedAsked = useRef(false);
@@ -310,10 +346,13 @@ export function ChatApp() {
         <JourneyView journey={journey} profile={profile} onAsk={ask} onProfile={() => setPage("profile")} />
       ) : page === "profile" ? (
         <ProfileView
-          key={ready ? "ready" : "loading"}
+          key={ready ? `ready-${profileVersion}` : "loading"}
           profile={profile}
           demo={demo}
           onSave={saveMyProfile}
+          onExport={exportRecords}
+          onImport={importRecords}
+          recordsNotice={recordsNotice}
           onFillJourney={() => {
             setPage("journey");
             void journey.generate();

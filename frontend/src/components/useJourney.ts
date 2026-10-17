@@ -225,8 +225,20 @@ export function useJourney(userId: string, demo: boolean, ready: boolean) {
     }
   }, [deleteIds, demo, record, update, userId]);
 
+  /** 기록 파일·이어 하기 코드로 되살린 작전도로 통째로 바꾼다 (되돌리기 기록은 비운다) */
+  const replaceAll = useCallback(
+    (next: JourneyItem[]) => {
+      update(() => next);
+      alias.current = {};
+      setHistory([]);
+      setToast(null);
+    },
+    [update],
+  );
+
   return {
     items,
+    replaceAll,
     fresh,
     generating,
     error,

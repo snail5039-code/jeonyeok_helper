@@ -7,6 +7,7 @@ import { profileCompleteness } from "@/lib/journey";
 import { SERVICE_TYPE_LABELS, type Profile, type ServiceType } from "@/lib/types";
 
 import { Book, BookTitle } from "./Book";
+import { KeepRecords } from "./KeepRecords";
 import { PhotoAvatar as Mascot } from "./PhotoAvatar";
 import { Say } from "./Guide";
 
@@ -48,9 +49,12 @@ interface Props {
   demo: boolean;
   onSave: (profile: Profile) => Promise<void>;
   onFillJourney: () => void;
+  onExport: () => Promise<void>;
+  onImport: (file: File) => Promise<string>;
+  recordsNotice?: string;
 }
 
-export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
+export function ProfileView({ profile, demo, onSave, onFillJourney, onExport, onImport, recordsNotice }: Props) {
   const [form, setForm] = useState<Profile>(profile);
   const [initialSido, initialRest] = splitRegion(profile.region);
   const [sido, setSido] = useState(initialSido);
@@ -224,6 +228,8 @@ export function ProfileView({ profile, demo, onSave, onFillJourney }: Props) {
             {error && <p role="alert" className="text-[13px] font-semibold text-warn">{error}</p>}
           </div>
         </form>
+
+        <KeepRecords demo={demo} onExport={onExport} onImport={onImport} notice={recordsNotice} />
       </Book>
     </main>
   );
