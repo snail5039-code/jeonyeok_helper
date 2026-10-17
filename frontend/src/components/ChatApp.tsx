@@ -20,6 +20,7 @@ import { HelpView } from "./HelpView";
 import { HomeView } from "./HomeView";
 import { DeadlineChip } from "./JourneyParts";
 import { JourneyView } from "./JourneyView";
+import { KeepNotice } from "./KeepNotice";
 import { ProfileView } from "./ProfileView";
 import { StatusPanel } from "./StatusPanel";
 import { MobileTabs, TopNav } from "./TopNav";
@@ -494,6 +495,24 @@ export function ChatApp() {
       )}
 
       <UndoToast journey={journey} />
+
+      {/* 작전도에 할 일이 생기면 한 번만, 기록이 이 브라우저에 묶여 있다고 알린다 */}
+      {ready && !demo && journey.items.length > 0 && (
+        <KeepNotice
+          onExport={exportRecords}
+          onOpenCode={() => {
+            setPage("profile");
+            // '내 정보' 화면이 그려질 때까지 기다렸다가 '내 기록 지키기' 칸으로 내린다
+            let tries = 0;
+            const scroll = () => {
+              const el = document.getElementById("keep-records");
+              if (el) el.scrollIntoView({ block: "start" });
+              else if (tries++ < 20) setTimeout(scroll, 50);
+            };
+            setTimeout(scroll, 50);
+          }}
+        />
+      )}
 
       <MobileTabs
         view={view}
