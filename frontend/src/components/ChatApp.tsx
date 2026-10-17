@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { downloadBackup, fetchBackup, makeBackup, parseBackup, restoreBackup } from "@/lib/backup";
 import { demoChat } from "@/lib/demo";
 import { findByCode, takeResumeParam } from "@/lib/resume";
+import { loadCopy, saveCopy, shouldRestore } from "@/lib/localCopy";
 import { sendFeedback, type Rating } from "@/lib/feedback";
 import { stepReplies } from "@/lib/guide";
 import { addItems, levelOf, nextItem, saveDemoJourney, saveProfile } from "@/lib/journey";
@@ -68,6 +69,10 @@ export function ChatApp() {
   // 기록을 되살리면 '내 정보' 입력칸을 새 값으로 다시 그린다
   const [profileVersion, setProfileVersion] = useState(0);
   const [recordsNotice, setRecordsNotice] = useState("");
+  // 브라우저 사본: 서버 기록과 맞춘 뒤부터 사본을 갱신한다 (그 전에 빈 목록으로 덮어쓰지 않게)
+  const [copySynced, setCopySynced] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState("");
+  const copyChecked = useRef(false);
   const threadId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const { dark, toggle } = useTheme();
@@ -315,6 +320,42 @@ export function ChatApp() {
     })();
   }, []);
 
+  // 시작할 때 한 번: 서버 기록이 비었는데 브라우저 사본이 있으면 사본으로 서버를 되살리고,
+  // 서버에서 작전도를 못 불러왔으면 사본으로 보여 준다.
+  const { status: journeyStatus, replaceAll } = journey;
+  useEffect(() => {
+    if (!ready || demo || copyChecked.current || journeyStatus === "loading") return;
+    copyChecked.current = true;
+    const copy = loadCopy(userId);
+    if (journeyStatus === "failed") {
+      if (copy?.items.length) {
+        replaceAll(copy.items);
+        setProfile((p) => (Object.keys(p).length ? p : copy.profile));
+        setOfflineNotice("서버에 연결하지 못해 이 브라우저에 저장해 둔 작전도를 보여 드려요. 바꾼 내용은 저장되지 않을 수 있어요.");
+      }
+      return;
+    }
+    if (!shouldRestore({ profile, items: journey.items }, copy)) {
+      setCopySynced(true);
+      return;
+    }
+    void restoreBackup(userId, makeBackup(copy.profile, copy.items))
+      .then((restored) => {
+        setProfile(restored.profile);
+        replaceAll(restored.items);
+      })
+      .catch(() => {
+        replaceAll(copy.items);
+        setProfile(copy.profile);
+      })
+      .finally(() => setCopySynced(true));
+  }, [ready, demo, userId, journeyStatus, replaceAll, profile, journey.items]);
+
+  // 서버 기록과 맞춘 뒤로는 바뀔 때마다 사본을 갱신한다
+  useEffect(() => {
+    if (copySynced && !demo && userId) saveCopy(userId, profile, journey.items);
+  }, [copySynced, demo, userId, profile, journey.items]);
+
   // 되살린 결과 안내는 '내 정보' 화면을 떠나면 지운다 (다시 왔을 때 지난 안내가 보이지 않게)
   useEffect(() => {
     if (page !== "profile") setRecordsNotice("");
@@ -354,6 +395,12 @@ export function ChatApp() {
         onHelp={() => setPage("help")}
         onAsk={ask}
       />
+
+      {offlineNotice && (
+        <p role="status" className="mx-auto mt-2 w-[min(100%-20px,1320px)] rounded-[10px] border-2 border-warn/60 bg-soft px-3.5 py-2 text-[13.5px] font-semibold text-warn">
+          {offlineNotice}
+        </p>
+      )}
 
       {page === "chat" && isHome ? (
         <HomeView
