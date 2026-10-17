@@ -241,3 +241,37 @@ def test_repair_profile_reads_merit_from_the_merit_status_field():
     out = repair_profile("국가유공자인데 취업 지원 받을 수 있나요?", {"merit_status": "국가유공자"})
     assert out["service_type"] == "merit"
     assert "service_type" not in repair_profile("의병전역했는데 보훈 등록 가능한가요?", {})
+
+
+def test_discharge_date_is_dropped_when_no_date_was_said():
+    from jeonyeok_helper.agents.guide import repair_profile
+
+    said_nothing = repair_profile(
+        "전역 후 1년 안에 할 일 정리해 줘. 병사로 전역했어",
+        {"service_type": "conscript", "discharge_date": "2027-10"},
+    )
+    assert "discharge_date" not in said_nothing
+    for text in [
+        "2025년 3월에 전역했어요",
+        "작년에 전역",
+        "전역한 지 2년 됐어요",
+        "다음 달 전역해요",
+    ]:
+        assert repair_profile(text, {"discharge_date": "2025-03"}).get("discharge_date"), text
+
+
+def test_eligibility_check_questions_go_to_research():
+    from jeonyeok_helper.agents.guide import needs_research
+
+    assert needs_research("간부로 5년 딱 채우고 전역했어요. 중기복무 제대군인 맞죠?")
+    assert needs_research("군대 갔다온 거 연금에 쳐주나요?")
+    assert not needs_research("단기 간부로 전역했어요")
+
+
+def test_pointing_words_with_a_generic_noun_are_vague():
+    from jeonyeok_helper.agents.guide import is_vague_first_turn
+
+    assert is_vague_first_turn("그 지원금 아직 신청 가능해요?", 1)
+    assert is_vague_first_turn("그거 신청 어디서 해요?", 1)
+    assert not is_vague_first_turn("그린카드 신청 어디서 해요?", 1)
+    assert not is_vague_first_turn("이직 지원금 있어요?", 1)

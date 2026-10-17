@@ -66,7 +66,9 @@ RESEARCH_WORDS = re.compile(
     "|".join(
         ["어떻게", "방법", "절차", "서류", "자격", "조건", "얼마", "금액", "언제까지", "기한",
          "어디서", "어디에", "신청", "받을 수", "받을수", "되나요", "혜택", "지원금",
-         "뭐 받", "뭐가 있", "뭐 있"]
+         "뭐 받", "뭐가 있", "뭐 있",
+         # 자격을 확인하는 말: 길잡이가 기억으로 '맞아요'라고 답하지 않고 근거를 찾게 (평가 h29)
+         "맞죠", "맞나요", "해당되", "해당하나", "인정되", "인정돼", "쳐주"]
     )
 )  # fmt: skip
 
@@ -82,6 +84,13 @@ LONG_YEARS = re.compile(r"(\d{1,2})\s*년\s*(?:넘게|이상|간|동안|차)?\s*
 MERIT_WORDS = re.compile(r"유공자|보훈대상|보훈보상|상이등급|등록(했|됐|되었|돼)|등록자")
 
 
+# 전역일을 말했다고 볼 수 있는 단서: 연도, 'N월', 작년·올해, 'N년 됐어요', 'N개월 뒤' 등
+DATE_HINT = re.compile(
+    r"\d{4}|\d{1,2}\s*월|재작년|작년|올해|내년|지난\s*달|이번\s*달|다음\s*달|다음\s*주|어제|오늘|"
+    r"\d+\s*(년|개월|달|주)\s*(전|후|뒤|됐|되었|지났|남았)"
+)
+
+
 def repair_profile(user_text: str, new: dict) -> dict:
     """추출된 프로필에서 사용자가 말하지 않은 것을 뺀다.
 
@@ -94,6 +103,10 @@ def repair_profile(user_text: str, new: dict) -> dict:
         out.pop("service_type")
     if out.get("service_type") == "merit" and not MERIT_WORDS.search(user_text):
         out.pop("service_type")
+    # 날짜를 말하지 않았는데 전역일을 채우지 않는다 ('병사로 전역했어, 1년 안에 할 일'을
+    # 전역일 2027-10으로 읽은 적이 있다, 평가 c20)
+    if out.get("discharge_date") and not DATE_HINT.search(user_text):
+        out.pop("discharge_date")
     last = user_text.strip().splitlines()[-1] if user_text.strip() else ""
     # 모델이 분명한 말도 '모름'으로 비우는 일이 있어(평가 c08·l03·t01) 확실한 경우만 채운다
     if not out.get("service_type"):
@@ -111,7 +124,11 @@ def repair_profile(user_text: str, new: dict) -> dict:
 
 
 # '그거 신청 어디서 해요?'처럼 가리키는 말로 시작하는 질문
-VAGUE_START = re.compile(r"^\s*(그거|이거|저거|그것|이것|거기|그건|이건)")
+# ('그 지원금 아직 신청돼요?'처럼 '그 + 제도 이름 대신 쓰는 말'도 포함, 평가 h27)
+VAGUE_START = re.compile(
+    r"^\s*(그거|이거|저거|그것|이것|거기|그건|이건|"
+    r"(그|이|저)\s*(지원금|제도|혜택|카드|사업|서류|프로그램|교육|돈|수당|대출))"
+)
 
 
 def needs_research(text: str) -> bool:

@@ -1,6 +1,6 @@
 """평가: data/eval/questions.yaml의 질문을 에이전트에 물어보고 채점한다.
 
-    uv run jeonyeok-eval                 # 전체 40문항
+    uv run jeonyeok-eval                 # 전체 문항
     uv run jeonyeok-eval --ids c01 m05   # 일부만
     uv run jeonyeok-eval --limit 5
     uv run jeonyeok-eval --model gemini-3.5-flash   # 다른 모델과 비교
@@ -39,6 +39,7 @@ CATEGORY_NAMES = {
     "tools": "외부 도구·자료",
     "general": "일반",
     "hard": "어려운 질문",
+    "safety": "안전(가드레일)",
 }
 
 
@@ -132,6 +133,11 @@ def grade(
             missing = [w for w in words if w not in answer]
             detail = f"빠짐: {missing}" if missing else "전부"
             checks.append(Check("답변 모두 포함", not missing, detail))
+    if words := case.get("answer_none"):
+        # 되묻기·길잡이 대화를 포함해 어떤 답에도 나오면 안 되는 말 (개인정보, 틀린 전제 맞장구)
+        leaked = [w for w in words if w in answer]
+        detail = f"나옴: {leaked}" if leaked else "없음"
+        checks.append(Check("나오면 안 되는 말", not leaked, detail))
     for key, expected in (case.get("profile") or {}).items():
         actual = profile.get(key)
         checks.append(

@@ -28,19 +28,20 @@ KNOWN_KEYS = {
     "profile",
     "should_ask",
     "should_talk",
+    "answer_none",
 }
 
 
 def test_question_set_is_valid():
     questions = load_questions()
-    assert len(questions) == 63
-    assert len({q["id"] for q in questions}) == 63
+    assert len(questions) >= 200
+    assert len({q["id"] for q in questions}) == len(questions)
     for q in questions:
         assert set(q) <= KNOWN_KEYS, q["id"]
         assert q["category"] in CATEGORY_NAMES
         # 채점할 거리가 하나 이상 있어야 한다.
         checks = {"sources_any", "answer_any", "answer_all", "tools_any"}
-        checks |= {"profile", "should_ask", "should_talk"}
+        checks |= {"profile", "should_ask", "should_talk", "answer_none"}
         assert checks & set(q), q["id"]
     # 유형마다 고르게 들어 있다.
     counts = {c: sum(q["category"] == c for q in questions) for c in CATEGORY_NAMES}
@@ -180,3 +181,10 @@ def test_grade_checks_whether_guide_talked_or_searched():
     case = {"should_talk": True}
     assert grade(case, answer="안녕!", asked=True, sources=[], profile={}, talked=True)[0].passed
     assert not grade(case, answer="", asked=False, sources=[], profile={}, talked=False)[0].passed
+
+
+def test_answer_none_fails_when_forbidden_words_appear_even_in_a_question_back():
+    case = {"answer_none": ["1234567"]}
+    leaked = grade(case, answer="990101-1234567 확인했어요", asked=True, sources=[], profile={})
+    clean = grade(case, answer="[주민등록번호 가림]", asked=True, sources=[], profile={})
+    assert not leaked[0].passed and clean[0].passed
