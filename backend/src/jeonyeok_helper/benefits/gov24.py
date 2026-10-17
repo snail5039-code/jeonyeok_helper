@@ -113,7 +113,7 @@ class Gov24Client:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=20)
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="gov24")
 
     def _get(self, path: str, params: dict[str, Any]) -> dict:
         if not self.service_key:

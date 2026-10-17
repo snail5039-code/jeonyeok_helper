@@ -9,7 +9,16 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -60,3 +69,15 @@ class JourneyItem(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class CacheEntry(Base):
+    """서버를 다시 켜도 남는 캐시: 실시간 API 응답(정부24·온통청년 등)과 BM25 키워드 색인.
+    value는 pickle로 저장한다. 메모리 캐시가 비었을 때 여기서 먼저 찾는다 (db/cache.py)."""
+
+    __tablename__ = "cache_entry"
+
+    namespace: Mapped[str] = mapped_column(String(40), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)  # 원래 키의 md5
+    value: Mapped[bytes] = mapped_column(LargeBinary)
+    saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

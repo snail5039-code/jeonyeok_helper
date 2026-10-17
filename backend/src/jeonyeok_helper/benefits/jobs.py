@@ -80,7 +80,7 @@ def parse_jobs(xml_text: str) -> list[Job]:
 class VnetJobClient:
     def __init__(self, client: httpx.Client | None = None, cache_ttl: float = 3600):
         self.client = client or httpx.Client(timeout=30)
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="vnet_jobs")
 
     def _fetch(self, code: str) -> list[Job]:
         def load() -> list[Job]:

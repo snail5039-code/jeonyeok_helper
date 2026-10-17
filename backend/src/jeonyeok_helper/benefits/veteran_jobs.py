@@ -72,7 +72,7 @@ class VeteranJobClient:
         self.client = client or httpx.Client(
             timeout=30, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True
         )
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="veteran_jobs")
 
     def _page(self, place: str, section: str, page: int) -> list[VeteranJob]:
         params = {"place": place, "page": page} | ({"section": section} if section else {})

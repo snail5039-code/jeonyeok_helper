@@ -1,5 +1,7 @@
-"""규정 검색기: 벡터 검색 + HyDE + Re-ranking.
+"""규정 검색기: 하이브리드 검색(벡터 + BM25) + HyDE + Re-ranking.
 
+0. 하이브리드: 벡터 검색(뜻이 비슷한 글)과 BM25 키워드 검색(용어·조문 번호가 그대로 들어 있는
+   글, rag/keyword.py)을 함께 돌리고 RRF(순위 역수 합)로 합친다.
 1. HyDE: 사용자 질문("군대 다녀오면 연금 더 받아?")은 법령 문체와 거리가 멀다.
    LLM이 '이 질문에 답하는 조문이라면 이렇게 쓰였을 것'이라는 가상 조문을 만들고,
    원래 질문과 가상 조문 둘 다로 검색해서 후보를 넓힌다.
@@ -58,6 +60,10 @@ LEGAL_TERMS = {
     "가산점": "가점",
     "내일배움카드": "직업능력개발훈련",
     "피부양자": "건강보험 피부양자 적용 대상",
+    # '복학 등록금', '장학금'으로 물으면 한국장학재단 자료를 못 찾았다 (RAGAS 자료 관련성 0)
+    "등록금": "국가장학금 학자금 지원",
+    "장학금": "국가장학금 한국장학재단",
+    "학자금": "학자금 대출 한국장학재단",
 }
 
 
@@ -74,6 +80,26 @@ class DocScore(BaseModel):
 
 class RerankResult(BaseModel):
     scores: list[DocScore]
+
+
+# RRF에서 키워드 검색 결과의 무게 (벡터 검색은 1). 골든셋으로 정한다.
+KEYWORD_WEIGHT = 1.0
+
+
+def rrf(
+    *rankings: list[Document], weights: list[float] | None = None, c: int = 60
+) -> list[Document]:
+    """Reciprocal Rank Fusion: 여러 검색 결과의 순위를 무게 × 1/(c+순위)로 더해 하나로 합친다.
+    점수 척도가 다른 벡터 유사도와 BM25 점수를 그대로 비교하지 않아도 된다."""
+    weights = weights or [1.0] * len(rankings)
+    scores: dict[str, float] = {}
+    docs: dict[str, Document] = {}
+    for ranking, weight in zip(rankings, weights, strict=True):
+        for rank, doc in enumerate(ranking, 1):
+            key = doc.metadata.get("doc_id") or doc.page_content
+            docs.setdefault(key, doc)
+            scores[key] = scores.get(key, 0.0) + weight / (c + rank)
+    return [docs[key] for key in sorted(scores, key=lambda key: -scores[key])]
 
 
 def diversify(docs: list[Document], k: int, per_source: int = 2) -> list[Document]:
@@ -103,12 +129,20 @@ class RegulationRetriever:
         *,
         use_hyde: bool = True,
         use_rerank: bool = True,
+        use_keywords: bool = True,
         candidates_per_query: int = 12,
+        keyword_candidates: int = 8,
+        keyword_weight: float = KEYWORD_WEIGHT,
         hyde_chain: Runnable | None = None,
         rerank_chain: Runnable | None = None,
     ):
         self.store = store
         self.candidates_per_query = candidates_per_query
+        self.keyword_weight = keyword_weight
+        # 키워드 검색은 저장소가 지원할 때만 (테스트용 가짜 저장소에는 없을 수 있다)
+        self.keyword_candidates = (
+            keyword_candidates if use_keywords and hasattr(store, "keyword_search") else 0
+        )
         # 테스트에서는 체인을 직접 주입할 수 있다.
         self.hyde_chain = hyde_chain
         self.rerank_chain = rerank_chain
@@ -161,17 +195,26 @@ class RegulationRetriever:
         def search(q: str) -> list[Document]:
             return self.store.search(q, k=self.candidates_per_query, region=region)
 
-        # 가상 조문을 만드는 동안(약 1.7초) 원래 질문으로 먼저 검색해 둔다.
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        query = expand_query(question)
+        # 가상 조문을 만드는 동안(약 1.7초) 원래 질문으로 벡터·키워드 검색을 먼저 해 둔다.
+        with ThreadPoolExecutor(max_workers=3) as pool:
             hyde = pool.submit(self._hyde, question)
-            results = search(expand_query(question))
+            keyword = (
+                pool.submit(self.store.keyword_search, query, self.keyword_candidates, region)
+                if self.keyword_candidates
+                else None
+            )
+            rankings, weights = [search(query)], [1.0]
             if hypothetical := hyde.result():
-                results += search(hypothetical)
-
-        seen: dict[str, Document] = {}
-        for doc in results:
-            seen.setdefault(doc.metadata.get("doc_id") or doc.page_content, doc)
-        return self._rerank(question, list(seen.values()), k)
+                rankings.append(search(hypothetical))
+                weights.append(1.0)
+            if keyword is not None:
+                try:
+                    rankings.append(keyword.result())
+                    weights.append(self.keyword_weight)
+                except Exception:
+                    log.warning("키워드 검색 실패, 벡터 검색만 씁니다.", exc_info=True)
+        return self._rerank(question, rrf(*rankings, weights=weights), k)
 
 
 def build_default_retriever() -> RegulationRetriever:
@@ -180,3 +223,12 @@ def build_default_retriever() -> RegulationRetriever:
 
     # 가상 조문 작성과 점수 매기기는 깊은 추론이 필요 없어 생각을 끈 빠른 설정을 쓴다.
     return RegulationRetriever(RegulationStore(), llm=get_fast_chat_model())
+
+
+def warm_default_keywords() -> None:
+    """서버가 켜질 때 BM25 색인을 미리 읽어 둔다 (저장한 파일이 있으면 1초 안쪽)."""
+    from jeonyeok_helper.rag.store import RegulationStore
+
+    index = RegulationStore().keywords.get()
+    if index is not None:
+        index.tokenizer("전역")  # 형태소 분석기(Kiwi)도 띄워 둔다 (약 0.6초)

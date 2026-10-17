@@ -125,6 +125,24 @@ def test_chat_sends_question_when_agent_asks_back():
     assert not any(e == "answer" for e, _ in events)
 
 
+def test_reply_to_question_resumes_the_paused_run():
+    routes = [Route(next="ask_user", question="병사로 전역하셨나요?"), Route(next="answer")]
+    with make_client(routes) as client:
+        first = parse_sse(client.post("/chat", json={"message": "혜택 알려줘"}).text)
+        thread_id = first[0][1]["thread_id"]
+        second = parse_sse(
+            client.post("/chat", json={"message": "네 병사요", "thread_id": thread_id}).text
+        )
+        messages = client.app.state.agent.get_state(
+            {"configurable": {"thread_id": thread_id}}
+        ).values["messages"]
+
+    assert any(e == "question" for e, _ in first)
+    assert any(e == "answer" for e, _ in second)
+    # 질문 → 되물음 → 답 → 최종 답변이 한 흐름으로 남는다
+    assert [m.text for m in messages][:3] == ["혜택 알려줘", "병사로 전역하셨나요?", "네 병사요"]
+
+
 def test_same_thread_keeps_conversation():
     with make_client([Route(next="answer")]) as client:
         first = parse_sse(client.post("/chat", json={"message": "안녕"}).text)

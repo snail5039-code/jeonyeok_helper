@@ -41,6 +41,7 @@ from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -201,6 +202,15 @@ def _default_runtime() -> tuple[
     return (lambda: open_agent(services=services)), roadmap, warm
 
 
+def _warm_keyword_index() -> None:
+    from jeonyeok_helper.rag.retriever import warm_default_keywords
+
+    try:
+        warm_default_keywords()
+    except Exception:  # DB가 아직 없거나 키가 없으면 첫 검색 때 다시 시도한다
+        log.warning("BM25 색인 미리 읽기 실패", exc_info=True)
+
+
 def _limited(request: Request, key: str | None) -> None:
     """모델을 부르는 요청을 사용자(없으면 접속 주소)별로 제한한다."""
     who = key or (request.client.host if request.client else "unknown")
@@ -214,8 +224,10 @@ def create_app(
     roadmap_builder: RoadmapBuilder | None = None,
 ) -> FastAPI:
     warm_roadmap = None
+    warm_keywords = None
     if agent_factory is None:
         agent_factory, default_roadmap, warm_roadmap = _default_runtime()
+        warm_keywords = _warm_keyword_index
         roadmap_builder = roadmap_builder or default_roadmap
 
     @asynccontextmanager
@@ -227,6 +239,9 @@ def create_app(
         app.state.roadmap = roadmap_builder
         app.state.warm_roadmap = warm_roadmap
         app.state.background = set()  # 미리 모으기 작업이 끝나기 전에 사라지지 않게 붙들어 둔다
+        if warm_keywords is not None:
+            # BM25 색인을 미리 읽어 둔다 (첫 질문이 색인을 기다리지 않게)
+            app.state.background.add(asyncio.create_task(asyncio.to_thread(warm_keywords)))
         async with AsyncExitStack() as stack:
             try:
                 app.state.agent = await stack.enter_async_context(agent_factory())
@@ -322,7 +337,7 @@ def create_app(
 
         thread_id = req.thread_id or str(uuid.uuid4())
         config = {"configurable": {"thread_id": thread_id}}
-        inputs: dict = {"messages": [("user", req.message)]}
+        inputs: dict | Command = {"messages": [("user", req.message)]}
         done_item = None
         items: list[dict] = []
         if req.user_id:
@@ -339,10 +354,21 @@ def create_app(
             items = await asyncio.to_thread(journey.list_items, db, req.user_id)
             config["configurable"]["journey"] = items
 
-        # 같은 질문·같은 조건이면 저장해 둔 답 (버튼 동작은 저장하지 않는다)
+        # 되물은 질문(interrupt)에 대한 답이면 멈춘 자리에서 이어 간다 (Human-in-the-loop).
+        # 버튼 동작은 되묻기에 대한 답이 아니므로 새로 시작한다.
+        resuming = False
+        if req.thread_id and not req.action:
+            snapshot = await agent.aget_state(config)
+            if snapshot.interrupts:
+                inputs = Command(resume=req.message)
+                resuming = True
+
+        # 같은 질문·같은 조건이면 저장해 둔 답 (버튼 동작·되묻기에 대한 답은 저장하지 않는다)
         cache: AnswerCache = request.app.state.answers
         profile_before = await stored_profile(agent, req.user_id) if req.user_id else {}
-        cache_key = None if req.action else cache.key(req.message, profile_before, items)
+        cache_key = (
+            None if req.action or resuming else cache.key(req.message, profile_before, items)
+        )
         cached = cache.get(cache_key)
 
         async def replay(hit: dict) -> AsyncIterator[str]:
@@ -419,7 +445,7 @@ def create_app(
                             yield _sse("step", {"node": node, "label": label})
                         if node == "verify":
                             pending.add("answer")
-                        elif node in ("guide", "coach"):
+                        elif node in ("guide", "coach", "guard"):
                             pending.add("guide")
                 state = (await agent.aget_state(config)).values or state
                 pending.update({"answer", "guide"} - sent)
@@ -436,10 +462,15 @@ def create_app(
                 if state.get("draft") and not talked and "answer" in payloads:
                     if not state.get("guide", {}).get("reopen"):
                         cache.put(cache_key, dict(payloads))
-                if not state.get("draft") and not talked:  # respond를 거치지 않았다면 되묻기
+                # 되묻기: ask_user가 interrupt로 멈춰 사용자의 답을 기다리는 중
+                snapshot = await agent.aget_state(config)
+                if snapshot.interrupts:
                     yield _sse(
                         "question",
-                        {"text": state["messages"][-1].text, "profile": state.get("profile", {})},
+                        {
+                            "text": snapshot.interrupts[0].value["question"],
+                            "profile": state.get("profile", {}),
+                        },
                     )
                 profile = state.get("profile", {})
                 missing = guide_rules.missing_field(profile)

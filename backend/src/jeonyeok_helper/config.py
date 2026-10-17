@@ -45,12 +45,17 @@ class Settings(BaseSettings):
     # PostgreSQL(pgvector): 규정 검색 벡터와 서비스 테이블(피드백). 로컬은 docker compose up -d db
     database_url: str = "postgresql+psycopg://jeonyeok:jeonyeok@localhost:5432/jeonyeok"
 
+    # 실시간 API 응답과 BM25 색인을 Postgres(cache_entry 표)에도 저장해 서버를 다시 켜도 쓴다.
+    # 테스트에서는 끈다.
+    persist_cache: bool = True
+
     # RAG
     vector_collection: str = "regulations"
     raw_docs_dir: Path = DATA_DIR / "raw"
     retrieval_k: int = 6
 
-    # 대화 기록과 사용자 프로필을 저장하는 SQLite 파일 (서버를 재시작해도 유지)
+    # 예전에 대화 기록과 사용자 프로필을 저장하던 SQLite 파일. 지금은 Postgres에 저장하고,
+    # 이 파일이 남아 있으면 서버가 켜질 때 프로필을 Postgres로 한 번 옮긴다.
     state_db: Path = DATA_DIR / "state.sqlite"
 
     # 슈퍼바이저가 한 질문에서 워커를 호출할 수 있는 최대 횟수 (무한 루프 방지)

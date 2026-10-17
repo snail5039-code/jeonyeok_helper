@@ -8,6 +8,8 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+from langgraph.types import Command
+
 from jeonyeok_helper.agents.runtime import open_agent
 from jeonyeok_helper.cli import run_cli
 
@@ -25,15 +27,18 @@ async def _chat() -> None:
                 return
             if not question.strip():
                 continue
+            # 되물은 질문에 답하는 중이면 멈춘 자리에서 이어 간다 (interrupt → resume)
+            waiting = (await agent.aget_state(config)).interrupts
+            inputs = Command(resume=question) if waiting else {"messages": [("user", question)]}
             # 어떤 워커를 거쳤는지 보여준다.
-            async for update in agent.astream(
-                {"messages": [("user", question)]}, config, stream_mode="updates"
-            ):
+            async for update in agent.astream(inputs, config, stream_mode="updates"):
                 for node, value in update.items():
                     if node == "supervisor" and value:
                         print(f"  · 슈퍼바이저 → {value.get('next')}")
-                    if node in {"verify", "ask_user"}:
+                    if node in {"verify", "coach", "guard"} and value and value.get("messages"):
                         print(f"\n전역도우미> {value['messages'][-1].text}")
+                    if node == "__interrupt__":
+                        print(f"\n전역도우미> {value[0].value['question']}")
 
 
 def main() -> int:

@@ -163,7 +163,52 @@ def test_hyde_adds_hypothetical_query_and_dedupes():
     result = retriever.retrieve("군대 다녀오면 연금 더 받아?", k=5)
 
     assert store.queries == ["군대 다녀오면 연금 더 받아?", "군 복무기간은 가입기간에 산입한다"]
-    assert [d.metadata["doc_id"] for d in result] == ["A", "B", "C"]
+    # RRF: 두 검색 모두에 나온 B가 맨 앞, 중복은 한 번만
+    assert [d.metadata["doc_id"] for d in result] == ["B", "A", "C"]
+
+
+def test_keyword_results_are_fused_with_vector_results():
+    class HybridStore(FakeStore):
+        def keyword_search(self, query, k, region=None):
+            return [doc("K"), doc("A")]
+
+    store = HybridStore({"공무상요양비": [doc("A"), doc("B")]})
+    retriever = RegulationRetriever(store)
+
+    result = retriever.retrieve("공무상요양비", k=5)
+
+    # 키워드 검색에서만 나온 K도 후보에 들어오고, 양쪽에 나온 A가 맨 앞
+    assert [d.metadata["doc_id"] for d in result] == ["A", "K", "B"]
+
+
+def test_rrf_scores_documents_found_by_several_searches_higher():
+    from jeonyeok_helper.rag.retriever import rrf
+
+    fused = rrf([doc("A"), doc("B"), doc("C")], [doc("C"), doc("D")])
+
+    assert [d.metadata["doc_id"] for d in fused] == ["C", "A", "B", "D"]
+
+
+def test_region_allows_matches_the_vector_filter_rules():
+    from jeonyeok_helper.rag.store import region_allows
+
+    law = {"source_type": "law"}
+    busan = {"source_type": "ordinance", "sido": "부산", "sigungu": ""}
+    haeundae = {"source_type": "ordinance", "sido": "부산", "sigungu": "해운대구"}
+    assert region_allows(law, None) and region_allows({}, None)
+    assert not region_allows(busan, None)  # 지역을 모르면 조례는 빼고
+    assert region_allows(busan, "부산") and region_allows(haeundae, "부산")
+    assert not region_allows(busan, "대전")
+
+
+def test_kiwi_tokenizer_strips_particles():
+    import pytest
+
+    pytest.importorskip("kiwipiepy")
+    from jeonyeok_helper.rag.keyword import Tokenizer
+
+    tokens = Tokenizer()("공무상요양비를 받으려면 어디에 신청해요?")
+    assert "요양비" in "".join(tokens) and "를" not in tokens
 
 
 def test_rerank_orders_by_score_and_cuts_to_k():
@@ -335,3 +380,56 @@ def test_undouble_fixes_bold_lines_only():
     assert undouble("첫 줄\n구구 분분 내내 용용\n끝") == "첫 줄\n구 분 내 용\n끝"
     assert undouble("2) 퇴퇴직직수수당당 (군인연금법)") == "2) 퇴직수당 (군인연금법)"
     assert undouble("하하 웃었다") == "하하 웃었다"  # 두 글자 하나는 실제 말일 수 있다
+
+
+def test_keyword_index_is_saved_and_reused_until_documents_change(tmp_path, monkeypatch):
+    import pytest
+
+    pytest.importorskip("kiwipiepy")
+    from jeonyeok_helper.rag import keyword
+
+    # BM25는 문서가 너무 적으면 IDF가 0이 되어 세 개 넣는다
+    rows = [
+        ("a", "공무상요양비를 청구한다", {}),
+        ("b", "전직지원금을 지급한다", {}),
+        ("d", "취업 상담을 받는다", {}),
+    ]
+    sig = {"value": "v1"}
+
+    class Session:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, *_args):
+            class Result:
+                def all(self_inner):
+                    return list(rows)
+
+            return Result()
+
+    monkeypatch.setattr(keyword, "signature", lambda *_: sig["value"])
+    analyzed = []
+    real_many = keyword.Tokenizer.many
+    monkeypatch.setattr(
+        keyword.Tokenizer,
+        "many",
+        lambda self, texts: analyzed.extend(texts) or real_many(self, texts),
+    )
+    path = tmp_path / "bm25.pkl"
+    storage = keyword.FileIndexStorage(path)
+
+    first = keyword.build_index(Session, "c", storage)
+    assert path.exists() and len(analyzed) == 3
+    assert first.search("공무상요양비", 1)[0].id == "a"
+
+    analyzed.clear()
+    keyword.build_index(Session, "c", storage)  # 그대로면 파일을 읽기만 한다
+    assert analyzed == []
+
+    rows.append(("c", "예비군 훈련 보상비", {}))
+    sig["value"] = "v2"
+    again = keyword.build_index(Session, "c", storage)  # 바뀐 조각만 다시 분석
+    assert analyzed == ["예비군 훈련 보상비"] and len(again.docs) == 4

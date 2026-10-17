@@ -132,7 +132,7 @@ class YouthPolicyClient:
         self.retry_wait = retry_wait
         # 기본 User-Agent(python-httpx)는 403으로 막힌다.
         self.client = client or httpx.Client(timeout=60, headers={"User-Agent": "Mozilla/5.0"})
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="youth")
 
     def all(self) -> list[YouthPolicy]:
         if not self.api_key:

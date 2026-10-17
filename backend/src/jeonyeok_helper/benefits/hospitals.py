@@ -67,7 +67,7 @@ class HospitalClient:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=30)
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="hospitals")
 
     def all(self) -> list[Hospital]:
         if not self.service_key:

@@ -39,6 +39,21 @@ def region_filter(region: str | None) -> dict:
     return {"$or": [not_ordinance, *local]}
 
 
+def region_allows(meta: dict, region: str | None) -> bool:
+    """region_filter와 같은 규칙을 파이썬으로 (키워드 검색 결과를 거를 때)."""
+    if meta.get("source_type") != "ordinance":
+        return True
+    keys = region_keys(region)
+    if not keys:
+        return False
+    sidos = {v for k in keys for v in province_variants(k)}
+    if meta.get("sigungu") in keys:
+        return True
+    if meta.get("sido") in sidos and (meta.get("sigungu", "") == "" or len(keys) == 1):
+        return True
+    return False
+
+
 # langchain-postgres가 만드는 표: langchain_pg_collection(이름) ← langchain_pg_embedding(문서)
 _IDS_BY_SOURCE = text(
     "SELECT e.id FROM langchain_pg_embedding e JOIN langchain_pg_collection c"
@@ -69,6 +84,9 @@ class RegulationStore:
             collection_name=self.collection,
             use_jsonb=True,
         )
+        from jeonyeok_helper.rag.keyword import shared_index
+
+        self.keywords = shared_index(self.db._make_sync_session, self.collection)
 
     def upsert(self, docs: list[Document], batch_size: int = 64) -> int:
         """임베딩 API 한도를 넘지 않도록 나눠서 넣는다. 같은 doc_id는 덮어쓴다."""
@@ -79,6 +97,13 @@ class RegulationStore:
 
     def search(self, query: str, k: int, region: str | None = None) -> list[Document]:
         return self.db.similarity_search(query, k=k, filter=region_filter(region))
+
+    def keyword_search(self, query: str, k: int, region: str | None = None) -> list[Document]:
+        """BM25 키워드 검색 (하이브리드 검색의 한쪽). 색인이 없으면 빈 목록."""
+        index = self.keywords.get()
+        if index is None:
+            return []
+        return index.search(query, k, allow=lambda m: region_allows(m, region))
 
     def replace_source(self, source: str, docs: list[Document]) -> int:
         """파일 하나의 조각을 새 조각으로 바꾼다. 조각 수가 줄면 예전 조각이 남으므로

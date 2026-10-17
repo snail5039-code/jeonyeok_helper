@@ -1,7 +1,7 @@
 """규정 검색 골든셋 평가: 질문마다 정해 둔 근거가 상위 k개 안에 나오는지.
 
     uv run jeonyeok-eval --retrieval              # HyDE + 재정렬 (서비스 설정)
-    uv run jeonyeok-eval --retrieval --ablation   # 벡터만 / +HyDE / +HyDE+재정렬 비교
+    uv run jeonyeok-eval --retrieval --ablation   # 벡터만 / +BM25 / +HyDE / BM25 유무 비교
 
 답변 전체를 채점하는 평가(questions.yaml)와 달리 LLM 답변 없이 검색 단계만 잰다.
 검색을 바꾸거나 자료를 늘렸을 때 근거가 밀려나지 않았는지 빠르게 확인하는 용도.
@@ -22,11 +22,13 @@ from jeonyeok_helper.config import DATA_DIR, load_yaml
 GOLDEN_FILE = DATA_DIR / "eval" / "retrieval_golden.yaml"
 RESULTS_DIR = DATA_DIR / "eval" / "results"
 
-# (이름, HyDE, 재정렬)
+# (이름, HyDE, 재정렬, 키워드 검색)
 SETUPS = {
-    "vector": ("벡터 검색만", False, False),
-    "hyde": ("+ HyDE", True, False),
-    "full": ("+ HyDE + 재정렬 (서비스)", True, True),
+    "vector": ("벡터 검색만", False, False, False),
+    "hybrid": ("벡터 + BM25", False, False, True),
+    "hyde": ("+ HyDE", True, False, True),
+    "no_bm25": ("+ HyDE + 재정렬, BM25 없음 (이전 서비스)", True, True, False),
+    "full": ("+ HyDE + 재정렬 (서비스)", True, True, True),
 }
 
 
@@ -177,8 +179,10 @@ def main_retrieval(ablation: bool, ids: list[str] | None, k: int) -> int:
     store, llm = RegulationStore(), get_fast_chat_model()
     runs = {}
     for key in SETUPS if ablation else ["full"]:
-        name, hyde, rerank = SETUPS[key]
-        retriever = RegulationRetriever(store, llm=llm, use_hyde=hyde, use_rerank=rerank)
+        name, hyde, rerank, keywords = SETUPS[key]
+        retriever = RegulationRetriever(
+            store, llm=llm, use_hyde=hyde, use_rerank=rerank, use_keywords=keywords
+        )
         results = run_retrieval_eval(retriever, cases, k=k)
         runs[key] = (results, summarize_retrieval(results))
         o = runs[key][1]["overall"]

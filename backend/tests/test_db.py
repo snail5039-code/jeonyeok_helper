@@ -35,3 +35,32 @@ def test_session_commits_and_rolls_back(tmp_path: Path):
 
     with db.session() as session:
         assert [f.rating for f in session.query(Feedback).all()] == ["up"]
+
+
+def test_saved_cache_keeps_api_results_across_restarts(tmp_path):
+    """TimedCache에 namespace를 주면 DB에도 저장해, 새로 만든(=서버를 다시 켠) 캐시가 API를
+    다시 부르지 않는다. ttl이 지나면 다시 부른다."""
+    from jeonyeok_helper.benefits.common import TimedCache
+    from jeonyeok_helper.db.cache import SavedCache, set_saved_cache
+
+    db = Database(sqlite_url(tmp_path / "app.sqlite"))
+    db.migrate()
+    set_saved_cache(SavedCache(db))
+    calls = []
+
+    def load():
+        calls.append(1)
+        return [{"name": "청년 월세 지원"}]
+
+    try:
+        assert TimedCache(3600, namespace="t").get(("목록", 1), load) == [
+            {"name": "청년 월세 지원"}
+        ]
+        assert TimedCache(3600, namespace="t").get(("목록", 1), load) == [
+            {"name": "청년 월세 지원"}
+        ]
+        assert len(calls) == 1  # 두 번째는 DB에서
+        TimedCache(0, namespace="t").get(("목록", 1), load)  # ttl이 지났으면 다시 받는다
+        assert len(calls) == 2
+    finally:
+        set_saved_cache(None)

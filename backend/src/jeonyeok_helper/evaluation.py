@@ -5,6 +5,7 @@
     uv run jeonyeok-eval --limit 5
     uv run jeonyeok-eval --model gemini-3.5-flash   # 다른 모델과 비교
     uv run jeonyeok-eval --retrieval [--ablation]   # 규정 검색 골든셋 (retrieval_eval.py)
+    uv run --group eval jeonyeok-eval --ragas       # 답변 평가 뒤 RAGAS 채점 (ragas_eval.py)
 
 결과는 data/eval/results/에 JSON과 마크다운 보고서로 남는다.
 """
@@ -61,6 +62,8 @@ class CaseResult:
     checks: list[Check] = field(default_factory=list)
     error: str = ""
     tools: list[str] = field(default_factory=list)
+    # 답변이 근거로 받은 도구 원문 (RAGAS 채점에 쓴다)
+    evidence: list[str] = field(default_factory=list)
 
     @property
     def score(self) -> float:
@@ -154,15 +157,20 @@ async def run_case(agent, case: dict) -> CaseResult:
             time.perf_counter() - started, [Check("실행", False, str(e))], str(e),
         )  # fmt: skip
     seconds = time.perf_counter() - started
-    answer = state["messages"][-1].text
-    asked = not state.get("draft")
+    # 되묻기는 ask_user가 interrupt로 멈춘 것 (답 대신 되물은 질문을 채점한다)
+    # 길잡이(talk)가 말로 되물은 경우도 답변 초안이 없으므로 되묻기로 본다.
+    interrupts = state.get("__interrupt__") or []
+    asked = bool(interrupts) or not state.get("draft")
+    answer = interrupts[0].value["question"] if interrupts else state["messages"][-1].text
     sources = state.get("sources", [])
     profile = state.get("profile", {})
-    tools = tools_used(state.get("evidence", []))
+    evidence = state.get("evidence", [])
+    tools = tools_used(evidence)
     talked = (state.get("guide") or {}).get("mode") == "talk"
     return CaseResult(
         case["id"], case["category"], case["question"], answer, asked, sources, profile, seconds,
         grade(case, answer, asked, sources, profile, tools, talked), tools=tools,
+        evidence=evidence,
     )  # fmt: skip
 
 
@@ -254,7 +262,18 @@ def _run(argv: list[str] | None) -> int:
     )
     parser.add_argument("--ablation", action="store_true", help="검색 설정 3가지 비교")
     parser.add_argument("-k", type=int, default=6, help="검색 평가의 상위 k개")
+    parser.add_argument("--ragas", action="store_true", help="답변 평가 뒤 RAGAS로도 채점")
+    parser.add_argument(
+        "--ragas-file", type=Path, help="저장된 답변 평가 결과(JSON)를 RAGAS로 채점"
+    )
+    parser.add_argument("--judge", help="RAGAS 채점 모델 (기본: .env의 GEMINI_MODEL)")
     args = parser.parse_args(argv)
+
+    if args.ragas_file:
+        from jeonyeok_helper.ragas_eval import score_file
+
+        score_file(args.ragas_file, args.judge, args.ids)
+        return 0
 
     if args.retrieval:
         from jeonyeok_helper.retrieval_eval import main_retrieval
@@ -288,6 +307,10 @@ def _run(argv: list[str] | None) -> int:
     o = summary["overall"]
     print(f"\n전부 통과 {o['perfect']}/{o['cases']}, 체크 통과율 {o['check_pass_rate']:.0%}")
     print(f"보고서: {report}")
+    if args.ragas:
+        from jeonyeok_helper.ragas_eval import score_file
+
+        score_file(report.with_suffix(".json"), args.judge)
     return 0
 
 

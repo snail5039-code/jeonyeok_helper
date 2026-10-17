@@ -341,6 +341,9 @@ def create_server(services: Services | None = None) -> FastMCP:
         return {
             "stores": [s.model_dump() for s in stores],
             "info_url": STORE_INFO_URL,
+            # 답변이 가게마다 대상·내용을 지어 쓰지 않도록 이 목록이 무엇인지 원문에 적어 둔다
+            "note": "병무청 나라사랑가게 가맹점. 예비군 동원훈련 이수자, 현역병·사회복무요원, "
+            "병역명문가가 증명서를 보여 주면 benefit(할인·면제 등) 혜택을 받는다.",
         }
 
     @server.tool()
@@ -373,7 +376,10 @@ def create_server(services: Services | None = None) -> FastMCP:
                     "map_url": h.map_url,
                 }
                 for h in hospitals
-            ]
+            ],
+            # 이 목록이 위탁병원인지 원문에 없으면 답변이 '위탁병원인지 확인할 수 없다'고 했다
+            "note": "아래는 모두 국가보훈부 지정 보훈 위탁병원이다. 국가유공자 등 보훈대상자는 "
+            "이 병원에서 진료비 감면을 받을 수 있다.",
         }
 
     @server.tool()

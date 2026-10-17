@@ -110,6 +110,16 @@ def main(argv: list[str] | None = None) -> int:
     return run_cli(lambda: _run(argv))
 
 
+# 문서를 바꾸는 명령. 끝나면 BM25 키워드 색인을 다시 만들어 저장한다.
+CHANGES_DOCS = {"laws", "ordinances", "interpretations", "datasets", "files", "web"}
+
+
+def save_keyword_index(store) -> None:
+    index = store.keywords.rebuild()
+    if index is not None:
+        print(f"BM25 키워드 색인 저장 ({len(index.docs)}개 조각)")
+
+
 def _run(argv: list[str] | None) -> int:
 
     parser = argparse.ArgumentParser(prog="jeonyeok-rag", description="규정 수집과 검색")
@@ -121,6 +131,7 @@ def _run(argv: list[str] | None) -> int:
     sub.add_parser("files", help="data/raw 파일 수집")
     sub.add_parser("web", help="data/webpages.yaml의 기관 안내 페이지 수집")
     sub.add_parser("stats", help="저장된 문서 수")
+    sub.add_parser("bm25", help="BM25 키워드 색인을 지금 DB 기준으로 만들어 저장")
     p_search = sub.add_parser("search", help="검색 결과 확인")
     p_search.add_argument("question")
     p_search.add_argument("-k", type=int, default=None)
@@ -133,6 +144,17 @@ def _run(argv: list[str] | None) -> int:
 
     s = get_settings()
     store = RegulationStore()
+    try:
+        return _command(args, s, store)
+    finally:
+        if args.cmd in CHANGES_DOCS:
+            save_keyword_index(store)
+
+
+def _command(args, s, store) -> int:
+    if args.cmd == "bm25":
+        save_keyword_index(store)
+        return 0
 
     if args.cmd in ("laws", "ordinances", "interpretations"):
         from jeonyeok_helper.rag.law_api import LawApiClient

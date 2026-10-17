@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from collections.abc import Callable, Hashable
 from datetime import date
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 DATA_GO_KR_KEY_MISSING = "공공데이터포털 서비스키(DATA_GO_KR_SERVICE_KEY)가 설정되지 않았습니다."
 
@@ -16,19 +19,50 @@ class BenefitApiError(RuntimeError):
 
 
 class TimedCache:
-    """키별로 받아 온 값을 ttl초 동안 다시 쓴다. 실패한 호출은 저장하지 않는다."""
+    """키별로 받아 온 값을 ttl초 동안 다시 쓴다. 실패한 호출은 저장하지 않는다.
 
-    def __init__(self, ttl: float):
+    namespace를 주면 Postgres(cache_entry 표)에도 저장해서 서버를 다시 켜도 ttl 안이면
+    API를 다시 부르지 않는다 (db/cache.py). DB가 없거나 실패하면 메모리 캐시로만 돈다.
+    """
+
+    def __init__(self, ttl: float, namespace: str | None = None):
         self.ttl = ttl
+        self.namespace = namespace
         self._entries: dict[Hashable, tuple[float, Any]] = {}
 
     def get[T](self, key: Hashable, load: Callable[[], T]) -> T:
         hit = self._entries.get(key)
         if hit and time.monotonic() - hit[0] < self.ttl:
             return hit[1]
+        saved = self._saved()
+        if saved is not None:
+            from jeonyeok_helper.db.cache import MISSING
+
+            try:
+                found = saved.get_with_age(self.namespace, key, self.ttl)
+            except Exception:
+                log.warning("저장 캐시 읽기 실패: %s", self.namespace, exc_info=True)
+                found = MISSING
+            if found is not MISSING:
+                value, age = found
+                # 저장한 시각 기준으로 ttl을 센다 (다시 켰다고 ttl이 늘어나지 않게)
+                self._entries[key] = (time.monotonic() - age, value)
+                return value
         value = load()
         self._entries[key] = (time.monotonic(), value)
+        if saved is not None:
+            try:
+                saved.put(self.namespace, key, value)
+            except Exception:
+                log.warning("저장 캐시 쓰기 실패: %s", self.namespace, exc_info=True)
         return value
+
+    def _saved(self):
+        if not self.namespace:
+            return None
+        from jeonyeok_helper.db.cache import get_saved_cache
+
+        return get_saved_cache()
 
 
 # '20250306 ~ 20250313', '2025.05.01~2025.05.20', '2025-03-13까지' 같은 날짜

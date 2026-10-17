@@ -64,7 +64,7 @@ class StoreClient:
     ):
         self.service_key = service_key
         self.client = client or httpx.Client(timeout=30)
-        self._cache = TimedCache(cache_ttl)
+        self._cache = TimedCache(cache_ttl, namespace="stores")
 
     def all(self) -> list[Store]:
         if not self.service_key:
