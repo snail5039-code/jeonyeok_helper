@@ -94,3 +94,31 @@ class ResumeCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+
+class PushSubscription(Base):
+    """브라우저 알림(Web Push) 구독. 익명 ID 하나에 기기(브라우저)마다 하나씩 생긴다.
+    푸시 서비스가 '없는 구독'(404·410)이라고 하면 지운다."""
+
+    __tablename__ = "push_subscription"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    endpoint: Mapped[str] = mapped_column(String(1024), unique=True)
+    p256dh: Mapped[str] = mapped_column(String(256))
+    auth: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class PushSent(Base):
+    """기한 알림을 보낸 기록. 같은 할 일에 같은 알림(30·7·1일 전)을 두 번 보내지 않는다."""
+
+    __tablename__ = "push_sent"
+
+    item_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    days_before: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )

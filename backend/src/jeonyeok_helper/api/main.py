@@ -46,7 +46,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from jeonyeok_helper import __version__, journey, resume
+from jeonyeok_helper import __version__, journey, push, resume
 from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
@@ -162,6 +162,22 @@ class ResumeRequest(BaseModel):
     code: str = Field(min_length=4, max_length=20)
 
 
+class PushKeys(BaseModel):
+    p256dh: str = Field(min_length=1, max_length=256)
+    auth: str = Field(min_length=1, max_length=64)
+
+
+class PushSubscribe(BaseModel):
+    """브라우저 PushSubscription.toJSON() 모양"""
+
+    endpoint: str = Field(min_length=1, max_length=1024)
+    keys: PushKeys
+
+
+class PushUnsubscribe(BaseModel):
+    endpoint: str = Field(min_length=1, max_length=1024)
+
+
 class AddItems(BaseModel):
     items: list[NewItem] = Field(min_length=1, max_length=20)
     question: str = Field(default="", max_length=500)
@@ -240,9 +256,11 @@ def create_app(
     agent_factory: AgentFactory | None = None,
     db_url: str | None = None,
     roadmap_builder: RoadmapBuilder | None = None,
+    push_sender: push.Sender | None = None,
 ) -> FastAPI:
     warm_roadmap = None
     warm_keywords = None
+    run_push_loop = agent_factory is None  # 실제 서버에서만 기한 알림을 확인한다
     if agent_factory is None:
         agent_factory, default_roadmap, warm_roadmap = _default_runtime()
         warm_keywords = _warm_keyword_index
@@ -257,6 +275,7 @@ def create_app(
         app.state.roadmap = roadmap_builder
         app.state.warm_roadmap = warm_roadmap
         app.state.background = set()  # 미리 모으기 작업이 끝나기 전에 사라지지 않게 붙들어 둔다
+        app.state.push_sender = push_sender or push.webpush_sender
         if warm_keywords is not None:
             # BM25 색인을 미리 읽어 둔다 (첫 질문이 색인을 기다리지 않게)
             app.state.background.add(asyncio.create_task(asyncio.to_thread(warm_keywords)))
@@ -267,6 +286,12 @@ def create_app(
             except RuntimeError as e:  # API 키 누락 등: 서버는 띄우고 /chat에서 안내
                 log.warning("에이전트를 시작하지 못했습니다: %s", e)
                 app.state.agent, app.state.agent_error = None, str(e)
+            if run_push_loop and push.configured() and app.state.agent is not None:
+                agent = app.state.agent
+                task = asyncio.create_task(
+                    push.loop(app.state.db, lambda uid: stored_profile(agent, uid))
+                )
+                stack.callback(task.cancel)
             yield
 
     app = FastAPI(title="전역도우미", version=__version__, lifespan=lifespan)
@@ -296,6 +321,7 @@ def create_app(
                 "law_api": bool(s.law_api_oc),
                 "data_go_kr": bool(s.data_go_kr_service_key),
                 "youthcenter": bool(s.youthcenter_api_key),
+                "vapid": push.configured(),
             },
         }
 
@@ -597,6 +623,39 @@ def create_app(
         if user_id is None:
             raise HTTPException(404, "코드에 맞는 기록이 없어요. 코드를 다시 확인해 주세요.")
         return {"user_id": user_id}
+
+    # ---------- 브라우저 알림 ----------
+
+    def require_push() -> None:
+        if not push.configured():
+            raise HTTPException(503, "알림 기능이 꺼져 있어요.")
+
+    @app.get("/push/key")
+    def push_key() -> dict:
+        """브라우저가 구독할 때 쓰는 서버 공개키. 없으면 알림 기능이 꺼져 있다."""
+        return {"key": get_settings().vapid_public_key or None}
+
+    @app.put("/push/{user_id}", status_code=204)
+    def push_subscribe(user_id: UserId, body: PushSubscribe, request: Request) -> None:
+        require_push()
+        _limited(request, user_id)
+        if not push.allowed_endpoint(body.endpoint):
+            raise HTTPException(422, "알 수 없는 알림 주소예요.")
+        push.subscribe(
+            request.app.state.db, user_id, body.endpoint, body.keys.p256dh, body.keys.auth
+        )
+
+    @app.post("/push/{user_id}/unsubscribe", status_code=204)
+    def push_unsubscribe(user_id: UserId, body: PushUnsubscribe, request: Request) -> None:
+        push.unsubscribe(request.app.state.db, user_id, body.endpoint)
+
+    @app.post("/push/{user_id}/test")
+    async def push_test(user_id: UserId, request: Request) -> dict:
+        """알림이 오는지 바로 확인하는 시험 알림"""
+        require_push()
+        _limited(request, user_id)
+        db, send = request.app.state.db, request.app.state.push_sender
+        return {"delivered": await asyncio.to_thread(push.send_test, db, user_id, send)}
 
     @app.get("/journey/{user_id}")
     def get_journey(user_id: UserId, request: Request) -> dict:

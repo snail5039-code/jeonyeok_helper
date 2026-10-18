@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # 온통청년(youthcenter.go.kr) 청년정책 OPEN API 인증키 — 마이페이지 > OPEN API에서 신청
     youthcenter_api_key: str = ""
 
+    # 브라우저 알림(Web Push) VAPID 키. 없으면 알림 기능을 끈다 (push.py)
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    # 푸시 서비스가 연락할 곳: 서비스 주소(https://도메인, 경로 없이) 또는 mailto:메일
+    vapid_subject: str = ""
+
     # PostgreSQL(pgvector): 규정 검색 벡터와 서비스 테이블(피드백). 로컬은 docker compose up -d db
     database_url: str = "postgresql+psycopg://jeonyeok:jeonyeok@localhost:5432/jeonyeok"
 
