@@ -100,7 +100,7 @@ export type ChatEvent =
   | { event: "delta"; data: { text: string } }
   | {
       event: "answer";
-      data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[] };
+      data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[]; as_of?: AsOf };
     }
   // 길잡이: talk면 answer 없이 이것만, research면 answer 다음에 온다
   | { event: "guide"; data: Guide }
@@ -109,6 +109,12 @@ export type ChatEvent =
   | { event: "question"; data: { text: string; profile?: Profile } }
   | { event: "error"; data: { message: string } }
   | { event: "done"; data: Record<string, never> };
+
+/** 답변의 자료 기준: 법령 개정을 마지막으로 확인한 날, 인용한 법령 중 가장 최근 시행일(YYYYMMDD) */
+export interface AsOf {
+  checked: string | null;
+  latest_enforced: string | null;
+}
 
 export interface Turn {
   id: string;
@@ -121,6 +127,7 @@ export interface Turn {
   profile: Profile;
   /** 이어서 물어볼 만한 질문 (최종 답변과 함께 온다) */
   followUps: string[];
+  asOf?: AsOf;
   /** 사용자가 답변 도중 멈춤 */
   stopped?: boolean;
   /** 길잡이의 한마디·버튼·할 일 제안 */

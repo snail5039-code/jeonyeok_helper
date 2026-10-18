@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarCheck,
   Check,
   ChevronRight,
   CircleHelp,
@@ -14,6 +15,7 @@ import {
 import { useState } from "react";
 
 import { citedCount, parseAnswer } from "@/lib/answer";
+import { asOfText, dateLabel } from "@/lib/asOf";
 import type { Rating } from "@/lib/feedback";
 import { SERVICE_REPLIES } from "@/lib/guide";
 import {
@@ -371,7 +373,11 @@ function AnswerDetails({ turn, onAsk, onFeedback }: { turn: Turn; onAsk: (text: 
         <FileText className="size-4 text-fg-3" strokeWidth={1.8} />
         자세히 보기
         <span className="truncate font-medium text-fg-3">
-          {[benefits ? `혜택 ${benefits}개` : "", turn.sources.length ? `근거 ${citedCount(turn.text, turn.sources.length)}개` : ""]
+          {[
+            benefits ? `혜택 ${benefits}개` : "",
+            turn.sources.length ? `근거 ${citedCount(turn.text, turn.sources.length)}개` : "",
+            turn.asOf?.checked ? `${dateLabel(turn.asOf.checked)} 확인 자료` : "",
+          ]
             .filter(Boolean)
             .join(" · ")}
         </span>
@@ -414,6 +420,12 @@ function Answer({
         {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
         {streaming && <span className="stream-caret" aria-hidden />}
         {!streaming && !turn.stopped && turn.sources.length > 0 && <SourcesBox text={turn.text} sources={turn.sources} />}
+        {!streaming && !turn.stopped && asOfText(turn.asOf) && (
+          <p className="-mt-2 flex items-center gap-1.5 text-[12.5px] text-fg-3">
+            <CalendarCheck className="size-3.5 shrink-0" />
+            {asOfText(turn.asOf)}
+          </p>
+        )}
         {turn.stopped && (
           <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
             <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />

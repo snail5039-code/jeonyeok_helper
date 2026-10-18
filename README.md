@@ -175,7 +175,7 @@ flowchart LR
 | 도구 연동 | **MCP** 서버 (정부24, 온통청년, 제대군인지원센터 채용, 보훈 채용, 위탁병원, 나라사랑가게) |
 | 서버 | **FastAPI** (SSE 스트리밍), SQLAlchemy 2.0 + Alembic, LangGraph Postgres 체크포인터·스토어 |
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
-| 품질 | pytest 274개, vitest 77개, ruff, ESLint, 평가 3종(답변·검색 골든셋·RAGAS), GitHub Actions CI |
+| 품질 | pytest 276개, vitest 79개, ruff, ESLint, 평가 3종(답변·검색 골든셋·RAGAS), GitHub Actions CI |
 | 배포 | Docker Compose |
 
 ## 실행

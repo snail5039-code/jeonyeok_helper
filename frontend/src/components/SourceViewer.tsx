@@ -4,6 +4,7 @@ import { ExternalLink, FileText, X } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { dateLabel } from "@/lib/asOf";
 import type { Source } from "@/lib/types";
 
 const KIND: Record<Source["type"], string> = {
@@ -26,9 +27,6 @@ export function useOpenSource() {
 }
 
 const isHttp = (url: string) => /^https?:\/\//.test(url);
-
-/** 법령 시행일: 20260820 → 2026.08.20 */
-const dateLabel = (d: string) => d.replace(/^(\d{4})-?(\d{2})-?(\d{2})$/, "$1.$2.$3");
 
 /** 근거 원문 보기: 답변의 [n]이나 근거 자료를 누르면 옆(휴대폰은 아래)에 원문 발췌와 원래 누리집 링크를 연다 */
 export function SourceViewer({ children }: { children: React.ReactNode }) {
