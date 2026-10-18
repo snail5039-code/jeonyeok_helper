@@ -31,8 +31,12 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
       const open = wins.find((w) => new URL(w.url).origin === url.origin);
-      if (open) return open.focus().then((w) => w.navigate(url.href));
-      return self.clients.openWindow(url.href);
+      if (!open) return self.clients.openWindow(url.href);
+      // 서비스 워커가 맡지 않은 탭은 navigate가 실패한다. 그때는 새 창으로 연다.
+      return open
+        .focus()
+        .then((w) => w.navigate(url.href))
+        .catch(() => self.clients.openWindow(url.href));
     }),
   );
 });

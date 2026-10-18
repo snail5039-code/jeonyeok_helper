@@ -31,6 +31,7 @@ SSE 이벤트
 """
 
 import asyncio
+import ipaddress
 import json
 import logging
 import re
@@ -286,10 +287,38 @@ def as_of(app: FastAPI, sources: list[dict]) -> dict:
     return {"checked": data_checked_at(app), "latest_enforced": dates[-1] if dates else None}
 
 
+# 코드·열쇠를 찍어 맞히는 요청은 접속 주소별 제한과 함께, 모든 사람을 합친 상한도 둔다.
+# 접속 주소는 Next 중계가 넘긴 X-Forwarded-For인데, 사용자가 이 머리글을 직접 보내면
+# Next가 그대로 넘겨서(없을 때만 채움) 주소를 바꿔 가며 제한을 피할 수 있기 때문이다.
+GUESS_LIMIT_PER_MINUTE = 300
+
+
+def client_ip(request: Request) -> str:
+    """요청한 사람의 주소. 같은 기계(127.0.0.1)나 내부망(Docker의 web)에서 온 중계 요청이면
+    X-Forwarded-For의 첫 주소를, 아니면 연결한 주소를 쓴다. (밖에서 바로 온 요청의 머리글은
+    믿지 않는다)"""
+    host = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for", "")
+    try:
+        trusted = ipaddress.ip_address(host).is_private or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        trusted = host == "testclient"  # FastAPI 테스트 클라이언트
+    if trusted and forwarded:
+        return forwarded.split(",")[0].strip() or host
+    return host
+
+
 def _limited(request: Request, key: str | None) -> None:
     """모델을 부르는 요청을 사용자(없으면 접속 주소)별로 제한한다."""
-    who = key or (request.client.host if request.client else "unknown")
+    who = key or client_ip(request)
     if not request.app.state.limiter.allow(who):
+        raise HTTPException(429, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.")
+
+
+def _guess_limited(request: Request, kind: str) -> None:
+    """찍어 맞히기를 막는 제한: 주소별(채팅과 따로 셈) + 모두 합친 상한"""
+    _limited(request, f"{kind}:{client_ip(request)}")
+    if not request.app.state.guess_limiter.allow(kind):
         raise HTTPException(429, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.")
 
 
@@ -312,6 +341,7 @@ def create_app(
         app.state.db = Database(db_url or get_settings().database_url)
         app.state.db.migrate()  # 최신 스키마까지 자동으로
         app.state.limiter = RateLimiter(get_settings().chat_rate_limit_per_minute)
+        app.state.guess_limiter = RateLimiter(GUESS_LIMIT_PER_MINUTE)
         app.state.answers = AnswerCache()
         app.state.roadmap = roadmap_builder
         app.state.warm_roadmap = warm_roadmap
@@ -647,8 +677,7 @@ def create_app(
         token = get_settings().admin_token
         if not token:
             raise HTTPException(404, "없는 주소예요.")
-        host = request.client.host if request.client else "unknown"
-        _limited(request, f"admin:{host}")  # 열쇠를 찍어 맞히지 못하게
+        _guess_limited(request, "admin")  # 열쇠를 찍어 맞히지 못하게
         if not x_admin_token or not secrets.compare_digest(x_admin_token, token):
             raise HTTPException(401, "관리자 열쇠가 맞지 않아요.")
         return runlog.summary(request.app.state.db, days)
@@ -717,8 +746,7 @@ def create_app(
     @app.post("/resume")
     def resume_with_code(body: ResumeRequest, request: Request) -> dict:
         """코드로 기록의 익명 ID를 찾는다. 찍어서 맞히지 못하게 접속 주소별로 횟수를 제한한다."""
-        host = request.client.host if request.client else "unknown"
-        _limited(request, f"resume:{host}")  # 채팅 횟수와 따로 센다
+        _guess_limited(request, "resume")
         user_id = resume.find_user(request.app.state.db, body.code)
         if user_id is None:
             raise HTTPException(404, "코드에 맞는 기록이 없어요. 코드를 다시 확인해 주세요.")
@@ -758,7 +786,7 @@ def create_app(
     @app.put("/push/{user_id}", status_code=204)
     def push_subscribe(user_id: UserId, body: PushSubscribe, request: Request) -> None:
         require_push()
-        _limited(request, user_id)
+        _limited(request, f"push:{user_id}")  # 작전도를 열 때마다 다시 알려서 채팅과 따로 센다
         if not push.allowed_endpoint(body.endpoint):
             raise HTTPException(422, "알 수 없는 알림 주소예요.")
         push.subscribe(
@@ -773,7 +801,7 @@ def create_app(
     async def push_test(user_id: UserId, request: Request) -> dict:
         """알림이 오는지 바로 확인하는 시험 알림"""
         require_push()
-        _limited(request, user_id)
+        _limited(request, f"push:{user_id}")
         db, send = request.app.state.db, request.app.state.push_sender
         return {"delivered": await asyncio.to_thread(push.send_test, db, user_id, send)}
 

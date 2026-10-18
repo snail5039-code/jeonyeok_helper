@@ -40,6 +40,8 @@ async function proxy(req: NextRequest, ctx: RouteContext<"/api/[...path]">) {
       method: req.method,
       headers: {
         "Content-Type": req.headers.get("content-type") ?? "application/json",
+        // 요청한 사람의 주소 (횟수 제한용. Next가 연결한 주소로 채운다)
+        ...(req.headers.get("x-forwarded-for") ? { "X-Forwarded-For": req.headers.get("x-forwarded-for")! } : {}),
         // 운영 대시보드의 관리자 열쇠만 넘긴다 (다른 머리글은 넘기지 않음)
         ...(req.headers.get("x-admin-token") ? { "X-Admin-Token": req.headers.get("x-admin-token")! } : {}),
       },

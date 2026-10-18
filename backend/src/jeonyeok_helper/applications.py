@@ -123,7 +123,8 @@ def _value(field: str, profile: dict) -> str:
     if field == "service_type":
         return SERVICE_NAMES.get(str(v), str(v))
     if field == "service_years":
-        return f"{v}년"
+        # 7.0 → 7년, 2.5 → 2.5년 (복무 기간은 소수로 저장된다)
+        return f"{int(v) if float(v).is_integer() else v}년"
     if field == "age":
         return f"{v}세"
     if isinstance(v, list):
