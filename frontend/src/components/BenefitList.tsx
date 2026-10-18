@@ -42,14 +42,14 @@ function BenefitCard({ benefit, sources }: { benefit: BenefitBlock; sources: Sou
         </div>
         {(meta.length > 0 || benefit.extra.length > 0) && (
           <div className="mt-1.5 mb-2.5 grid gap-0.5 text-[14.5px] leading-relaxed text-fg-2">
-            {meta.map(([k, v]) => (
-              <span key={k}>
+            {meta.map(([k, v], i) => (
+              <span key={`m${i}`}>
                 <b className="mr-1.5 font-semibold text-fg-3">{k}</b>
                 <InlineText text={v} sources={sources} />
               </span>
             ))}
-            {benefit.extra.map((line) => (
-              <span key={line}>
+            {benefit.extra.map((line, i) => (
+              <span key={`e${i}`}>
                 <InlineText text={line} sources={sources} />
               </span>
             ))}
@@ -58,16 +58,16 @@ function BenefitCard({ benefit, sources }: { benefit: BenefitBlock; sources: Sou
         {(target.length > 0 || basis.length > 0) && (
           // 길면 여러 줄로 감싼다 (높이를 고정하면 줄끼리 겹쳐 글자가 깨짐)
           <div className="grid gap-1.5">
-            {target.map(([, v]) => (
-              <p key={v} className="flex items-start gap-1.5 rounded-md bg-accent-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-accent">
+            {target.map(([, v], i) => (
+              <p key={`t${i}`} className="flex items-start gap-1.5 rounded-md bg-accent-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-accent">
                 <Check className="mt-0.5 size-[13px] shrink-0" strokeWidth={2.2} />
                 <span className="min-w-0">
                   <InlineText text={v} sources={sources} />
                 </span>
               </p>
             ))}
-            {basis.map(([, v]) => (
-              <p key={v} className="rounded-md bg-law-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-law">
+            {basis.map(([, v], i) => (
+              <p key={`b${i}`} className="rounded-md bg-law-soft px-2.5 py-1.5 text-[13px] leading-snug font-semibold text-law">
                 <InlineText text={v} sources={sources} />
               </p>
             ))}
@@ -97,8 +97,8 @@ export function BenefitList({ benefits, sources }: { benefits: BenefitBlock[]; s
         <span className="font-bold tabular-nums text-accent">{benefits.length}</span>
       </div>
       <div className="overflow-hidden rounded-[18px] border border-line">
-        {benefits.map((b) => (
-          <BenefitCard key={b.title} benefit={b} sources={sources} />
+        {benefits.map((b, i) => (
+          <BenefitCard key={`${i}:${b.title}`} benefit={b} sources={sources} />
         ))}
       </div>
     </section>

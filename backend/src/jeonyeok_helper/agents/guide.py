@@ -219,6 +219,16 @@ def next_item(items: list[dict], skipped: list[str] | None = None) -> dict | Non
     return min(open_items, key=key)
 
 
+def kit_replies(question: str) -> list[dict]:
+    """신청하려는 말이면("전직지원금 신청할래요") 그 제도의 신청 서류 도우미를 여는 버튼."""
+    from jeonyeok_helper.applications import asked_to_apply
+
+    program = asked_to_apply(question)
+    return (
+        [{"label": f"{program.short} 서류 챙기기", "open": f"kit:{program.id}"}] if program else []
+    )
+
+
 def step_replies(item: dict) -> list[dict]:
     title, item_id = item["title"], item["id"]
     return [

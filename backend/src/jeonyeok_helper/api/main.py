@@ -38,7 +38,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path, Request
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -46,7 +46,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from jeonyeok_helper import __version__, journey, push, resume
+from jeonyeok_helper import __version__, applications, journey, push, resume
 from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
@@ -623,6 +623,26 @@ def create_app(
         if user_id is None:
             raise HTTPException(404, "코드에 맞는 기록이 없어요. 코드를 다시 확인해 주세요.")
         return {"user_id": user_id}
+
+    # ---------- 신청 서류 도우미 ----------
+
+    @app.get("/applications")
+    def list_applications() -> dict:
+        return {"programs": applications.summaries()}
+
+    @app.get("/applications/{program_id}")
+    async def application_kit(
+        program_id: Annotated[str, Path(pattern=r"^[a-z_]{1,40}$")],
+        request: Request,
+        user_id: Annotated[str | None, Query(pattern=r"^[\w-]{1,64}$")] = None,
+    ) -> dict:
+        """챙길 서류·낼 곳·마감일. user_id를 주면 내 정보로 채우고 관할 보훈청을 찾는다."""
+        program = applications.get_program(program_id)
+        if program is None:
+            raise HTTPException(404, "없는 제도예요.")
+        agent = request.app.state.agent
+        profile = await stored_profile(agent, user_id) if user_id and agent is not None else {}
+        return applications.build_kit(program, profile)
 
     # ---------- 브라우저 알림 ----------
 
