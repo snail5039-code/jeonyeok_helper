@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 
 from langchain.agents import create_agent
@@ -31,40 +32,92 @@ def _tool_payload(msg: ToolMessage) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+# 근거 원문 보기: 출처마다 도구가 돌려준 원문을 발췌해 붙인다 (화면에서 [n]을 누르면 보인다).
+EXCERPT_LIMIT = 1500
+# 원문에서 보여 줄 칸과 이름. 여기 없는 칸(주소 링크, 내부 ID 등)은 뺀다.
+EXCERPT_FIELDS = {
+    "summary": "요약",
+    "description": "설명",
+    "target": "대상",
+    "content": "내용",
+    "support": "지원 내용",
+    "how_to_apply": "신청 방법",
+    "apply": "신청",
+    "deadline": "기한",
+    "period": "기간",
+    "agency": "소관 기관",
+    "section": "구분",
+    "title": "제목",
+    "type": "종류",
+    "region": "지역",
+    "address": "주소",
+    "phone": "전화",
+    "contact": "문의",
+}
+
+
+def _excerpt(record: dict) -> str:
+    """정해 둔 칸만 '이름: 값' 줄로 모은 발췌"""
+    lines = [
+        f"{label}: {value.strip()}"
+        for key, label in EXCERPT_FIELDS.items()
+        if isinstance(value := record.get(key), str) and value.strip()
+    ]
+    return "\n".join(lines)[:EXCERPT_LIMIT]
+
+
+def _unwrap(text: str) -> str:
+    """PDF에서 뽑은 글은 줄 끝에 공백을 두고 줄을 넘긴다. 그런 줄바꿈은 이어 붙인다."""
+    return re.sub(r"[ \t]+\n[ \t]*", " ", text)
+
+
 def extract_sources(messages: Sequence[AnyMessage]) -> list[dict]:
-    """도구 결과에서 답변에 인용할 출처 목록을 만든다. 같은 출처는 한 번만."""
+    """도구 결과에서 답변에 인용할 출처 목록을 만든다. 같은 출처는 한 번만.
+    원문이 있으면 excerpt(발췌), 법령은 date(시행일)도 붙인다."""
     sources: list[dict] = []
     seen: set[tuple] = set()
 
-    def add(kind: str, title: str, url: str = "") -> None:
+    def add(kind: str, title: str, url: str = "", excerpt: str = "", date: str = "") -> None:
         key = (kind, title, url)
         if title and key not in seen:
             seen.add(key)
-            sources.append({"type": kind, "title": title, "url": url})
+            source = {"type": kind, "title": title, "url": url}
+            if excerpt:
+                source["excerpt"] = excerpt[:EXCERPT_LIMIT]
+            if date:
+                source["date"] = date
+            sources.append(source)
 
     for msg in messages:
         if not isinstance(msg, ToolMessage) or (data := _tool_payload(msg)) is None:
             continue
         for r in data.get("results", []):
-            add("regulation", r.get("citation", ""), r.get("url", ""))
+            add(
+                "regulation",
+                r.get("citation", ""),
+                r.get("url", ""),
+                _unwrap(r.get("text", "") or ""),
+                r.get("enforced_at", "") or "",
+            )
         for b in data.get("benefits", []):
-            add("benefit", b.get("name", ""), b.get("url", ""))
+            add("benefit", b.get("name", ""), b.get("url", ""), _excerpt(b))
         if msg.name == "get_benefit_detail" and data.get("name"):
-            add("benefit", data["name"], data.get("url", ""))
+            add("benefit", data["name"], data.get("url", ""), _excerpt(data))
         for p in data.get("policies", []):
-            add("benefit", p.get("name", ""), p.get("url", ""))
+            add("benefit", p.get("name", ""), p.get("url", ""), _excerpt(p))
         for j in [*data.get("jobs", []), *data.get("nationwide_jobs", [])]:
-            add("benefit", f"{j.get('company', '')} 채용", j.get("url", ""))
+            add("benefit", f"{j.get('company', '')} 채용", j.get("url", ""), _excerpt(j))
         for v in data.get("vacancies", []):
-            add("benefit", f"{v.get('company', '')} {v.get('section', '채용')}", v.get("url", ""))
+            title = f"{v.get('company', '')} {v.get('section', '채용')}"
+            add("benefit", title, v.get("url", ""), _excerpt(v))
         if data.get("stores"):
-            add("benefit", "병무청 나라사랑가게", data.get("info_url", ""))
+            add("benefit", "병무청 나라사랑가게", data.get("info_url", ""), data.get("note", ""))
         for o in data.get("offices", []):
-            add("institution", o.get("name", ""), o.get("url", ""))
+            add("institution", o.get("name", ""), o.get("url", ""), _excerpt(o))
         for h in data.get("hospitals", []):
-            add("institution", h.get("name", ""), h.get("map_url", ""))
+            add("institution", h.get("name", ""), h.get("map_url", ""), _excerpt(h))
         for inst in [*data.get("institutions", []), *data.get("fallback", [])]:
-            add("institution", inst.get("name", ""), inst.get("url", ""))
+            add("institution", inst.get("name", ""), inst.get("url", ""), _excerpt(inst))
     return sources
 
 

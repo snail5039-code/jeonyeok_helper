@@ -270,6 +270,55 @@ def test_extract_sources_from_mcp_tool_results():
     ]
 
 
+def test_sources_carry_an_excerpt_of_the_original():
+    """근거 원문 보기: 법령은 조문 원문과 시행일, 혜택은 정해 둔 칸만 발췌한다."""
+    article = "제18조(군 복무기간의 가입기간 산입) " + "가" * 2000
+    messages = [
+        tool_msg(
+            "search_regulations",
+            {
+                "results": [
+                    {
+                        "citation": "국민연금법 제18조",
+                        "url": "https://law.go.kr/a",
+                        "enforced_at": "2026-01-01",
+                        "text": article,
+                    }
+                ]
+            },
+        ),
+        tool_msg(
+            "search_benefits",
+            {
+                "benefits": [
+                    {
+                        "name": "전직지원금",
+                        "url": "b",
+                        "service_id": "123",
+                        "target": "중기복무 제대군인",
+                        "how_to_apply": "관할 보훈청 방문",
+                    }
+                ]
+            },
+        ),
+    ]
+    law, benefit = extract_sources(messages)
+    assert law["date"] == "2026-01-01"
+    assert law["excerpt"].startswith("제18조(군 복무기간의 가입기간 산입)")
+    assert len(law["excerpt"]) == 1500  # 너무 긴 원문은 자른다
+    assert benefit["excerpt"] == "대상: 중기복무 제대군인\n신청 방법: 관할 보훈청 방문"
+    assert "123" not in benefit["excerpt"]  # 내부 ID 같은 칸은 빼고
+
+
+def test_excerpt_joins_pdf_line_wraps():
+    text = "일정기간을 국민연금에 \n가입한 것으로 인정\n• 대상 : 병역의무 이행자"
+    result = {"citation": "길라잡이", "text": text}
+    messages = [tool_msg("search_regulations", {"results": [result]})]
+    assert extract_sources(messages)[0]["excerpt"] == (
+        "일정기간을 국민연금에 가입한 것으로 인정\n• 대상 : 병역의무 이행자"
+    )
+
+
 TOOL_CHOICES: list = []
 
 

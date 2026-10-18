@@ -84,7 +84,11 @@ def add_items(
                 title=title,
                 action=it.get("action", ""),
                 detail=it.get("detail", ""),
-                sources=it.get("sources", []),
+                # 원문 발췌(excerpt)는 답변에서만 쓰고 작전도에는 출처 이름·주소만 둔다
+                sources=[
+                    {k: src.get(k, "") for k in ("type", "title", "url")}
+                    for src in it.get("sources", [])
+                ],
                 origin=it.get("origin") or origin,
                 question=(it.get("question") or question)[:500],
                 done=bool(it.get("done")),

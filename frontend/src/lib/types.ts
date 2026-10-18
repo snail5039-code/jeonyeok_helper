@@ -6,6 +6,10 @@ export interface Source {
   type: SourceType;
   title: string;
   url: string;
+  /** 도구가 돌려준 원문 발췌 (답변 출처에만 있다. 작전도 출처에는 없다) */
+  excerpt?: string;
+  /** 법령 시행일 */
+  date?: string;
 }
 
 export type ServiceType = "conscript" | "short_term_officer" | "long_term" | "merit";
