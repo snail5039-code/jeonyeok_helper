@@ -643,7 +643,7 @@ def test_personal_numbers_are_masked_before_the_llm_sees_them():
     components, rec = make_components([Route(next="answer")])
     graph = build_graph(components, checkpointer=InMemorySaver())
 
-    state = ask(graph, "제 주민번호 990101-1234567 인데 전역 후 혜택 알려줘")
+    state = ask(graph, "제 주민번호 990101-1234567 인데 병장으로 전역했어요. 혜택 알려줘")
 
     first = state["messages"][0].text
     assert "1234567" not in first and "[주민등록번호 가림]" in first
@@ -668,3 +668,19 @@ def test_guardrail_rules():
     assert mask_pii("문의 1577-0606, 02-123-4567")[1] == []
     assert mask_pii("카드 1234-5678-9012-3456")[1] == ["카드번호"]
     assert mask_pii("군번 21-12345678")[1] == ["군번"]
+
+
+def test_profile_extraction_is_skipped_without_service_hints():
+    """제도만 묻는 말에는 새로 알 복무 정보가 없어 프로필 추출(LLM)을 부르지 않는다."""
+    from jeonyeok_helper.agents.guide import may_tell_profile
+
+    components, rec = make_components([Route(next="answer")])
+    graph = build_graph(components, checkpointer=InMemorySaver())
+    ask(graph, "군 복무기간이 국민연금에 인정되나요?")
+    assert rec["profile"].calls == []
+
+    for said in ["중사로 7년 복무했어요", "작년에 전역했어요", "부산 살아요", "병장 만기 전역",
+                 "공무 중 다쳤어요", "25살이에요", "다음 달 전역 예정"]:  # fmt: skip
+        assert may_tell_profile(said), said
+    for asked in ["예비군 훈련 연기하려면 어떻게 해요?", "국민취업지원제도가 뭐예요?"]:
+        assert not may_tell_profile(asked), asked

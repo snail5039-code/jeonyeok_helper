@@ -22,6 +22,8 @@ SSE 이벤트
                             "profile": {...}}
                      # talk: 검색 없이 길잡이가 바로 한 말 (answer 없이 이것만 온다)
                      # research: answer 뒤에 오는 한마디와 로드맵에 담을 할 일 제안
+    event: found     data: {"node": "regulation", "sources": [{type, title, url}]}
+                     # 워커가 찾은 자료. 답변을 쓰기 전에 먼저 보여 준다 (중복 제외)
     event: journey   data: {"added": [할 일, ...], "done": 할 일?}   # 서버가 로드맵을 바꿨을 때
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
@@ -54,7 +56,7 @@ from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
-from jeonyeok_helper.agents.state import cadre_of, merge_profile
+from jeonyeok_helper.agents.state import WORKERS, cadre_of, merge_profile
 from jeonyeok_helper.api import runlog
 from jeonyeok_helper.api.cache import AnswerCache
 from jeonyeok_helper.api.limits import RateLimiter
@@ -74,6 +76,9 @@ STEP_LABELS = {
     "verify": "근거를 확인하고 있어요",
     "guide": "다음에 할 일을 고르고 있어요",
 }
+
+# 자료를 찾는 워커 노드 (끝나면 찾은 자료를 found 이벤트로 먼저 보낸다)
+WORKER_NODES = set(WORKERS)
 
 AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
 # 첫 작전도를 자동으로 만들었다는 표시. 사용자가 그 임무들을 되돌려 비워도 다시 만들지 않는다.
@@ -500,6 +505,7 @@ def create_app(
                 yield _sse("done", {})
                 return
             # 답변·길잡이는 해당 단계가 끝난 직후의 전체 상태(values)로 보낸다
+            found_titles: set[str] = set()
             pending: set[str] = set()
             state: dict = {}
             sent: set[str] = set()
@@ -543,10 +549,24 @@ def create_app(
                         for event in flush(chunk):
                             yield event
                         continue
-                    for node in chunk:
+                    for node, update in chunk.items():
                         timer.step(node)
                         if label := STEP_LABELS.get(node):
                             yield _sse("step", {"node": node, "label": label})
+                        # 찾은 자료는 답변을 쓰기 전에 먼저 보여 준다 (첫 화면 반응을 빠르게)
+                        if node in WORKER_NODES and isinstance(update, dict):
+                            new = [
+                                {
+                                    "type": src["type"],
+                                    "title": src["title"],
+                                    "url": src.get("url", ""),
+                                }
+                                for src in update.get("sources") or []
+                                if src.get("title") and src["title"] not in found_titles
+                            ]
+                            if new:
+                                found_titles.update(src["title"] for src in new)
+                                yield _sse("found", {"node": node, "sources": new})
                         if node == "verify":
                             pending.add("answer")
                         elif node in ("guide", "coach", "guard"):

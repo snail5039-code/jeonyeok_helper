@@ -113,6 +113,9 @@ export function ChatApp() {
           case "step":
             updateTurn(id, (t) => ({ steps: [...t.steps, e.data.label] }));
             break;
+          case "found":
+            updateTurn(id, (t) => ({ found: [...(t.found ?? []), ...e.data.sources] }));
+            break;
           case "delta":
             updateTurn(id, (t) => ({ status: "streaming", text: t.text + e.data.text }));
             break;

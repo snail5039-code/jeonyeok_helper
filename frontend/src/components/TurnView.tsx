@@ -132,6 +132,31 @@ function Process({ turn }: { turn: Turn }) {
   );
 }
 
+const FOUND_KIND: Record<Source["type"], string> = { regulation: "법령", benefit: "혜택", institution: "기관" };
+
+/** 답변을 쓰는 동안 먼저 보여 주는 찾은 자료 (첫 화면 반응을 빠르게) */
+function FoundSources({ sources }: { sources: Source[] }) {
+  if (!sources.length) return null;
+  const shown = sources.slice(0, 6);
+  return (
+    <div className="mt-2 grid gap-1.5" aria-live="polite">
+      <span className="text-[12.5px] font-bold text-fg-3">찾은 자료 {sources.length}개 · 이걸로 답을 쓰고 있어요</span>
+      <ul className="flex flex-wrap gap-1.5">
+        {shown.map((s, i) => (
+          <li
+            key={`${i}:${s.title}`}
+            className="animate-pop inline-flex max-w-full items-center gap-1 rounded-full border border-line bg-bg px-2.5 py-0.5 text-[12.5px] text-fg-2"
+          >
+            <b className="shrink-0 text-[11px] text-fg-3">{FOUND_KIND[s.type] ?? "출처"}</b>
+            <span className="truncate">{s.title}</span>
+          </li>
+        ))}
+        {sources.length > shown.length && <li className="text-[12.5px] text-fg-3">외 {sources.length - shown.length}개</li>}
+      </ul>
+    </div>
+  );
+}
+
 function Lines({ lines, sources, muted }: { lines: string[]; sources: Source[]; muted?: boolean }) {
   return (
     <div className={`grid gap-2.5 ${muted ? "text-[13px] text-fg-3" : "text-base leading-[1.8]"}`}>
@@ -316,6 +341,7 @@ export function TurnView({
               <>정리해 왔어요. 아래에서 자세히 볼 수 있어요.</>
             )}
           </Say>
+          {turn.status === "loading" && <FoundSources sources={turn.found ?? []} />}
           {searching && <AnswerDetails turn={turn} onAsk={onAsk} onFeedback={onFeedback} />}
           {turn.guide && turn.guide.suggest.length > 0 && (
             <SuggestBox suggest={turn.guide.suggest} onAdd={(items) => onAddSuggest(turn, items)} />
