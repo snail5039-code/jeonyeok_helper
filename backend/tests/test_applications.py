@@ -48,7 +48,7 @@ def test_kit_fills_my_profile_and_finds_my_office():
     program = applications.get_program("transition_allowance")
     profile = {
         "service_type": "long_term",
-        "service_years": 7,
+        "service_years": 7.0,  # 저장된 값은 소수
         "discharge_date": "2026-09",
         "region": "부산 해운대",
         "rank": "중사",
