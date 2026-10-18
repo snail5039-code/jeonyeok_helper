@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # 온통청년(youthcenter.go.kr) 청년정책 OPEN API 인증키 — 마이페이지 > OPEN API에서 신청
     youthcenter_api_key: str = ""
 
+    # 운영 대시보드(/admin) 열쇠. 비어 있으면 대시보드를 끈다
+    admin_token: str = ""
+
     # 브라우저 알림(Web Push) VAPID 키. 없으면 알림 기능을 끈다 (push.py)
     vapid_public_key: str = ""
     vapid_private_key: str = ""

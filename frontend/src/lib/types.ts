@@ -98,6 +98,8 @@ export type ChatEvent =
   | { event: "step"; data: { node?: string; label: string } }
   // 답변 초안 조각. 이어 붙여 바로 보여 주고, 검증을 마친 answer가 오면 그것으로 바꾼다.
   | { event: "delta"; data: { text: string } }
+  // 워커가 찾은 자료 (답변을 쓰기 전에 먼저 보여 준다)
+  | { event: "found"; data: { node: string; sources: Source[] } }
   | {
       event: "answer";
       data: { text: string; sources: Source[]; profile: Profile; follow_ups?: string[]; as_of?: AsOf };
@@ -128,6 +130,8 @@ export interface Turn {
   /** 이어서 물어볼 만한 질문 (최종 답변과 함께 온다) */
   followUps: string[];
   asOf?: AsOf;
+  /** 답변 전에 먼저 보여 줄, 지금까지 찾은 자료 */
+  found?: Source[];
   /** 사용자가 답변 도중 멈춤 */
   stopped?: boolean;
   /** 길잡이의 한마디·버튼·할 일 제안 */

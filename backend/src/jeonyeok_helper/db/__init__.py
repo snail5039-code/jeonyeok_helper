@@ -7,6 +7,7 @@
 
 from jeonyeok_helper.db.models import (
     Base,
+    ChatRun,
     Feedback,
     JourneyItem,
     PushSent,
@@ -19,6 +20,7 @@ from jeonyeok_helper.db.session import Database
 
 __all__ = [
     "Base",
+    "ChatRun",
     "Database",
     "Feedback",
     "JourneyItem",

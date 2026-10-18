@@ -22,6 +22,8 @@ SSE 이벤트
                             "profile": {...}}
                      # talk: 검색 없이 길잡이가 바로 한 말 (answer 없이 이것만 온다)
                      # research: answer 뒤에 오는 한마디와 로드맵에 담을 할 일 제안
+    event: found     data: {"node": "regulation", "sources": [{type, title, url}]}
+                     # 워커가 찾은 자료. 답변을 쓰기 전에 먼저 보여 준다 (중복 제외)
     event: journey   data: {"added": [할 일, ...], "done": 할 일?}   # 서버가 로드맵을 바꿨을 때
     event: question  data: {"text": "...", "profile": {...}}   # 정보가 부족해 되물을 때
     event: error     data: {"message": "..."}
@@ -32,6 +34,7 @@ import asyncio
 import json
 import logging
 import re
+import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -40,7 +43,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -53,9 +56,11 @@ from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
-from jeonyeok_helper.agents.state import cadre_of, merge_profile
+from jeonyeok_helper.agents.state import WORKERS, cadre_of, merge_profile
+from jeonyeok_helper.api import runlog
 from jeonyeok_helper.api.cache import AnswerCache
 from jeonyeok_helper.api.limits import RateLimiter
+from jeonyeok_helper.api.runlog import RunTimer, failures_from
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
 from jeonyeok_helper.push import KST
@@ -71,6 +76,9 @@ STEP_LABELS = {
     "verify": "근거를 확인하고 있어요",
     "guide": "다음에 할 일을 고르고 있어요",
 }
+
+# 자료를 찾는 워커 노드 (끝나면 찾은 자료를 found 이벤트로 먼저 보낸다)
+WORKER_NODES = set(WORKERS)
 
 AgentFactory = Callable[[], AbstractAsyncContextManager[CompiledStateGraph]]
 # 첫 작전도를 자동으로 만들었다는 표시. 사용자가 그 임무들을 되돌려 비워도 다시 만들지 않는다.
@@ -471,18 +479,33 @@ def create_app(
                 await agent.store.aput(PROFILE_NAMESPACE, req.user_id, merged)
 
         async def events() -> AsyncIterator[str]:
+            # 운영 대시보드용 기록 (걸린 시간·단계·실패). 연결이 끊겨도 남긴다.
+            timer = RunTimer(req.message)
+            try:
+                async for event in run(timer):
+                    yield event
+            finally:
+                try:
+                    await asyncio.to_thread(timer.save, db)
+                except Exception:
+                    log.warning("대화 기록 저장 실패", exc_info=True)
+
+        async def run(timer: RunTimer) -> AsyncIterator[str]:
             yield _sse("thread", {"thread_id": thread_id})
             if done_item:
                 yield _sse("journey", {"added": [], "done": done_item})
             if cached:
+                timer.kind = "cached"
                 try:
                     async for event in replay(cached):
+                        timer.first()
                         yield event
                 except Exception:
                     log.exception("저장한 답 보내기 실패")
                 yield _sse("done", {})
                 return
             # 답변·길잡이는 해당 단계가 끝난 직후의 전체 상태(values)로 보낸다
+            found_titles: set[str] = set()
             pending: set[str] = set()
             state: dict = {}
             sent: set[str] = set()
@@ -500,11 +523,13 @@ def create_app(
                     }
                     out.append(_sse("answer", payloads["answer"]))
                     sent.add("answer")
+                    timer.first()
                 if "guide" in pending and (g := values.get("guide")) and g.get("mode"):
                     if g["mode"] == "talk" or "answer" in sent:
                         payloads["guide"] = {**g, "profile": values.get("profile", {})}
                         out.append(_sse("guide", payloads["guide"]))
                         sent.add("guide")
+                        timer.first()
                 pending.clear()
                 return out
 
@@ -516,6 +541,7 @@ def create_app(
                         # 답변 초안을 만들어지는 대로 보낸다 (다른 노드의 LLM 출력은 제외)
                         token, meta = chunk
                         if meta.get("langgraph_node") == "respond" and (text := token.text):
+                            timer.first()
                             yield _sse("delta", {"text": text})
                         continue
                     if mode == "values":
@@ -523,9 +549,24 @@ def create_app(
                         for event in flush(chunk):
                             yield event
                         continue
-                    for node in chunk:
+                    for node, update in chunk.items():
+                        timer.step(node)
                         if label := STEP_LABELS.get(node):
                             yield _sse("step", {"node": node, "label": label})
+                        # 찾은 자료는 답변을 쓰기 전에 먼저 보여 준다 (첫 화면 반응을 빠르게)
+                        if node in WORKER_NODES and isinstance(update, dict):
+                            new = [
+                                {
+                                    "type": src["type"],
+                                    "title": src["title"],
+                                    "url": src.get("url", ""),
+                                }
+                                for src in update.get("sources") or []
+                                if src.get("title") and src["title"] not in found_titles
+                            ]
+                            if new:
+                                found_titles.update(src["title"] for src in new)
+                                yield _sse("found", {"node": node, "sources": new})
                         if node == "verify":
                             pending.add("answer")
                         elif node in ("guide", "coach", "guard"):
@@ -541,6 +582,8 @@ def create_app(
                     if undone:
                         yield _sse("journey", {"added": [], "done": undone})
                 talked = state.get("guide", {}).get("mode") == "talk"
+                timer.kind = "talk" if talked else "research"
+                timer.failures = failures_from(state.get("findings"))
                 # 자료를 찾아 답한 것만 저장한다 (짧은 대화·되묻기·되돌리기는 상황마다 다르다)
                 if state.get("draft") and not talked and "answer" in payloads:
                     if not state.get("guide", {}).get("reopen"):
@@ -548,6 +591,7 @@ def create_app(
                 # 되묻기: ask_user가 interrupt로 멈춰 사용자의 답을 기다리는 중
                 snapshot = await agent.aget_state(config)
                 if snapshot.interrupts:
+                    timer.kind = "question"
                     yield _sse(
                         "question",
                         {
@@ -562,8 +606,9 @@ def create_app(
                 if req.user_id and not items and not missing:
                     async for event in first_roadmap(request, req.user_id, profile):
                         yield event
-            except Exception:
+            except Exception as e:
                 log.exception("대화 처리 실패")
+                timer.kind, timer.error = "error", f"{type(e).__name__}: {e}"
                 message = "답변 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요."
                 yield _sse("error", {"message": message})
             yield _sse("done", {})
@@ -591,6 +636,22 @@ def create_app(
                 ).all()
             )
         return {"up": counts.get("up", 0), "down": counts.get("down", 0)}
+
+    @app.get("/admin/summary")
+    def admin_summary(
+        request: Request,
+        x_admin_token: Annotated[str | None, Header()] = None,
+        days: Annotated[int, Query(ge=1, le=30)] = 7,
+    ) -> dict:
+        """운영 대시보드: 최근 며칠의 👎 피드백, 느린 단계, 실패한 도구 호출, 걸린 시간."""
+        token = get_settings().admin_token
+        if not token:
+            raise HTTPException(404, "없는 주소예요.")
+        host = request.client.host if request.client else "unknown"
+        _limited(request, f"admin:{host}")  # 열쇠를 찍어 맞히지 못하게
+        if not x_admin_token or not secrets.compare_digest(x_admin_token, token):
+            raise HTTPException(401, "관리자 열쇠가 맞지 않아요.")
+        return runlog.summary(request.app.state.db, days)
 
     @app.get("/profile/{user_id}")
     async def get_profile(user_id: UserId, request: Request) -> dict:

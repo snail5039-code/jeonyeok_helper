@@ -67,7 +67,9 @@ def test_chat_streams_steps_then_answer_with_sources():
         [Route(next="regulation"), Route(next="answer")],
         profile=Profile(service_type="conscript"),
     ) as client:
-        resp = client.post("/chat", json={"message": "군복무 크레딧?", "user_id": "u1"})
+        resp = client.post(
+            "/chat", json={"message": "병사로 전역했는데 군복무 크레딧?", "user_id": "u1"}
+        )
 
     assert resp.headers["content-type"].startswith("text/event-stream")
     events = parse_sse(resp.text)
@@ -474,7 +476,7 @@ def test_same_question_with_same_conditions_is_answered_from_cache():
         [Route(next="regulation"), Route(next="answer")],
         profile=Profile(service_type="conscript"),
     ) as client:
-        ask = {"message": "군복무 크레딧?", "user_id": "u1"}
+        ask = {"message": "병사로 전역했는데 군복무 크레딧?", "user_id": "u1"}
         first = parse_sse(client.post("/chat", json=ask).text)
         # 조건이 같은 다른 사람(처음 온 사람)이 같은 질문을 하면 저장한 답
         second = parse_sse(client.post("/chat", json={**ask, "user_id": "u2"}).text)
@@ -610,3 +612,17 @@ def test_as_of_picks_latest_enforced_date():
         {"title": "d", "date": "엉뚱한 값"},
     ]
     assert as_of(App, sources) == {"checked": "2026-10-18", "latest_enforced": "20260820"}
+
+
+def test_found_sources_arrive_before_the_answer():
+    with make_client(
+        [Route(next="regulation"), Route(next="answer")],
+        profile=Profile(service_type="conscript"),
+    ) as client:
+        events = parse_sse(client.post("/chat", json={"message": "군복무 크레딧?"}).text)
+    names = [e for e, _ in events]
+    found = next(d for e, d in events if e == "found")
+    assert found["node"] == "regulation"
+    assert found["sources"][0]["title"] == "국민연금법 제18조"
+    assert "excerpt" not in found["sources"][0]  # 미리 보기는 이름·주소만
+    assert names.index("found") < names.index("answer")

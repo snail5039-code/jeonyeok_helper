@@ -172,6 +172,9 @@ def build_graph(
         # 복무 형태로 잘못 읽지 않도록 추출하지 않는다.
         if (config.get("configurable") or {}).get("action"):
             return {}
+        # 복무 정보를 말한 단서가 없으면 LLM을 부르지 않는다 (첫 글자가 약 3초 빨라짐)
+        if not guide_rules.may_tell_profile(_last_question(state)):
+            return {}
         try:
             extracted: Profile = await c.profile_extractor.ainvoke(
                 {

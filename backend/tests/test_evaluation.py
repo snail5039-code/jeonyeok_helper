@@ -109,7 +109,7 @@ def test_run_eval_end_to_end_with_fake_agent(tmp_path):
         {
             "id": "c01",
             "category": "conscript",
-            "question": "군복무 크레딧이 뭐예요?",
+            "question": "병사로 전역했는데 군복무 크레딧이 뭐예요?",
             "sources_any": ["국민연금법"],
             "answer_any": ["최종 답변"],
             "profile": {"service_type": "conscript"},
