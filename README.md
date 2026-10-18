@@ -138,6 +138,7 @@ flowchart LR
 | **가드레일** | 프롬프트 인젝션은 검색 전에 규칙으로 차단, 주민번호·카드번호·군번은 LLM과 대화 기록에 닿기 전에 가림 | 실제 서버에서 대화 기록(Postgres)에 원래 번호 0건 확인. LLM 판단을 쓰지 않아 질문마다 1~2초 절약 |
 | **TimeoutPolicy · RetryPolicy · error_handler** | 답변 작성 노드에 90초 제한, 끊긴 연결만 재시도, 실패 시 안내 문구로 종료 | 응답이 멈춰 화면이 계속 도는 일 방지. 워커는 동시 실행이라 노드 안에서 45초 제한(병렬 노드에서 error_handler가 동작하지 않는 것을 확인함) |
 | **로그인 없이 기록 지키기** | 누구나 바로 쓰도록 계정을 두지 않는 대신, 내 기록을 파일로 저장·불러오기, 다른 기기에서 이어 하는 코드와 QR, 브라우저 사본(서버 기록이 사라지면 자동 복구) | 새 브라우저에서 파일·코드·QR로 완료 표시까지 그대로 이어짐을 실제 화면에서 확인 |
+| **기한을 캘린더에 넣기** | 전역일로 계산한 신청 마감일을 `.ics` 파일(RFC 5545)로 만들어 마감 7일 전·1일 전 알림과 함께 휴대폰·PC 캘린더에 추가 (계정·이메일 없이 알림) | 형식 테스트 9개, iCalendar 파서로 날짜·알림 확인 |
 | **Postgres 체크포인터 · trim_messages** | 대화 기록·프로필을 SQLite에서 Postgres로, LLM에는 최근 약 4,000토큰만 | 서버 여러 대로 늘릴 수 있는 구조, 대화가 길어져도 속도·비용 일정 |
 
 ### 8. 응답 속도
@@ -170,7 +171,7 @@ flowchart LR
 | 도구 연동 | **MCP** 서버 (정부24, 온통청년, 제대군인지원센터 채용, 보훈 채용, 위탁병원, 나라사랑가게) |
 | 서버 | **FastAPI** (SSE 스트리밍), SQLAlchemy 2.0 + Alembic, LangGraph Postgres 체크포인터·스토어 |
 | 화면 | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4 |
-| 품질 | pytest 231개, vitest 60개, ruff, ESLint, 평가 3종(답변·검색 골든셋·RAGAS), GitHub Actions CI |
+| 품질 | pytest 231개, vitest 69개, ruff, ESLint, 평가 3종(답변·검색 골든셋·RAGAS), GitHub Actions CI |
 | 배포 | Docker Compose |
 
 ## 실행

@@ -1,7 +1,8 @@
 "use client";
 
-import { AlarmClock, Check, ExternalLink, MessageCircle, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
+import { AlarmClock, CalendarPlus, Check, ExternalLink, MessageCircle, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
 
+import { calendarEntries } from "@/lib/calendar";
 import { STAGES, currentStage, daysLeft, ddayLabel, dueDate, stageDone } from "@/lib/journey";
 import type { JourneyItem, Source } from "@/lib/types";
 
@@ -94,6 +95,7 @@ export function ItemCard({
   onToggle,
   onAsk,
   onRemove,
+  onCalendar,
 }: {
   item: JourneyItem;
   fresh?: boolean;
@@ -102,7 +104,10 @@ export function ItemCard({
   onToggle: (item: JourneyItem) => void;
   onAsk: (question: string) => void;
   onRemove?: (item: JourneyItem) => void;
+  /** 이 할 일의 기한을 캘린더 파일로 내려받는다 (마감일을 셀 수 있을 때만 버튼이 보인다) */
+  onCalendar?: (item: JourneyItem) => void;
 }) {
+  const canCalendar = Boolean(onCalendar) && calendarEntries([item], dischargeDate).length > 0;
   return (
     <li
       className={`group grid grid-cols-[26px_minmax(0,1fr)] gap-3 rounded-xl border p-3.5 transition-colors ${
@@ -150,8 +155,19 @@ export function ItemCard({
         </div>
         {!item.done && <div className="text-[14px] font-semibold text-olive">{item.action}</div>}
         {item.deadline && (
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
             <DeadlineChip item={item} dischargeDate={dischargeDate} />
+            {canCalendar && (
+              <button
+                type="button"
+                onClick={() => onCalendar!(item)}
+                aria-label={`${item.title} 기한 캘린더에 넣기`}
+                className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-fg-2 hover:text-accent"
+              >
+                <CalendarPlus className="size-3.5" />
+                캘린더에 넣기
+              </button>
+            )}
           </div>
         )}
         {!compact && item.detail && <p className="text-[13.5px] leading-relaxed text-fg-2">{item.detail}</p>}

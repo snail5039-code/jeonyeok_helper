@@ -1,10 +1,11 @@
 "use client";
 
-import { History, MessageCircle, RefreshCw, Undo2, UserRoundPen, Wand2 } from "lucide-react";
+import { CalendarPlus, History, MessageCircle, RefreshCw, Undo2, UserRoundPen, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { calendarEntries, downloadIcs } from "@/lib/calendar";
 import { badges as badgesOf, byStage, type Badge } from "@/lib/journey";
-import type { Profile, StageKey } from "@/lib/types";
+import type { JourneyItem, Profile, StageKey } from "@/lib/types";
 
 import { Book, BookTitle, Stamp } from "./Book";
 import { MedalCard } from "./Doodle";
@@ -30,6 +31,18 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
     const added = await generate();
     setNotice(added ? `임무 ${added}개를 새로 담았어요.` : "새로 담을 임무가 없었어요. 이미 다 담겨 있어요.");
   };
+
+  const entries = calendarEntries(items, profile.discharge_date);
+  // 전역일만 있으면 캘린더에 넣을 수 있는 기한이 있는데, 전역일이 없는 경우
+  const needsDate = !profile.discharge_date && items.some((i) => !i.done && i.deadline && i.due_months != null);
+
+  const toCalendar = (list: typeof entries) => {
+    downloadIcs(list);
+    setNotice(
+      `기한 ${list.length}개를 캘린더 파일로 내려받았어요. 파일을 열면 캘린더에 추가되고, 마감 7일 전·1일 전 아침 9시에 알려 줘요.`,
+    );
+  };
+  const oneToCalendar = (item: JourneyItem) => toCalendar(calendarEntries([item], profile.discharge_date));
 
   const goTo = (key: StageKey) => document.getElementById(`stage-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -67,7 +80,21 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
           >
             <UserRoundPen className="size-4" />내 정보 {profile.service_type ? "고치기" : "입력하기"}
           </button>
+          {entries.length > 0 && (
+            <button
+              type="button"
+              onClick={() => toCalendar(entries)}
+              title="마감 7일 전·1일 전에 알림이 울려요"
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border-2 border-edge bg-soft px-3.5 text-[14px] font-bold text-fg-2 hover:border-ink"
+            >
+              <CalendarPlus className="size-4" />
+              기한 {entries.length}개 캘린더에 넣기
+            </button>
+          )}
         </div>
+        {needsDate && (
+          <p className="-mt-3 text-[13.5px] text-fg-2">내 정보에 전역(예정)일을 넣으면 기한을 캘린더에 넣고 알림을 받을 수 있어요.</p>
+        )}
         {!profile.service_type && (
           <p className="-mt-3 text-[13.5px] text-fg-2">작전도를 만들려면 내 정보에서 복무 형태를 먼저 골라 주세요.</p>
         )}
@@ -106,6 +133,7 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
                         onToggle={toggle}
                         onAsk={onAsk}
                         onRemove={remove}
+                        onCalendar={oneToCalendar}
                       />
                     ))}
                   </ul>
