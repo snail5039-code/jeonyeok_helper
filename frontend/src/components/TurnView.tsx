@@ -30,6 +30,7 @@ import { BenefitList } from "./BenefitList";
 import { GuideBubble, QuickReplies, Say, SuggestBox, UserBubble } from "./Guide";
 import { InlineText } from "./InlineText";
 import { SourcesBox } from "./SourcesBox";
+import { SourceViewer } from "./SourceViewer";
 
 const CHIP = "inline-flex h-[26px] items-center rounded-full border px-2.5 text-[12.5px] font-medium";
 
@@ -406,19 +407,21 @@ function Answer({
 }) {
   const { lead, benefits, tail } = parseAnswer(turn.text);
   return (
-    <div className="grid gap-5" aria-busy={streaming}>
-      {lead.length > 0 && <Lines lines={lead} sources={turn.sources} />}
-      {benefits.length > 0 && <BenefitList benefits={benefits} sources={turn.sources} />}
-      {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
-      {streaming && <span className="stream-caret" aria-hidden />}
-      {!streaming && !turn.stopped && turn.sources.length > 0 && <SourcesBox text={turn.text} sources={turn.sources} />}
-      {turn.stopped && (
-        <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
-          <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />
-          답변을 멈췄어요. 근거 확인 전의 초안이라 정확하지 않을 수 있어요. 필요하면 다시 물어봐 주세요.
-        </p>
-      )}
-      {!streaming && !turn.stopped && <Feedback turn={turn} onFeedback={onFeedback} />}
-    </div>
+    <SourceViewer>
+      <div className="grid gap-5" aria-busy={streaming}>
+        {lead.length > 0 && <Lines lines={lead} sources={turn.sources} />}
+        {benefits.length > 0 && <BenefitList benefits={benefits} sources={turn.sources} />}
+        {tail.length > 0 && <Lines lines={tail} sources={turn.sources} muted />}
+        {streaming && <span className="stream-caret" aria-hidden />}
+        {!streaming && !turn.stopped && turn.sources.length > 0 && <SourcesBox text={turn.text} sources={turn.sources} />}
+        {turn.stopped && (
+          <p className="grid grid-cols-[18px_1fr] gap-2 rounded-xl border border-line px-3.5 py-3 text-[13px] text-fg-2">
+            <CircleHelp className="mt-0.5 size-[16px] text-warn" strokeWidth={1.8} />
+            답변을 멈췄어요. 근거 확인 전의 초안이라 정확하지 않을 수 있어요. 필요하면 다시 물어봐 주세요.
+          </p>
+        )}
+        {!streaming && !turn.stopped && <Feedback turn={turn} onFeedback={onFeedback} />}
+      </div>
+    </SourceViewer>
   );
 }

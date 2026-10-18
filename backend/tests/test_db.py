@@ -64,3 +64,16 @@ def test_saved_cache_keeps_api_results_across_restarts(tmp_path):
         assert len(calls) == 2
     finally:
         set_saved_cache(None)
+
+
+def test_journey_keeps_only_source_name_and_link(tmp_path: Path):
+    """답변 출처의 원문 발췌는 작전도에 저장하지 않는다 (작전도가 커지지 않게)."""
+    from jeonyeok_helper import journey
+
+    db = Database(sqlite_url(tmp_path / "app.sqlite"))
+    db.migrate()
+    source = {"type": "regulation", "title": "국민연금법 제18조", "url": "u", "excerpt": "원문"}
+    added = journey.add_items(
+        db, "u1", [{"stage": "job", "title": "연금 크레딧 확인", "sources": [source]}], "chat"
+    )
+    assert added[0]["sources"] == [{"type": "regulation", "title": "국민연금법 제18조", "url": "u"}]

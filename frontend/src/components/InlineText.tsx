@@ -1,10 +1,13 @@
 import { splitInline } from "@/lib/answer";
 import type { Source } from "@/lib/types";
 
+import { useOpenSource } from "./SourceViewer";
+
 const isHttp = (url: string) => /^https?:\/\//.test(url);
 
 /** 답변 한 줄: **굵게**와 [n] 출처 번호를 링크로 그린다. */
 export function InlineText({ text, sources }: { text: string; sources: Source[] }) {
+  const openSource = useOpenSource();
   return (
     <>
       {splitInline(text).map((part, i) => {
@@ -14,6 +17,21 @@ export function InlineText({ text, sources }: { text: string; sources: Source[] 
         if (!src) return `[${part.index}]`;
         const className =
           "mx-px inline-grid h-[18px] min-w-[18px] place-items-center rounded-[5px] bg-sunken px-1 align-[2px] text-[11px] font-bold tabular-nums text-fg-2";
+        // 근거 원문 보기 안에서는 원문 패널로, 밖에서는 원래 누리집 링크로
+        if (openSource) {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => openSource(src, part.index)}
+              title={src.title}
+              aria-label={`근거 ${part.index}: ${src.title} 원문 보기`}
+              className={`${className} cursor-pointer hover:bg-accent-soft hover:text-accent`}
+            >
+              {part.index}
+            </button>
+          );
+        }
         return isHttp(src.url) ? (
           <a
             key={i}
