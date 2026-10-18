@@ -122,3 +122,38 @@ class PushSent(Base):
     sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
+
+
+class SourceVersion(Base):
+    """자료 자동 갱신: 마지막으로 수집한 법령·행정규칙·조례의 개정 번호(일련번호).
+    국가법령정보센터는 개정될 때마다 일련번호가 바뀌어서, 번호가 다를 때만 다시 수집한다."""
+
+    __tablename__ = "source_version"
+
+    kind: Mapped[str] = mapped_column(String(16), primary_key=True)  # law, admrul, ordin
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)  # 법령ID 등 바뀌지 않는 ID
+    version: Mapped[str] = mapped_column(String(64))  # 일련번호
+    name: Mapped[str] = mapped_column(String(200), default="")
+    enforced_at: Mapped[str] = mapped_column(String(16), default="")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
+class RefreshRun(Base):
+    """자료 자동 갱신 한 번의 기록: 바뀐 자료, 실패, 갱신 뒤 검색 골든셋 점수."""
+
+    __tablename__ = "refresh_run"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    changed: Mapped[list] = mapped_column(
+        JSON, default=list
+    )  # ["법령 제대군인지원에 관한 법률", ...]
+    errors: Mapped[list] = mapped_column(JSON, default=list)
+    docs_written: Mapped[int] = mapped_column(Integer, default=0)
+    docs_deleted: Mapped[int] = mapped_column(Integer, default=0)
+    # 검색 골든셋 결과 {"hit", "recall", "mrr", "cases", "errors"} (바뀐 게 없으면 None)
+    retrieval: Mapped[dict | None] = mapped_column(JSON, default=None)
+    score_dropped: Mapped[bool] = mapped_column(Boolean, default=False)

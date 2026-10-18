@@ -8,6 +8,7 @@ uv run jeonyeok-rag files          # data/raw/ 의 파일 수집
 uv run jeonyeok-rag web            # data/webpages.yaml의 기관 안내 페이지 수집
 uv run jeonyeok-rag search "질문"    # 검색 결과 확인
 uv run jeonyeok-rag stats           # 저장된 문서 수
+uv run jeonyeok-rag refresh         # 바뀐 법령·조례만 다시 수집 (rag/refresh.py, --loop면 7일마다)
 """
 
 from __future__ import annotations
@@ -132,6 +133,10 @@ def _run(argv: list[str] | None) -> int:
     sub.add_parser("web", help="data/webpages.yaml의 기관 안내 페이지 수집")
     sub.add_parser("stats", help="저장된 문서 수")
     sub.add_parser("bm25", help="BM25 키워드 색인을 지금 DB 기준으로 만들어 저장")
+    p_refresh = sub.add_parser("refresh", help="개정된 법령·조례만 다시 수집하고 검색 평가")
+    p_refresh.add_argument("--dry-run", action="store_true", help="바뀐 것만 보여 주고 저장 안 함")
+    p_refresh.add_argument("--eval", action="store_true", help="바뀐 게 없어도 검색 평가")
+    p_refresh.add_argument("--loop", action="store_true", help="켜 두면 7일마다 갱신")
     p_search = sub.add_parser("search", help="검색 결과 확인")
     p_search.add_argument("question")
     p_search.add_argument("-k", type=int, default=None)
@@ -151,7 +156,39 @@ def _run(argv: list[str] | None) -> int:
             save_keyword_index(store)
 
 
+def _refresh(args, s, store) -> int:
+    from jeonyeok_helper.db import Database
+    from jeonyeok_helper.rag import refresh
+    from jeonyeok_helper.rag.law_api import LawApiClient
+
+    db = Database(s.database_url)
+    db.migrate()
+    client = LawApiClient(s.law_api_oc)
+
+    def once() -> int:
+        result = refresh.refresh_once(
+            client, store, db, refresh.default_sources(), dry_run=args.dry_run, force_eval=args.eval
+        )
+        print(f"바뀐 자료 {len(result.changed)}건, 실패 {len(result.errors)}건")
+        for e in result.errors:
+            print(f"  ✗ {e}")
+        if getattr(result, "retrieval", None):
+            r = result.retrieval
+            print(
+                f"검색 골든셋: Hit {r['hit']:.0%}, Recall {r['recall']:.0%}, MRR {r['mrr']:.2f}"
+                + (" (지난번보다 떨어짐)" if result.score_dropped else "")
+            )
+        return 1 if result.errors else 0
+
+    if args.loop:
+        refresh.loop(once, db)
+    return once()
+
+
 def _command(args, s, store) -> int:
+    if args.cmd == "refresh":
+        return _refresh(args, s, store)
+
     if args.cmd == "bm25":
         save_keyword_index(store)
         return 0

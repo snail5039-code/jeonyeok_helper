@@ -9,6 +9,7 @@
 본문의 md5)만 비교해(약 0.05초) 같으면 저장한 것을 그대로 읽고, 자료가 바뀌었으면 새로 들어온
 조각만 형태소 분석해 다시 저장한다.
 자료를 넣는 명령(jeonyeok-rag)은 끝날 때 색인을 다시 저장하고, 서버는 켜질 때 미리 읽어 둔다.
+서버는 10분마다 지문을 확인해 자료 자동 갱신(rag/refresh.py)이 바꾼 색인으로 바꿔 끼운다.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import logging
 import pickle
 import threading
+import time
 from pathlib import Path
 
 from langchain_core.documents import Document
@@ -26,6 +28,8 @@ log = logging.getLogger(__name__)
 CACHE_NAMESPACE = "bm25"
 # 저장 형식이 바뀌면 올린다 (예전 형식 파일은 다시 만든다)
 INDEX_VERSION = 1
+# 서버가 다른 프로세스(자료 자동 갱신)가 바꾼 자료를 알아채는 간격(초)
+CHECK_EVERY = 600
 # 명사·동사·형용사 어근·외국어·숫자만 쓴다 (조사·어미는 검색에 도움이 안 된다)
 KEEP_TAGS = ("NNG", "NNP", "NNB", "NR", "VV", "VA", "XR", "SL", "SN", "SH")
 
@@ -80,6 +84,7 @@ class KeywordIndex:
         self.tokens = tokens
         self.bm25 = bm25 if bm25 is not None else BM25Okapi(tokens)
         self.tokenizer = Tokenizer()
+        self.signature = ""  # 만들 때의 DB 지문 (build_index가 채운다)
 
     def search(self, query: str, k: int, allow=None) -> list[Document]:
         """allow(metadata) → bool 로 거른 뒤 점수가 높은 k개. 겹치는 단어가 없으면 빼고 준다."""
@@ -160,7 +165,9 @@ def build_index(session_factory, collection: str, storage=None) -> KeywordIndex:
     saved = storage.load()
     if saved.get("signature") == sig:
         log.info("키워드 색인: 저장한 색인 사용 (%d개 조각)", len(saved["docs"]))
-        return KeywordIndex(saved["docs"], saved["tokens"], saved["bm25"])
+        index = KeywordIndex(saved["docs"], saved["tokens"], saved["bm25"])
+        index.signature = sig
+        return index
 
     with session_factory() as session:
         rows = session.execute(_ALL_DOCS, {"collection": collection}).all()
@@ -174,6 +181,7 @@ def build_index(session_factory, collection: str, storage=None) -> KeywordIndex:
         for d, toks in zip(todo, Tokenizer().many([d[1] for d in todo]), strict=True):
             known[_key(d[0], d[1])] = toks
     index = KeywordIndex(docs, [known[_key(d[0], d[1])] for d in docs])
+    index.signature = sig
     try:
         storage.save(
             {
@@ -192,17 +200,25 @@ def build_index(session_factory, collection: str, storage=None) -> KeywordIndex:
 
 class LazyKeywordIndex:
     """처음 쓸 때 한 번만 읽거나 만든다. 그동안 다른 검색은 기다린다.
-    실패하면 키워드 검색 없이 간다."""
+    실패하면 키워드 검색 없이 간다.
+    자료 자동 갱신은 따로 도는 프로세스라, check_every초마다 DB 지문을 뒤에서 확인해
+    자료가 바뀌었으면 새 색인으로 바꿔 끼운다 (검색은 그동안 예전 색인으로 계속한다)."""
 
-    def __init__(self, session_factory, collection: str, storage=None):
+    def __init__(self, session_factory, collection: str, storage=None, check_every=CHECK_EVERY):
         self._args = (session_factory, collection, storage)
         self._index: KeywordIndex | None = None
         self._failed = False
         self._lock = threading.Lock()
+        self.check_every = check_every
+        self._checked_at = time.monotonic()
+        self._checking = False
 
     def get(self) -> KeywordIndex | None:
-        if self._index is not None or self._failed:
+        if self._index is not None:
+            self._check_later()
             return self._index
+        if self._failed:
+            return None
         with self._lock:
             if self._index is None and not self._failed:
                 try:
@@ -211,6 +227,25 @@ class LazyKeywordIndex:
                     log.warning("키워드 색인 만들기 실패, 벡터 검색만 씁니다.", exc_info=True)
                     self._failed = True
         return self._index
+
+    def _check_later(self) -> None:
+        now = time.monotonic()
+        if self._checking or now - self._checked_at < self.check_every:
+            return
+        self._checking, self._checked_at = True, now
+        threading.Thread(target=self._check, daemon=True).start()
+
+    def _check(self) -> None:
+        try:
+            current = self._index
+            sig = signature(self._args[0], self._args[1])
+            if current is not None and sig != current.signature:
+                log.info("키워드 색인: 자료가 바뀌어 새 색인으로 바꿉니다")
+                self._index = build_index(*self._args)
+        except Exception:
+            log.warning("키워드 색인 확인 실패 (예전 색인을 계속 씀)", exc_info=True)
+        finally:
+            self._checking = False
 
     def rebuild(self) -> KeywordIndex | None:
         """자료를 새로 넣은 뒤 지금 DB 기준으로 다시 만들어 저장한다."""

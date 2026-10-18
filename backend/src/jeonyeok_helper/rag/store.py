@@ -59,6 +59,16 @@ _IDS_BY_SOURCE = text(
     "SELECT e.id FROM langchain_pg_embedding e JOIN langchain_pg_collection c"
     " ON e.collection_id = c.uuid WHERE c.name = :collection AND e.cmetadata->>'source' = :source"
 )
+_IDS_BY_PREFIX = text(
+    "SELECT e.id FROM langchain_pg_embedding e JOIN langchain_pg_collection c"
+    " ON e.collection_id = c.uuid WHERE c.name = :collection"
+    " AND left(e.id, char_length(:prefix)) = :prefix"
+)
+_ENFORCED_BY_PREFIX = text(
+    "SELECT DISTINCT e.cmetadata->>'enforced_at' FROM langchain_pg_embedding e"
+    " JOIN langchain_pg_collection c ON e.collection_id = c.uuid WHERE c.name = :collection"
+    " AND left(e.id, char_length(:prefix)) = :prefix"
+)
 _COUNT = text(
     "SELECT count(*) FROM langchain_pg_embedding e JOIN langchain_pg_collection c"
     " ON e.collection_id = c.uuid WHERE c.name = :collection"
@@ -117,6 +127,29 @@ class RegulationStore:
         if stale := [i for i in old_ids if i not in new_ids]:
             self.db.delete(ids=stale)
         return self.upsert(docs)
+
+    def ids(self, prefix: str) -> set[str]:
+        """doc_id가 prefix로 시작하는 문서 ID (예: 'law:001325:'는 그 법령의 모든 조문)"""
+        with self.db._make_sync_session() as session:
+            params = {"collection": self.collection, "prefix": prefix}
+            rows = session.execute(_IDS_BY_PREFIX, params)
+            return {r[0] for r in rows}
+
+    def enforced_dates(self, prefix: str) -> set[str]:
+        """prefix 문서들에 저장된 시행일 (처음 갱신할 때 지금 자료가 최신인지 볼 때)"""
+        with self.db._make_sync_session() as session:
+            params = {"collection": self.collection, "prefix": prefix}
+            rows = session.execute(_ENFORCED_BY_PREFIX, params)
+            return {r[0] or "" for r in rows}
+
+    def replace_prefix(self, prefix: str, docs: list[Document]) -> tuple[int, int]:
+        """법령 하나(같은 prefix)의 조문을 새 조문으로 바꾼다. 개정으로 없어진 조문은 지운다.
+        (저장 수, 지운 수)"""
+        new_ids = {d.metadata["doc_id"] for d in docs}
+        stale = sorted(self.ids(prefix) - new_ids)
+        if stale:
+            self.db.delete(ids=stale)
+        return self.upsert(docs), len(stale)
 
     def count(self) -> int:
         with self.db._make_sync_session() as session:
