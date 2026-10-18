@@ -1,5 +1,6 @@
 "use client";
 
+import { dateLabel } from "@/lib/asOf";
 import type { Source } from "@/lib/types";
 
 import { useOpenSource } from "./SourceViewer";
@@ -34,6 +35,7 @@ export function SourceList({ sources, only }: { sources: Source[]; only?: Set<nu
               <small className="mt-1 flex items-center gap-1.5 text-xs text-fg-3">
                 <span className={`rounded px-1.5 py-px text-[11px] font-bold ${kindClass}`}>{label}</span>
                 {domain(s.url)}
+                {s.date && <span className="tabular-nums">· 시행 {dateLabel(s.date)}</span>}
               </small>
             </span>
           </>

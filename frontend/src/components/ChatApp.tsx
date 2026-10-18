@@ -123,6 +123,7 @@ export function ChatApp() {
               sources: e.data.sources ?? [],
               profile: e.data.profile ?? {},
               followUps: e.data.follow_ups ?? [],
+              asOf: e.data.as_of,
             }));
             mergeProfile(e.data.profile);
             break;

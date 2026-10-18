@@ -31,6 +31,8 @@ SSE 이벤트
 import asyncio
 import json
 import logging
+import re
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
@@ -56,6 +58,7 @@ from jeonyeok_helper.api.cache import AnswerCache
 from jeonyeok_helper.api.limits import RateLimiter
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
+from jeonyeok_helper.push import KST
 
 log = logging.getLogger(__name__)
 
@@ -245,6 +248,36 @@ def _warm_keyword_index() -> None:
         log.warning("BM25 색인 미리 읽기 실패", exc_info=True)
 
 
+AS_OF_TTL = 600  # 초. 자료 확인일은 7일마다 바뀌어 자주 읽을 필요가 없다
+
+
+def data_checked_at(app: FastAPI) -> str | None:
+    """자료 자동 갱신이 법령 개정을 마지막으로 확인한 날 (YYYY-MM-DD). 한 번도 안 돌았으면 None."""
+    from jeonyeok_helper.rag.refresh import last_run
+
+    cached = getattr(app.state, "as_of", None)
+    now = time.monotonic()
+    if cached and now - cached[0] < AS_OF_TTL:
+        return cached[1]
+    try:
+        run = last_run(app.state.db)
+        done = run.finished_at if run else None
+        if done is not None and done.tzinfo is None:  # SQLite는 시간대 없이 돌려준다
+            done = done.replace(tzinfo=UTC)
+        day = done.astimezone(KST).date().isoformat() if done else None
+    except Exception:
+        log.warning("자료 확인일 읽기 실패", exc_info=True)
+        day = None
+    app.state.as_of = (now, day)
+    return day
+
+
+def as_of(app: FastAPI, sources: list[dict]) -> dict:
+    """답변 아래 '자료 기준': 법령 개정 확인일과, 인용한 법령 중 가장 최근 시행일"""
+    dates = sorted(s["date"] for s in sources if re.fullmatch(r"\d{8}", str(s.get("date", ""))))
+    return {"checked": data_checked_at(app), "latest_enforced": dates[-1] if dates else None}
+
+
 def _limited(request: Request, key: str | None) -> None:
     """모델을 부르는 요청을 사용자(없으면 접속 주소)별로 제한한다."""
     who = key or (request.client.host if request.client else "unknown")
@@ -417,7 +450,12 @@ def create_app(
 
         async def replay(hit: dict) -> AsyncIterator[str]:
             """저장한 답을 보내고, 대화 기록과 내 정보에도 정상 실행과 같이 남긴다."""
-            yield _sse("answer", hit["answer"])
+            # 저장한 답이라도 자료 기준일은 지금 기준으로
+            answer = {
+                **hit["answer"],
+                "as_of": as_of(request.app, hit["answer"].get("sources", [])),
+            }
+            yield _sse("answer", answer)
             if hit.get("guide"):
                 yield _sse("guide", hit["guide"])
             await agent.aupdate_state(
@@ -458,6 +496,7 @@ def create_app(
                         "profile": values.get("profile", {}),
                         "sources": values.get("sources", []),
                         "follow_ups": values.get("follow_ups", []),
+                        "as_of": as_of(request.app, values.get("sources", [])),
                     }
                     out.append(_sse("answer", payloads["answer"]))
                     sent.add("answer")

@@ -563,3 +563,50 @@ def test_guessing_resume_codes_is_rate_limited():
             client.post("/resume", json={"code": "JY-2222-2222"}).status_code for _ in range(25)
         ]
     assert codes[0] == 404 and 429 in codes
+
+
+# ---------- 자료 기준일 ----------
+
+
+def test_answer_carries_data_as_of():
+    from datetime import UTC, datetime
+
+    from jeonyeok_helper.db import RefreshRun
+
+    with make_client(
+        [Route(next="regulation"), Route(next="answer")],
+        profile=Profile(service_type="conscript"),
+    ) as client:
+        first = parse_sse(client.post("/chat", json={"message": "군복무 크레딧?"}).text)
+        # 자료 자동 갱신이 한 번 돌면 그 날짜가 '확인일'이 된다 (10분 캐시를 비우고)
+        with client.app.state.db.session() as session:
+            session.add(
+                RefreshRun(
+                    started_at=datetime(2026, 10, 18, 9, tzinfo=UTC),
+                    finished_at=datetime(2026, 10, 18, 16, tzinfo=UTC),  # 한국 시각 19일 새벽 1시
+                    changed=[],
+                    errors=[],
+                )
+            )
+        client.app.state.as_of = None
+        second = parse_sse(client.post("/chat", json={"message": "예비군 연기?"}).text)
+
+    as_of = next(d for e, d in first if e == "answer")["as_of"]
+    assert as_of == {"checked": None, "latest_enforced": None}
+    assert next(d for e, d in second if e == "answer")["as_of"]["checked"] == "2026-10-19"
+
+
+def test_as_of_picks_latest_enforced_date():
+    from jeonyeok_helper.api.main import as_of
+
+    class App:
+        class state:
+            as_of = (float("inf"), "2026-10-18")
+
+    sources = [
+        {"title": "a", "date": "20260101"},
+        {"title": "b", "date": "20260820"},
+        {"title": "c"},
+        {"title": "d", "date": "엉뚱한 값"},
+    ]
+    assert as_of(App, sources) == {"checked": "2026-10-18", "latest_enforced": "20260820"}
