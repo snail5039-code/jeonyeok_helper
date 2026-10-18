@@ -235,6 +235,7 @@ def build_graph(
             replies = guide_rules.step_replies(step)
         else:
             replies = []
+        replies = guide_rules.kit_replies(_last_question(state)) + replies
         return {
             "messages": [AIMessage(say, name="jeonyeok_helper")],
             "guide": {
@@ -420,7 +421,8 @@ def build_graph(
             "say": "",
             "ask": missing,
             "step": None,
-            "quick_replies": guide_rules.ask_replies(missing) if missing else [],
+            "quick_replies": guide_rules.kit_replies(_last_question(state))
+            + (guide_rules.ask_replies(missing) if missing else []),
             "suggest": [],
         }
         if c.guide is None:

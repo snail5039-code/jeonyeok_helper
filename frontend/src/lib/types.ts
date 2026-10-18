@@ -71,8 +71,8 @@ export interface QuickReply {
   label: string;
   message?: string;
   action?: ChatAction;
-  /** 메시지 대신 화면을 연다 (화면에서만 쓰는 버튼) */
-  open?: "journey" | "profile";
+  /** 메시지 대신 화면을 연다 (화면에서만 쓰는 버튼). kit:제도ID는 신청 서류 도우미 */
+  open?: "journey" | "profile" | `kit:${string}`;
 }
 
 export interface ChatAction {

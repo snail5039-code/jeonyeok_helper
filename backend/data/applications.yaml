@@ -1,0 +1,216 @@
+# 신청 서류 도우미 (applications.py)
+# 제도마다 '무엇을 들고 어디로 가는지'를 근거 자료에 적힌 그대로 정리한다. 지어내지 않는다.
+# 근거: 국가보훈부 '보훈 관련 민원사무 및 구비서류 목록'(공공데이터, 정부24 민원 안내),
+#       법령·행정규칙(국가법령정보센터), 국방부 2026 병 복지 길라잡이·전역간부안내서, 고용24·국민연금공단 안내.
+# 확인일: 2026-10-18 (자료 자동 갱신으로 법령이 바뀌면 여기도 다시 확인한다)
+#
+# documents[].by: me = 내가 내는 서류, office = 기관이 직접 확인해서 내지 않아도 되는 서류
+# form[].field: 내 정보(Profile) 칸 이름. 없으면 신청할 때 직접 적는 칸
+# submit.office: veterans = 사는 곳 관할 보훈(지)청을 찾아 보여 준다
+
+programs:
+  - id: transition_allowance
+    title: 제대군인 전직지원금
+    short: 전직지원금
+    aliases: [전직지원금, 전직 지원금]
+    summary: 실업 상태인 중·장기복무 제대군인이 구직활동을 하면 최장 6개월간 매달 받는 돈이에요.
+    fits: [long_term]
+    fit_note: 중·장기복무(5년 이상) 제대군인 중 군인연금(퇴역연금 등)을 받지 않는 사람이 대상이에요.
+    steps:
+      - 전역 후 6개월 안에 관할 보훈(지)청에 방문하거나 인터넷으로 신청해요.
+      - 보훈부가 25일 안에 지급 대상인지 알려 줘요.
+      - 지급 기간에는 적극적인 구직활동을 하고, 보훈부가 한 달에 한 번 이상 확인해요.
+      - 매달 25일에 지정한 계좌로 들어와요. 받는 중에 취업·창업하면 바로 신고해야 해요.
+    documents:
+      - name: 전직지원금 지급신청서
+        by: me
+        how: 제대군인지원에 관한 법률 시행규칙 별지 제12호서식. 보훈(지)청에 있고, 인터넷 신청도 돼요.
+      - name: 적극적 구직활동 증명서류
+        by: me
+        how: 해당하는 사람만 내요. 어떤 활동이 적극적 구직활동인지는 시행령 제20조의2에서 정해요.
+      - name: 건강보험 자격득실 확인서
+        by: office
+      - name: 사업자등록증
+        by: office
+      - name: 군인퇴직연금 급여 여부
+        by: office
+    form:
+      - {label: 복무 형태, field: service_type}
+      - {label: 군, field: branch}
+      - {label: 계급, field: rank}
+      - {label: 복무 기간, field: service_years}
+      - {label: 전역일, field: discharge_date}
+      - {label: 사는 곳, field: region}
+      - {label: 이름·주민등록번호·연락처, hint: 신청서에 직접 적어요}
+      - {label: 전직지원금 받을 본인 계좌, hint: 신청서에 직접 적어요}
+    submit:
+      office: veterans
+      ways: [방문, 인터넷]
+      online: {name: 정부24 민원 안내, url: "https://www.gov.kr/mw/AA020InfoCappView.do?HighCtgCD=A05005&CappBizCD=11800000096&tp_seq=01"}
+      phone: 1577-0606 (국가보훈부 보훈상담센터)
+    deadline: {text: 전역 후 6개월 안에 신청 (지나면 받을 수 없어요), due_months: 6}
+    sources:
+      - {type: benefit, title: "국가보훈부 민원 안내: 제대군인 전직지원금 지급신청", url: "https://www.gov.kr/mw/AA020InfoCappView.do?HighCtgCD=A05005&CappBizCD=11800000096&tp_seq=01"}
+      - {type: regulation, title: "제대군인지원에 관한 법률 제18조의2(전직지원금)", url: "https://www.law.go.kr/법령/제대군인지원에관한법률/제18조의2"}
+      - {type: regulation, title: "제대군인지원에 관한 법률 시행령 제20조의3(전직지원금 지급신청 등)", url: "https://www.law.go.kr/법령/제대군인지원에관한법률시행령/제20조의3"}
+
+  - id: merit_registration
+    title: 국가유공자(보훈대상자) 등록
+    short: 보훈 등록
+    aliases: [국가유공자 등록, 국가유공자 신청, 보훈대상자 등록, 보훈 등록, 보훈등록, 유공자 등록]
+    summary: 복무 중 다치거나 병을 얻었다면 국가유공자나 보훈보상대상자로 등록해 보상과 지원을 받을 수 있어요.
+    fits: [conscript, short_term_officer, long_term, merit]
+    needs_injury: true
+    fit_note: 교육훈련이나 직무수행 중에 다치거나 병을 얻은 사람이 대상이에요. 전역 후, 또는 전역 6개월 전부터 신청할 수 있어요.
+    steps:
+      - 사는 곳 관할 보훈(지)청에 방문, 우편, 인터넷으로 등록신청서를 내요.
+      - 보훈(지)청이 내가 있던 부대(기관)에 다친 경위 자료를 요청하고, 낸 자료와 합쳐 요건에 맞는지 심사해요.
+      - 요건에 맞으면 보훈병원 등에서 신체검사로 상이등급을 판정받아요. 심사는 시간이 꽤 걸릴 수 있어요.
+    documents:
+      - name: 국가유공자 등록신청서
+        by: me
+        how: 국가유공자 등 예우 및 지원에 관한 법률 시행규칙 별지 서식. 보훈(지)청에 있어요.
+      - name: 사진 (3.5×4.5cm)
+        by: me
+      - name: 가족관계 기록사항에 관한 증명서
+        by: me
+        how: 정부24나 주민센터에서 발급해요.
+      - name: 전역일자를 확인할 수 있는 서류
+        by: me
+        how: 이미 전역했으면 전역일, 6개월 안에 전역할 예정이면 전역예정일을 확인할 수 있는 서류예요.
+      - name: 다친 경위를 보여 주는 자료 (병상일지 등)
+        by: me
+        how: 있으면 내요. 병상일지 같은 객관적 자료가 없으면 입원명령서, 전역명령서, 군 복무 관련 기록 등을 종합해 판단해요.
+      - name: 병적증명서
+        by: office
+      - name: 상훈수여증명
+        by: office
+      - name: 주민등록정보
+        by: office
+    form:
+      - {label: 복무 형태, field: service_type}
+      - {label: 군, field: branch}
+      - {label: 계급, field: rank}
+      - {label: 전역(예정)일, field: discharge_date}
+      - {label: 다치거나 아픈 곳, field: injury}
+      - {label: 사는 곳, field: region}
+      - {label: 다친 날짜·장소·경위, hint: 언제, 어디서, 무엇을 하다 다쳤는지 미리 적어 두면 좋아요}
+      - {label: 이름·주민등록번호·연락처, hint: 신청서에 직접 적어요}
+    submit:
+      office: veterans
+      ways: [방문, 우편, 인터넷]
+      online: {name: 정부24 민원 안내, url: "https://www.gov.kr/mw/AA020InfoCappView.do?HighCtgCD=A05005&CappBizCD=11800000001&tp_seq=01"}
+      phone: 1577-0606 (국가보훈부 보훈상담센터)
+    deadline: {text: 정해진 기한은 없어요. 전역 6개월 전부터 신청할 수 있어요}
+    sources:
+      - {type: benefit, title: "국가보훈부 민원 안내: 국가유공자(유족)등록", url: "https://www.gov.kr/mw/AA020InfoCappView.do?HighCtgCD=A05005&CappBizCD=11800000001&tp_seq=01"}
+      - {type: regulation, title: "국가보훈부 법령해석: 교육훈련 또는 직무수행 중 상이를 입은 군인이 재직 중 국가유공자로 등록이 가능한 지", url: ""}
+      - {type: regulation, title: "국가보훈부 법령해석: 국가유공자 등록신청 시 병상일지 등 근거자료가 없을 경우에 제출서류는", url: ""}
+
+  - id: reserve_postpone
+    title: 예비군 훈련 연기
+    short: 예비군 연기
+    aliases: [예비군 연기, 예비군 훈련 연기, 예비군훈련 연기, 훈련 연기]
+    summary: 소집 통지를 받았는데 정당한 사유로 훈련에 갈 수 없으면 연기원서를 내 훈련을 미룰 수 있어요.
+    fits: [conscript, short_term_officer, long_term, merit]
+    fit_note: 예비군훈련 소집을 통보받은 예비군이 대상이에요.
+    steps:
+      - 훈련 소집을 통보받으면, 훈련 전에 소속 예비군부대에 연기원서를 내요.
+      - 갑자기 사유가 생기면 훈련이 끝나기 전에 전화·문자 등으로 먼저 알리고, 3근무일 안에 연기원서와 증빙서류를 내요.
+      - 예비군 지휘관이 확인해서 처리 결과를 전화나 이메일로 알려 줘요.
+    documents:
+      - name: 연기원서
+        by: me
+        how: 예비군법 시행규칙 별지 서식. 주요 업무 때문에 예비군 홈페이지·앱으로 연기를 신청하면 사유서 서명은 생략할 수 있어요.
+      - name: 연기 사유를 증명하는 서류
+        by: me
+        how: 사유마다 다르고 예비군 교육훈련 훈령 별표 7에 정해져 있어요. 해외 출국은 입출국 기록으로 대신해요.
+      - name: (아파서 연기할 때) 진단서 또는 진료확인서
+        by: me
+        how: 진단서는 적힌 치료기간 동안의 훈련을, 진료확인서(통원치료 확인서)는 진료한 날 훈련만 연기돼요. 진료확인서는 두 번 연속 낼 수 없어요.
+    form:
+      - {label: 군, field: branch}
+      - {label: 계급, field: rank}
+      - {label: 사는 곳, field: region}
+      - {label: 소집 통지받은 훈련 날짜, hint: 소집통지서나 예비군 앱에서 확인해요}
+      - {label: 연기 사유, hint: 예) 입원, 해외 출장, 시험, 결혼 등}
+      - {label: 이름·연락처, hint: 연기원서에 직접 적어요}
+    submit:
+      where: 소속 예비군부대 (예비군 지휘관)
+      ways: [방문, 예비군 홈페이지·앱, 팩스, 사진 전송·문자]
+      online: {name: 예비군 홈페이지, url: "https://www.yebigun1.mil.kr"}
+    deadline: {text: 훈련 전에 내요. 갑자기 생긴 사유는 훈련 종료 전 신고 후 3근무일 안에 서류를 내요}
+    sources:
+      - {type: regulation, title: "예비군 교육훈련 훈령 제24조(예비군훈련 연기)", url: "https://www.law.go.kr/행정규칙/예비군교육훈련훈령"}
+      - {type: regulation, title: "예비군법 시행령 제14조(동원의 연기)", url: "https://www.law.go.kr/법령/예비군법시행령/제14조"}
+      - {type: regulation, title: "국방부_2026년_전역간부안내서 (142쪽)", url: ""}
+
+  - id: military_credit
+    title: 국민연금 군 복무 크레딧
+    short: 군 복무 크레딧
+    aliases: [군복무 크레딧, 군 복무 크레딧, 군복무크레딧]
+    summary: 병역의무를 마친 사람에게 국민연금 가입기간을 더 인정해 주는 제도예요. 반드시 본인이 신청해야 해요.
+    fits: [conscript]
+    fit_note: 6개월 이상 복무한 병역의무 이행자(현역병, 상근예비역, 사회복무요원 등)가 대상이에요. 2026년 1월 1일 이후 전역하면 12개월, 그 전에 전역했으면 6개월이 인정돼요.
+    steps:
+      - 전역 후 병적증명서나 복무확인서를 떼요.
+      - 국민연금공단 지사(전국 어디서나)에 내서 신청해요. 나중에 국민연금을 받을 때 함께 신청해도 돼요.
+      - 크레딧은 국민연금을 받을 자격(가입기간 10년 이상)이 생길 때 가입기간에 더해져요.
+    documents:
+      - name: 병적증명서·복무확인서 등 복무를 증명하는 서류
+        by: me
+        how: 병적증명서는 정부24나 병무청 누리집에서 발급돼요. 어떤 서류가 맞는지는 1355에 물어보면 돼요.
+      - name: 신분증
+        by: me
+    form:
+      - {label: 복무 형태, field: service_type}
+      - {label: 군, field: branch}
+      - {label: 전역일, field: discharge_date}
+      - {label: 복무 기간, field: service_years}
+      - {label: 이름·주민등록번호·연락처, hint: 신청서에 직접 적어요}
+    submit:
+      where: 국민연금공단 지사 (전국 어디서나)
+      ways: [방문, 국민연금 수급 신청 때 함께]
+      online: {name: 국민연금공단 크레딧 안내, url: "https://www.nps.or.kr/pnsinfo/ntpsklg/getOHAF0048M0.do?menuId=MN24001117&tab=tab8"}
+      phone: 1355 (국민연금공단)
+    deadline: {text: 정해진 기한은 없어요. 다만 본인이 신청해야만 인정돼요}
+    sources:
+      - {type: regulation, title: "국방부_2026년_병_복지_길라잡이 (70쪽)", url: ""}
+      - {type: benefit, title: "국민연금공단 안내 - 크레딧 제도(군복무 크레딧)", url: "https://www.nps.or.kr/pnsinfo/ntpsklg/getOHAF0048M0.do?menuId=MN24001117&tab=tab8"}
+
+  - id: employment_support
+    title: 국민취업지원제도
+    short: 국민취업지원제도
+    aliases: [국민취업지원제도, 국민취업지원, 구직촉진수당, 국취제]
+    summary: 1:1 취업 상담, 직업훈련, 일경험과 함께 구직촉진수당(월 60만원, 6개월)이나 취업활동비용을 받을 수 있어요.
+    fits: [conscript, short_term_officer, long_term, merit]
+    fit_note: 일자리를 찾는 사람이면 대부분 참여할 수 있어요. 주 30시간 이상 일하거나 실업급여를 받는 중이면 참여할 수 없고, 수당은 가구 소득·재산 기준이 있어요.
+    steps:
+      - 고용24에서 지원 대상인지 사전진단을 해 봐요.
+      - 고용24에 구직 등록을 하고 제도 안내 동영상을 꼭 봐요.
+      - 고용24에서 온라인으로, 또는 사는 곳 관할 고용센터에 가서 참여 신청을 해요.
+      - 고용센터가 가구 소득·재산으로 자격을 심사해 보통 1개월 안에 알려 줘요.
+      - 담당자와 취업활동계획을 세우면 첫 수당이 나와요.
+    documents:
+      - name: 가구원의 개인정보 제공 동의서
+        by: me
+        how: 신청할 때 휴대전화 인증을 고르면 내지 않아도 돼요.
+      - name: (필요한 경우만) 소득·재산이나 특정계층 확인 서류
+        by: me
+        how: 고용센터가 대부분 자동으로 확인해서 보통은 필요 없어요. 실제와 다를 때만 내요.
+    form:
+      - {label: 사는 곳, field: region}
+      - {label: 나이, field: age}
+      - {label: 최종 학력, field: education}
+      - {label: 희망 직무, field: desired_job}
+      - {label: 가진 자격증, field: certificates}
+      - {label: 가구원 수·가구 소득, hint: 수당 자격 심사에 쓰여요}
+    submit:
+      where: 사는 곳 관할 고용센터 (또는 고용24 온라인)
+      ways: [고용24 온라인, 고용센터 방문]
+      online: {name: 고용24 국민취업지원제도, url: "https://m.work24.go.kr/cm/c/f/1100/selecSystInfo.do?systId=SI00000316&systClId=SC00000206"}
+      phone: 1350 (고용노동부 고객상담센터)
+    deadline: {text: 정해진 기한은 없어요. 구직 중이면 바로 신청할 수 있어요}
+    sources:
+      - {type: benefit, title: "고용24 안내 - 국민취업지원제도", url: "https://m.work24.go.kr/cm/c/f/1100/selecSystInfo.do?systId=SI00000316&systClId=SC00000206"}
+      - {type: regulation, title: "구직자 취업촉진 및 생활안정지원에 관한 법률 제8조(취업지원 신청)", url: "https://www.law.go.kr/법령/구직자취업촉진및생활안정지원에관한법률/제8조"}

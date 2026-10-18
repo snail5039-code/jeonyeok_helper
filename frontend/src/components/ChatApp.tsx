@@ -3,6 +3,7 @@
 import { Check, CircleHelp, Star } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { fetchPrograms, type ProgramSummary } from "@/lib/applications";
 import { downloadBackup, fetchBackup, makeBackup, parseBackup, restoreBackup } from "@/lib/backup";
 import { demoChat } from "@/lib/demo";
 import { findByCode, takeResumeParam } from "@/lib/resume";
@@ -19,6 +20,7 @@ import { Composer } from "./Composer";
 import { HelpView } from "./HelpView";
 import { HomeView } from "./HomeView";
 import { DeadlineChip } from "./JourneyParts";
+import { ApplicationKit } from "./ApplicationKit";
 import { JourneyView } from "./JourneyView";
 import { KeepNotice } from "./KeepNotice";
 import { ProfileView } from "./ProfileView";
@@ -66,6 +68,9 @@ export function ChatApp() {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState<Page>("chat");
+  // 신청 서류 도우미로 연 제도 (null이면 닫힘)
+  const [kit, setKit] = useState<string | null>(null);
+  const [programs, setPrograms] = useState<ProgramSummary[]>([]);
   const [userId, setUserId] = useState("");
   // 기록을 되살리면 '내 정보' 입력칸을 새 값으로 다시 그린다
   const [profileVersion, setProfileVersion] = useState(0);
@@ -182,7 +187,8 @@ export function ChatApp() {
   /** 길잡이 버튼: 화면 열기, 또는 버튼 말을 보내며 동작(했어요·나중에)을 함께 보낸다 */
   const reply = useCallback(
     (r: QuickReply) => {
-      if (r.open) return setPage(r.open);
+      if (r.open?.startsWith("kit:")) return setKit(r.open.slice(4));
+      if (r.open === "journey" || r.open === "profile") return setPage(r.open);
       if (demo && r.action?.type === "done") {
         const item = journey.items.find((i) => i.id === r.action!.item_id);
         if (item && !item.done) void toggleItem(item);
@@ -357,6 +363,16 @@ export function ChatApp() {
     if (copySynced && !demo && userId) saveCopy(userId, profile, journey.items);
   }, [copySynced, demo, userId, profile, journey.items]);
 
+  // 신청 서류 도우미가 있는 제도 목록 (작전도 할 일에 '서류 챙기기' 버튼을 붙이는 데 쓴다)
+  useEffect(() => {
+    if (!ready || demo) return;
+    let alive = true;
+    void fetchPrograms().then((p) => alive && setPrograms(p));
+    return () => {
+      alive = false;
+    };
+  }, [ready, demo]);
+
   // 되살린 결과 안내는 '내 정보' 화면을 떠나면 지운다 (다시 왔을 때 지난 안내가 보이지 않게)
   useEffect(() => {
     if (page !== "profile") setRecordsNotice("");
@@ -417,7 +433,7 @@ export function ChatApp() {
       ) : page === "help" ? (
         <HelpView onAsk={ask} onJourney={openJourney} onProfile={() => setPage("profile")} />
       ) : page === "journey" ? (
-        <JourneyView journey={journey} profile={profile} userId={userId} demo={demo} onAsk={ask} onProfile={() => setPage("profile")} />
+        <JourneyView journey={journey} profile={profile} userId={userId} demo={demo} programs={programs} onKit={setKit} onAsk={ask} onProfile={() => setPage("profile")} />
       ) : page === "profile" ? (
         <ProfileView
           key={ready ? `ready-${profileVersion}` : "loading"}
@@ -495,6 +511,18 @@ export function ChatApp() {
       )}
 
       <UndoToast journey={journey} />
+
+      {kit && (
+        <ApplicationKit
+          programId={kit}
+          userId={userId}
+          onClose={() => setKit(null)}
+          onProfile={() => {
+            setKit(null);
+            setPage("profile");
+          }}
+        />
+      )}
 
       {/* 작전도에 할 일이 생기면 한 번만, 기록이 이 브라우저에 묶여 있다고 알린다 */}
       {ready && !demo && journey.items.length > 0 && (

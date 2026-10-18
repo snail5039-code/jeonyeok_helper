@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, CircleHelp, Map, Plus, SkipForward, Star, UserRound } from "lucide-react";
+import { Check, CircleHelp, ClipboardCheck, Map, Plus, SkipForward, Star, UserRound } from "lucide-react";
 import { useState } from "react";
 
 import { STAGE_BY_KEY } from "@/lib/journey";
@@ -59,6 +59,7 @@ function ReplyIcon({ reply }: { reply: QuickReply }) {
   if (reply.action?.type === "later") return <SkipForward className={cls} strokeWidth={2.2} />;
   if (reply.open === "journey") return <Map className={cls} strokeWidth={2.2} />;
   if (reply.open === "profile") return <UserRound className={cls} strokeWidth={2.2} />;
+  if (reply.open?.startsWith("kit:")) return <ClipboardCheck className={cls} strokeWidth={2.2} />;
   if (reply.message?.includes("어떻게")) return <CircleHelp className={cls} strokeWidth={2.2} />;
   return null;
 }

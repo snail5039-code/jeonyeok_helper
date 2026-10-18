@@ -1,8 +1,9 @@
 "use client";
 
-import { CalendarPlus, History, MessageCircle, RefreshCw, Undo2, UserRoundPen, Wand2 } from "lucide-react";
+import { CalendarPlus, ClipboardCheck, History, MessageCircle, RefreshCw, Undo2, UserRoundPen, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { programFor, type ProgramSummary } from "@/lib/applications";
 import { calendarEntries, downloadIcs } from "@/lib/calendar";
 import { badges as badgesOf, byStage, type Badge } from "@/lib/journey";
 import type { JourneyItem, Profile, StageKey } from "@/lib/types";
@@ -21,12 +22,15 @@ interface Props {
   userId: string;
   /** 데모 모드(서버 없음)에서는 알림을 켤 수 없다 */
   demo: boolean;
+  /** 신청 서류 도우미가 있는 제도 */
+  programs: ProgramSummary[];
+  onKit: (programId: string) => void;
   onAsk: (question: string) => void;
   onProfile: () => void;
 }
 
 /** '나의 전역 작전도' 전체 화면: 계급, 단계 지도, 훈장, 단계별 임무 */
-export function JourneyView({ journey, profile, userId, demo, onAsk, onProfile }: Props) {
+export function JourneyView({ journey, profile, userId, demo, programs, onKit, onAsk, onProfile }: Props) {
   const { items, fresh, generating, error, toggle, remove, generate } = journey;
   const groups = byStage(items);
   const [notice, setNotice] = useState("");
@@ -114,6 +118,7 @@ export function JourneyView({ journey, profile, userId, demo, onAsk, onProfile }
               <StageTrack items={items} onSelect={goTo} />
             </section>
             {!demo && userId && <DeadlineAlerts userId={userId} dueCount={entries.length} />}
+            {programs.length > 0 && <KitShelf programs={programs} onKit={onKit} />}
             <BadgeShelf badges={badgesOf(items, profile)} />
             <ChangeLog journey={journey} />
             <ol className="grid grid-cols-[minmax(0,1fr)] gap-7">
@@ -139,6 +144,8 @@ export function JourneyView({ journey, profile, userId, demo, onAsk, onProfile }
                         onAsk={onAsk}
                         onRemove={remove}
                         onCalendar={oneToCalendar}
+                        kit={programFor(item.title, programs)?.id}
+                        onKit={onKit}
                       />
                     ))}
                   </ul>
@@ -165,6 +172,32 @@ export function JourneyView({ journey, profile, userId, demo, onAsk, onProfile }
         )}
       </Book>
     </main>
+  );
+}
+
+/** 신청 서류 도우미: 제도를 고르면 챙길 서류·낼 곳을 연다 */
+function KitShelf({ programs, onKit }: { programs: ProgramSummary[]; onKit: (id: string) => void }) {
+  return (
+    <section className="grid gap-2.5 rounded-xl border-2 border-edge bg-soft p-4" aria-labelledby="kit-shelf">
+      <h2 id="kit-shelf" className="flex items-center gap-2">
+        <ClipboardCheck className="size-[18px] text-olive" strokeWidth={2.2} />
+        <span className="font-stencil text-[17px] font-normal">신청 서류 도우미</span>
+        <span className="text-[12.5px] font-semibold text-fg-3">챙길 서류·낼 곳을 내 정보로 정리해 줘요</span>
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        {programs.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onKit(p.id)}
+            title={p.summary}
+            className="inline-flex h-9 items-center rounded-full border-2 border-edge bg-bg px-3 text-[13.5px] font-bold hover:border-ink"
+          >
+            {p.short}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

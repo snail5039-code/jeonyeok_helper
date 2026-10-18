@@ -1,6 +1,6 @@
 "use client";
 
-import { AlarmClock, CalendarPlus, Check, ExternalLink, MessageCircle, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
+import { AlarmClock, CalendarPlus, Check, ClipboardCheck, ExternalLink, MessageCircle, MessageCircleQuestion, Sparkles, Star, X } from "lucide-react";
 
 import { calendarEntries } from "@/lib/calendar";
 import { STAGES, currentStage, daysLeft, ddayLabel, dueDate, stageDone } from "@/lib/journey";
@@ -96,6 +96,8 @@ export function ItemCard({
   onAsk,
   onRemove,
   onCalendar,
+  kit,
+  onKit,
 }: {
   item: JourneyItem;
   fresh?: boolean;
@@ -106,6 +108,9 @@ export function ItemCard({
   onRemove?: (item: JourneyItem) => void;
   /** 이 할 일의 기한을 캘린더 파일로 내려받는다 (마감일을 셀 수 있을 때만 버튼이 보인다) */
   onCalendar?: (item: JourneyItem) => void;
+  /** 이 할 일에 맞는 신청 서류 도우미 제도 ID */
+  kit?: string;
+  onKit?: (programId: string) => void;
 }) {
   const canCalendar = Boolean(onCalendar) && calendarEntries([item], dischargeDate).length > 0;
   return (
@@ -184,6 +189,16 @@ export function ItemCard({
               <MessageCircleQuestion className="size-3.5" />
               이 단계 진행하기
             </button>
+            {kit && onKit && !item.done && (
+              <button
+                type="button"
+                onClick={() => onKit(kit)}
+                className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-fg-2 hover:text-accent"
+              >
+                <ClipboardCheck className="size-3.5" />
+                서류 챙기기
+              </button>
+            )}
           </div>
         )}
         {!compact && item.origin === "chat" && item.question && (
