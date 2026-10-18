@@ -626,3 +626,33 @@ def test_found_sources_arrive_before_the_answer():
     assert found["sources"][0]["title"] == "국민연금법 제18조"
     assert "excerpt" not in found["sources"][0]  # 미리 보기는 이름·주소만
     assert names.index("found") < names.index("answer")
+
+
+def test_client_ip_trusts_forwarded_only_from_the_proxy():
+    from starlette.requests import Request as StarletteRequest
+
+    from jeonyeok_helper.api.main import client_ip
+
+    def req(host, forwarded=None):
+        headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+        return StarletteRequest({"type": "http", "client": (host, 1), "headers": headers})
+
+    assert client_ip(req("127.0.0.1", "203.0.113.7")) == "203.0.113.7"  # Next 중계
+    assert client_ip(req("172.18.0.5", "203.0.113.7, 10.0.0.1")) == "203.0.113.7"  # Docker web
+    assert client_ip(req("8.8.4.4", "1.2.3.4")) == "8.8.4.4"  # 밖에서 바로: 믿지 않음
+    assert client_ip(req("127.0.0.1")) == "127.0.0.1"
+
+
+def test_resume_guessing_has_a_global_cap_even_with_fake_addresses(monkeypatch):
+    from jeonyeok_helper.api import main
+
+    monkeypatch.setattr(main, "GUESS_LIMIT_PER_MINUTE", 5)
+    with make_client([Route(next="answer")]) as client:
+        # 주소를 바꿔 가며 보내도(머리글 위조) 모두 합친 상한에 걸린다
+        codes = [
+            client.post(
+                "/resume", json={"code": "JY-2222-2222"}, headers={"X-Forwarded-For": f"10.0.0.{i}"}
+            ).status_code
+            for i in range(8)
+        ]
+    assert codes[:5] == [404] * 5 and codes[5:] == [429] * 3
