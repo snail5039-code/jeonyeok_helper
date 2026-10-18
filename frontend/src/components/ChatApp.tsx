@@ -417,7 +417,7 @@ export function ChatApp() {
       ) : page === "help" ? (
         <HelpView onAsk={ask} onJourney={openJourney} onProfile={() => setPage("profile")} />
       ) : page === "journey" ? (
-        <JourneyView journey={journey} profile={profile} onAsk={ask} onProfile={() => setPage("profile")} />
+        <JourneyView journey={journey} profile={profile} userId={userId} demo={demo} onAsk={ask} onProfile={() => setPage("profile")} />
       ) : page === "profile" ? (
         <ProfileView
           key={ready ? `ready-${profileVersion}` : "loading"}

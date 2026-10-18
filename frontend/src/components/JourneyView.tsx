@@ -8,6 +8,7 @@ import { badges as badgesOf, byStage, type Badge } from "@/lib/journey";
 import type { JourneyItem, Profile, StageKey } from "@/lib/types";
 
 import { Book, BookTitle, Stamp } from "./Book";
+import { DeadlineAlerts } from "./DeadlineAlerts";
 import { MedalCard } from "./Doodle";
 import { RankCard, RankTrack } from "./JourneyPanel";
 import { ItemCard, StageTrack } from "./JourneyParts";
@@ -17,12 +18,15 @@ import type { Journey } from "./useJourney";
 interface Props {
   journey: Journey;
   profile: Profile;
+  userId: string;
+  /** 데모 모드(서버 없음)에서는 알림을 켤 수 없다 */
+  demo: boolean;
   onAsk: (question: string) => void;
   onProfile: () => void;
 }
 
 /** '나의 전역 작전도' 전체 화면: 계급, 단계 지도, 훈장, 단계별 임무 */
-export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
+export function JourneyView({ journey, profile, userId, demo, onAsk, onProfile }: Props) {
   const { items, fresh, generating, error, toggle, remove, generate } = journey;
   const groups = byStage(items);
   const [notice, setNotice] = useState("");
@@ -109,6 +113,7 @@ export function JourneyView({ journey, profile, onAsk, onProfile }: Props) {
             <section className="rounded-xl border-2 border-edge bg-soft p-4">
               <StageTrack items={items} onSelect={goTo} />
             </section>
+            {!demo && userId && <DeadlineAlerts userId={userId} dueCount={entries.length} />}
             <BadgeShelf badges={badgesOf(items, profile)} />
             <ChangeLog journey={journey} />
             <ol className="grid grid-cols-[minmax(0,1fr)] gap-7">

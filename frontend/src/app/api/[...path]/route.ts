@@ -18,6 +18,9 @@ const ALLOWED = [
   /^backup\/[\w-]{1,64}$/,
   /^resume-code\/[\w-]{1,64}$/,
   /^resume$/,
+  /^push\/key$/,
+  /^push\/[\w-]{1,64}$/,
+  /^push\/[\w-]{1,64}\/(unsubscribe|test)$/,
 ];
 const NO_BODY = new Set(["GET", "DELETE"]);
 
