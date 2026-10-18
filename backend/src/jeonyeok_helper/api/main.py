@@ -32,6 +32,7 @@ import asyncio
 import json
 import logging
 import re
+import secrets
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -40,7 +41,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -54,8 +55,10 @@ from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
 from jeonyeok_helper.agents.roadmap import RoadmapProfile
 from jeonyeok_helper.agents.state import cadre_of, merge_profile
+from jeonyeok_helper.api import runlog
 from jeonyeok_helper.api.cache import AnswerCache
 from jeonyeok_helper.api.limits import RateLimiter
+from jeonyeok_helper.api.runlog import RunTimer, failures_from
 from jeonyeok_helper.config import get_settings
 from jeonyeok_helper.db import Database, Feedback
 from jeonyeok_helper.push import KST
@@ -471,12 +474,26 @@ def create_app(
                 await agent.store.aput(PROFILE_NAMESPACE, req.user_id, merged)
 
         async def events() -> AsyncIterator[str]:
+            # 운영 대시보드용 기록 (걸린 시간·단계·실패). 연결이 끊겨도 남긴다.
+            timer = RunTimer(req.message)
+            try:
+                async for event in run(timer):
+                    yield event
+            finally:
+                try:
+                    await asyncio.to_thread(timer.save, db)
+                except Exception:
+                    log.warning("대화 기록 저장 실패", exc_info=True)
+
+        async def run(timer: RunTimer) -> AsyncIterator[str]:
             yield _sse("thread", {"thread_id": thread_id})
             if done_item:
                 yield _sse("journey", {"added": [], "done": done_item})
             if cached:
+                timer.kind = "cached"
                 try:
                     async for event in replay(cached):
+                        timer.first()
                         yield event
                 except Exception:
                     log.exception("저장한 답 보내기 실패")
@@ -500,11 +517,13 @@ def create_app(
                     }
                     out.append(_sse("answer", payloads["answer"]))
                     sent.add("answer")
+                    timer.first()
                 if "guide" in pending and (g := values.get("guide")) and g.get("mode"):
                     if g["mode"] == "talk" or "answer" in sent:
                         payloads["guide"] = {**g, "profile": values.get("profile", {})}
                         out.append(_sse("guide", payloads["guide"]))
                         sent.add("guide")
+                        timer.first()
                 pending.clear()
                 return out
 
@@ -516,6 +535,7 @@ def create_app(
                         # 답변 초안을 만들어지는 대로 보낸다 (다른 노드의 LLM 출력은 제외)
                         token, meta = chunk
                         if meta.get("langgraph_node") == "respond" and (text := token.text):
+                            timer.first()
                             yield _sse("delta", {"text": text})
                         continue
                     if mode == "values":
@@ -524,6 +544,7 @@ def create_app(
                             yield event
                         continue
                     for node in chunk:
+                        timer.step(node)
                         if label := STEP_LABELS.get(node):
                             yield _sse("step", {"node": node, "label": label})
                         if node == "verify":
@@ -541,6 +562,8 @@ def create_app(
                     if undone:
                         yield _sse("journey", {"added": [], "done": undone})
                 talked = state.get("guide", {}).get("mode") == "talk"
+                timer.kind = "talk" if talked else "research"
+                timer.failures = failures_from(state.get("findings"))
                 # 자료를 찾아 답한 것만 저장한다 (짧은 대화·되묻기·되돌리기는 상황마다 다르다)
                 if state.get("draft") and not talked and "answer" in payloads:
                     if not state.get("guide", {}).get("reopen"):
@@ -548,6 +571,7 @@ def create_app(
                 # 되묻기: ask_user가 interrupt로 멈춰 사용자의 답을 기다리는 중
                 snapshot = await agent.aget_state(config)
                 if snapshot.interrupts:
+                    timer.kind = "question"
                     yield _sse(
                         "question",
                         {
@@ -562,8 +586,9 @@ def create_app(
                 if req.user_id and not items and not missing:
                     async for event in first_roadmap(request, req.user_id, profile):
                         yield event
-            except Exception:
+            except Exception as e:
                 log.exception("대화 처리 실패")
+                timer.kind, timer.error = "error", f"{type(e).__name__}: {e}"
                 message = "답변 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요."
                 yield _sse("error", {"message": message})
             yield _sse("done", {})
@@ -591,6 +616,22 @@ def create_app(
                 ).all()
             )
         return {"up": counts.get("up", 0), "down": counts.get("down", 0)}
+
+    @app.get("/admin/summary")
+    def admin_summary(
+        request: Request,
+        x_admin_token: Annotated[str | None, Header()] = None,
+        days: Annotated[int, Query(ge=1, le=30)] = 7,
+    ) -> dict:
+        """운영 대시보드: 최근 며칠의 👎 피드백, 느린 단계, 실패한 도구 호출, 걸린 시간."""
+        token = get_settings().admin_token
+        if not token:
+            raise HTTPException(404, "없는 주소예요.")
+        host = request.client.host if request.client else "unknown"
+        _limited(request, f"admin:{host}")  # 열쇠를 찍어 맞히지 못하게
+        if not x_admin_token or not secrets.compare_digest(x_admin_token, token):
+            raise HTTPException(401, "관리자 열쇠가 맞지 않아요.")
+        return runlog.summary(request.app.state.db, days)
 
     @app.get("/profile/{user_id}")
     async def get_profile(user_id: UserId, request: Request) -> dict:

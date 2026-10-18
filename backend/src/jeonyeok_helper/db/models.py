@@ -157,3 +157,22 @@ class RefreshRun(Base):
     # 검색 골든셋 결과 {"hit", "recall", "mrr", "cases", "errors"} (바뀐 게 없으면 None)
     retrieval: Mapped[dict | None] = mapped_column(JSON, default=None)
     score_dropped: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ChatRun(Base):
+    """운영 대시보드용 질문 한 번의 기록: 걸린 시간, 단계별로 끝난 시각, 실패한 도구 호출.
+    질문은 개인정보 형식을 가린 뒤 앞부분만 둔다 (누가 물었는지는 남기지 않는다)."""
+
+    __tablename__ = "chat_run"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))  # research, talk, cached, question, error
+    question: Mapped[str] = mapped_column(Text, default="")
+    total_ms: Mapped[int] = mapped_column(Integer)
+    first_ms: Mapped[int | None] = mapped_column(Integer, default=None)  # 첫 글자(또는 첫 답)까지
+    steps: Mapped[list] = mapped_column(JSON, default=list)  # [{"node", "ms"}] 끝난 시각
+    failures: Mapped[list] = mapped_column(JSON, default=list)  # [{"where", "error"}]
+    error: Mapped[str] = mapped_column(Text, default="")
