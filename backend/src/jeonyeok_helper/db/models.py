@@ -81,3 +81,16 @@ class CacheEntry(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)  # 원래 키의 md5
     value: Mapped[bytes] = mapped_column(LargeBinary)
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ResumeCode(Base):
+    """이어 하기 코드: 로그인 없이 다른 기기에서 같은 기록(익명 ID)을 열기 위한 짧은 코드.
+    사용자당 하나이고, 새로 만들면 이전 코드는 지워진다."""
+
+    __tablename__ = "resume_code"
+
+    code: Mapped[str] = mapped_column(String(16), primary_key=True)  # 예: JY7K3Q9XPA (하이픈 없이)
+    user_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )

@@ -86,7 +86,7 @@ def add_items(
                 detail=it.get("detail", ""),
                 sources=it.get("sources", []),
                 origin=it.get("origin") or origin,
-                question=question[:500],
+                question=(it.get("question") or question)[:500],
                 done=bool(it.get("done")),
                 done_at=datetime.now(UTC) if it.get("done") else None,
                 core=bool(it.get("core")),
@@ -97,6 +97,15 @@ def add_items(
             session.flush()
             added.append(to_dict(row))
     return added
+
+
+def replace_items(db: Database, user_id: str, items: list[dict]) -> list[dict]:
+    """사용자의 할 일을 통째로 바꾼다 (기록 파일 불러오기). 완료 여부·출처·기한도 그대로."""
+    with db.session() as session:
+        for row in session.scalars(select(JourneyItem).where(JourneyItem.user_id == user_id)):
+            session.delete(row)
+    add_items(db, user_id, items, "chat")
+    return list_items(db, user_id)
 
 
 def set_done(db: Database, user_id: str, item_id: str, done: bool) -> dict | None:

@@ -485,3 +485,81 @@ def test_same_question_with_same_conditions_is_answered_from_cache():
     assert answer2["text"] == answer1["text"] and answer2["sources"] == answer1["sources"]
     assert not any(e == "step" for e, _ in second)  # 모델·검색을 다시 돌지 않았다
     assert profile["service_type"] == "conscript"  # 내 정보도 정상 실행처럼 남는다
+
+
+# ---------- 내 기록 파일 (로그인 대신) ----------
+
+
+def test_backup_round_trip_restores_profile_and_journey_on_another_browser():
+    item = {
+        "stage": "job", "title": "국민취업지원제도", "action": "고용24에서 신청",
+        "sources": [{"type": "benefit", "title": "국민취업지원제도", "url": "u"}],
+        "core": True, "deadline": "전역 후 1년 이내", "due_months": 12, "done": True,
+        "origin": "plan",
+    }  # fmt: skip
+    with make_client([Route(next="answer")]) as client:
+        client.put("/profile/old-browser", json={"service_type": "conscript", "region": "부산"})
+        client.post("/journey/old-browser/items", json={"items": [item], "question": "취업"})
+        backup = client.get("/backup/old-browser").json()
+
+        # 다른 브라우저(새 익명 ID)에 이미 다른 기록이 있어도 파일 내용으로 바뀐다
+        client.post("/journey/new-browser/items", json={"items": [{**item, "title": "지울 것"}]})
+        restored = client.put("/backup/new-browser", json=backup).json()
+        items = client.get("/journey/new-browser").json()["items"]
+        profile = client.get("/profile/new-browser").json()["profile"]
+
+    assert backup["app"] == "jeonyeok_helper" and backup["version"] == 1
+    assert profile == {"service_type": "conscript", "region": "부산"}
+    assert (
+        [i["title"] for i in items]
+        == ["국민취업지원제도"]
+        == [i["title"] for i in restored["items"]]
+    )
+    got = items[0]
+    assert got["done"] and got["core"] and got["due_months"] == 12
+    assert got["deadline"] == "전역 후 1년 이내" and got["origin"] == "plan"
+    assert got["question"] == "취업" and got["sources"][0]["title"] == "국민취업지원제도"
+
+
+def test_backup_rejects_files_from_other_apps():
+    with make_client([Route(next="answer")]) as client:
+        res = client.put("/backup/u1", json={"app": "other", "version": 1, "items": []})
+    assert res.status_code == 422
+
+
+# ---------- 이어 하기 코드 ----------
+
+
+def test_resume_code_opens_the_same_records_on_another_device():
+    with make_client([Route(next="answer")]) as client:
+        assert client.get("/resume-code/pc").json() == {"code": None}
+        code = client.post("/resume-code/pc").json()["code"]
+        # 사람이 소문자·띄어쓰기로 적어도 찾는다
+        typed = code.lower().replace("-", " ")
+        found = client.post("/resume", json={"code": typed}).json()
+        assert client.get("/resume-code/pc").json() == {"code": code}
+
+        # 새 코드를 만들면 이전 코드는 못 쓴다
+        newer = client.post("/resume-code/pc").json()["code"]
+        old = client.post("/resume", json={"code": code})
+
+    assert found == {"user_id": "pc"}
+    assert newer != code and old.status_code == 404
+
+
+def test_resume_code_format_and_normalize():
+    from jeonyeok_helper import resume
+
+    assert resume.normalize("jy-7k3q-9xpa") == "7K3Q9XPA"
+    assert resume.normalize("7K3Q 9XPA") == "7K3Q9XPA"
+    assert resume.normalize("JY-0OIL-9XPA") is None  # 코드에 없는 글자
+    assert resume.normalize("short") is None
+    assert resume.display("7K3Q9XPA") == "JY-7K3Q-9XPA"
+
+
+def test_guessing_resume_codes_is_rate_limited():
+    with make_client([Route(next="answer")]) as client:
+        codes = [
+            client.post("/resume", json={"code": "JY-2222-2222"}).status_code for _ in range(25)
+        ]
+    assert codes[0] == 404 and 429 in codes

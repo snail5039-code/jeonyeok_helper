@@ -34,6 +34,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 import uvicorn
@@ -45,7 +46,7 @@ from langgraph.types import Command
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from jeonyeok_helper import __version__, journey
+from jeonyeok_helper import __version__, journey, resume
 from jeonyeok_helper.agents import guide as guide_rules
 from jeonyeok_helper.agents.graph import PROFILE_NAMESPACE
 from jeonyeok_helper.agents.prompts import format_profile
@@ -142,6 +143,23 @@ class NewItem(BaseModel):
     # 빼기를 되돌릴 때 원래 상태(완료 여부, 어디서 담겼는지)를 그대로 복원하기 위한 값
     done: bool = False
     origin: Literal["plan", "chat"] = "chat"
+
+
+class BackupItem(NewItem):
+    question: str = Field(default="", max_length=500)
+
+
+class BackupFile(BaseModel):
+    """'내 기록 파일': 내 정보와 작전도를 통째로 담는다. 로그인 없이 기기를 옮기는 수단."""
+
+    app: Literal["jeonyeok_helper"] = "jeonyeok_helper"
+    version: Literal[1] = 1
+    profile: ProfileUpdate = Field(default_factory=ProfileUpdate)
+    items: list[BackupItem] = Field(default_factory=list, max_length=200)
+
+
+class ResumeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=20)
 
 
 class AddItems(BaseModel):
@@ -529,6 +547,56 @@ def create_app(
                 profile[key] = value
         await agent.store.aput(PROFILE_NAMESPACE, user_id, profile)
         return {"profile": profile}
+
+    @app.get("/backup/{user_id}")
+    async def export_backup(user_id: UserId, request: Request) -> dict:
+        """내 정보와 작전도를 파일로 내려받을 수 있게 한 번에 돌려준다."""
+        agent: CompiledStateGraph | None = request.app.state.agent
+        profile = await stored_profile(agent, user_id) if agent is not None else {}
+        items = journey.list_items(request.app.state.db, user_id)
+        return {
+            "app": "jeonyeok_helper",
+            "version": 1,
+            "saved_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "profile": profile,
+            "items": items,
+        }
+
+    @app.put("/backup/{user_id}")
+    async def import_backup(user_id: UserId, backup: BackupFile, request: Request) -> dict:
+        """기록 파일로 이 사용자의 내 정보와 작전도를 바꾼다 (지금 있던 것은 지워진다)."""
+        agent = require_agent(request)
+        if agent.store is None:
+            raise HTTPException(503, "프로필 저장소가 없어요")
+        profile = backup.profile.model_dump(exclude_none=True)
+        profile = {k: v for k, v in profile.items() if v not in ("", [])}
+        await agent.store.aput(PROFILE_NAMESPACE, user_id, profile)
+        items = journey.replace_items(
+            request.app.state.db, user_id, [i.model_dump() for i in backup.items]
+        )
+        # 불러온 작전도가 비어 있어도 첫 작전도를 자동으로 다시 만들지 않는다 (사용자의 기록)
+        await agent.store.aput(ROADMAP_MADE_NAMESPACE, user_id, {"count": len(items)})
+        return {"profile": profile, "items": items}
+
+    @app.get("/resume-code/{user_id}")
+    def get_resume_code(user_id: UserId, request: Request) -> dict:
+        return {"code": resume.get_code(request.app.state.db, user_id)}
+
+    @app.post("/resume-code/{user_id}", status_code=201)
+    def make_resume_code(user_id: UserId, request: Request) -> dict:
+        """이어 하기 코드를 새로 만든다. 이전 코드는 더 이상 쓸 수 없다."""
+        _limited(request, user_id)
+        return {"code": resume.new_code(request.app.state.db, user_id)}
+
+    @app.post("/resume")
+    def resume_with_code(body: ResumeRequest, request: Request) -> dict:
+        """코드로 기록의 익명 ID를 찾는다. 찍어서 맞히지 못하게 접속 주소별로 횟수를 제한한다."""
+        host = request.client.host if request.client else "unknown"
+        _limited(request, f"resume:{host}")  # 채팅 횟수와 따로 센다
+        user_id = resume.find_user(request.app.state.db, body.code)
+        if user_id is None:
+            raise HTTPException(404, "코드에 맞는 기록이 없어요. 코드를 다시 확인해 주세요.")
+        return {"user_id": user_id}
 
     @app.get("/journey/{user_id}")
     def get_journey(user_id: UserId, request: Request) -> dict:

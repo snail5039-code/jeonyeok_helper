@@ -3,12 +3,15 @@
 import { Check, CircleHelp, Star } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { downloadBackup, fetchBackup, makeBackup, parseBackup, restoreBackup } from "@/lib/backup";
 import { demoChat } from "@/lib/demo";
+import { findByCode, takeResumeParam } from "@/lib/resume";
+import { loadCopy, saveCopy, shouldRestore } from "@/lib/localCopy";
 import { sendFeedback, type Rating } from "@/lib/feedback";
 import { stepReplies } from "@/lib/guide";
-import { addItems, levelOf, nextItem, saveProfile } from "@/lib/journey";
+import { addItems, levelOf, nextItem, saveDemoJourney, saveProfile } from "@/lib/journey";
 import { streamChat } from "@/lib/sse";
-import { getUserId, readStorage, writeStorage } from "@/lib/storage";
+import { getUserId, readStorage, USER_ID_KEY, writeStorage } from "@/lib/storage";
 import type { ChatAction, ChatEvent, Guide, JourneyItem, Profile, QuickReply, Suggestion, Turn } from "@/lib/types";
 
 import { Book, BookTitle } from "./Book";
@@ -17,6 +20,7 @@ import { HelpView } from "./HelpView";
 import { HomeView } from "./HomeView";
 import { DeadlineChip } from "./JourneyParts";
 import { JourneyView } from "./JourneyView";
+import { KeepNotice } from "./KeepNotice";
 import { ProfileView } from "./ProfileView";
 import { StatusPanel } from "./StatusPanel";
 import { MobileTabs, TopNav } from "./TopNav";
@@ -63,6 +67,13 @@ export function ChatApp() {
   const [ready, setReady] = useState(false);
   const [page, setPage] = useState<Page>("chat");
   const [userId, setUserId] = useState("");
+  // 기록을 되살리면 '내 정보' 입력칸을 새 값으로 다시 그린다
+  const [profileVersion, setProfileVersion] = useState(0);
+  const [recordsNotice, setRecordsNotice] = useState("");
+  // 브라우저 사본: 서버 기록과 맞춘 뒤부터 사본을 갱신한다 (그 전에 빈 목록으로 덮어쓰지 않게)
+  const [copySynced, setCopySynced] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState("");
+  const copyChecked = useRef(false);
   const threadId = useRef<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   const { dark, toggle } = useTheme();
@@ -227,12 +238,64 @@ export function ChatApp() {
     setProfile(await saveProfile(userId, next));
   };
 
+  /** 내 기록 파일로 내려받기. 서버 기록이 기준이고, 데모 모드면 이 브라우저의 기록 */
+  const exportRecords = async () => {
+    downloadBackup(demo ? makeBackup(profile, journey.items) : await fetchBackup(userId));
+  };
+
+  /** 기록 파일로 이 브라우저의 기록을 바꾼다. 지금 기록이 있으면 먼저 묻는다 */
+  const importRecords = async (file: File): Promise<string> => {
+    const backup = parseBackup(await file.text());
+    const hasNow = journey.items.length > 0 || Boolean(profile.service_type);
+    if (hasNow && !confirm(`지금 기록을 이 파일 내용(임무 ${backup.items.length}개)으로 바꿀까요? 지금 기록은 사라져요.`)) {
+      return "불러오기를 취소했어요.";
+    }
+    let restored = { profile: backup.profile, items: backup.items };
+    if (demo) {
+      writeStorage(DEMO_PROFILE_KEY, JSON.stringify(backup.profile));
+      saveDemoJourney(backup.items);
+    } else {
+      restored = await restoreBackup(userId, backup);
+    }
+    setProfile(restored.profile);
+    journey.replaceAll(restored.items);
+    const done = `기록을 되살렸어요. 임무 ${restored.items.length}개, 완료 ${restored.items.filter((i) => i.done).length}개.`;
+    setRecordsNotice(done);
+    setProfileVersion((v) => v + 1);
+    return done;
+  };
+
+  /** 다른 기기에서 받은 코드로 이 브라우저를 그 기록으로 바꾸고 작전도를 연다 */
+  const resumeWithCode = async (code: string): Promise<string> => {
+    const found = await findByCode(code);
+    if (found === userId) return "이미 이 기록을 쓰고 있어요.";
+    const hasNow = journey.items.length > 0 || Boolean(profile.service_type);
+    if (hasNow && !confirm("이 브라우저의 지금 기록 대신 코드의 기록으로 바꿀까요? 지금 기록은 파일로 저장해 두지 않으면 다시 열 수 없어요.")) {
+      return "이어 하기를 취소했어요.";
+    }
+    writeStorage(USER_ID_KEY, found);
+    // 익명 ID가 바뀌었으니 화면 상태를 처음부터 다시 읽는다 (작전도 화면으로)
+    history.replaceState(null, "", "/?page=journey");
+    location.reload();
+    return "기록을 여는 중…";
+  };
+
   // 시작: 서버 에이전트가 준비됐는지 보고, 아니면 데모 모드로 연다.
   useEffect(() => {
-    const id = getUserId();
     const params = new URLSearchParams(location.search);
     let useDemo = params.has("demo");
     (async () => {
+      // QR(?resume=코드)로 들어오면 그 기록으로 바꾸고 주소에서는 코드를 지운다
+      const { code, cleaned } = takeResumeParam(new URL(location.href));
+      if (code) {
+        history.replaceState(null, "", cleaned);
+        try {
+          writeStorage(USER_ID_KEY, await findByCode(code));
+        } catch {
+          // 틀린 코드면 이 브라우저의 기록 그대로 연다
+        }
+      }
+      const id = getUserId();
       try {
         const health = await (await fetch("/api/health")).json();
         if (!health.agent_ready) useDemo = true;
@@ -257,6 +320,47 @@ export function ChatApp() {
       setReady(true);
     })();
   }, []);
+
+  // 시작할 때 한 번: 서버 기록이 비었는데 브라우저 사본이 있으면 사본으로 서버를 되살리고,
+  // 서버에서 작전도를 못 불러왔으면 사본으로 보여 준다.
+  const { status: journeyStatus, replaceAll } = journey;
+  useEffect(() => {
+    if (!ready || demo || copyChecked.current || journeyStatus === "loading") return;
+    copyChecked.current = true;
+    const copy = loadCopy(userId);
+    if (journeyStatus === "failed") {
+      if (copy?.items.length) {
+        replaceAll(copy.items);
+        setProfile((p) => (Object.keys(p).length ? p : copy.profile));
+        setOfflineNotice("서버에 연결하지 못해 이 브라우저에 저장해 둔 작전도를 보여 드려요. 바꾼 내용은 저장되지 않을 수 있어요.");
+      }
+      return;
+    }
+    if (!shouldRestore({ profile, items: journey.items }, copy)) {
+      setCopySynced(true);
+      return;
+    }
+    void restoreBackup(userId, makeBackup(copy.profile, copy.items))
+      .then((restored) => {
+        setProfile(restored.profile);
+        replaceAll(restored.items);
+      })
+      .catch(() => {
+        replaceAll(copy.items);
+        setProfile(copy.profile);
+      })
+      .finally(() => setCopySynced(true));
+  }, [ready, demo, userId, journeyStatus, replaceAll, profile, journey.items]);
+
+  // 서버 기록과 맞춘 뒤로는 바뀔 때마다 사본을 갱신한다
+  useEffect(() => {
+    if (copySynced && !demo && userId) saveCopy(userId, profile, journey.items);
+  }, [copySynced, demo, userId, profile, journey.items]);
+
+  // 되살린 결과 안내는 '내 정보' 화면을 떠나면 지운다 (다시 왔을 때 지난 안내가 보이지 않게)
+  useEffect(() => {
+    if (page !== "profile") setRecordsNotice("");
+  }, [page]);
 
   // 공유 링크: ?q=질문 으로 들어오면 서버 상태를 확인한 뒤 한 번 물어본다.
   const sharedAsked = useRef(false);
@@ -293,6 +397,12 @@ export function ChatApp() {
         onAsk={ask}
       />
 
+      {offlineNotice && (
+        <p role="status" className="mx-auto mt-2 w-[min(100%-20px,1320px)] rounded-[10px] border-2 border-warn/60 bg-soft px-3.5 py-2 text-[13.5px] font-semibold text-warn">
+          {offlineNotice}
+        </p>
+      )}
+
       {page === "chat" && isHome ? (
         <HomeView
           profile={profile}
@@ -310,10 +420,15 @@ export function ChatApp() {
         <JourneyView journey={journey} profile={profile} onAsk={ask} onProfile={() => setPage("profile")} />
       ) : page === "profile" ? (
         <ProfileView
-          key={ready ? "ready" : "loading"}
+          key={ready ? `ready-${profileVersion}` : "loading"}
           profile={profile}
           demo={demo}
           onSave={saveMyProfile}
+          onExport={exportRecords}
+          onImport={importRecords}
+          recordsNotice={recordsNotice}
+          userId={userId}
+          onResume={resumeWithCode}
           onFillJourney={() => {
             setPage("journey");
             void journey.generate();
@@ -380,6 +495,24 @@ export function ChatApp() {
       )}
 
       <UndoToast journey={journey} />
+
+      {/* 작전도에 할 일이 생기면 한 번만, 기록이 이 브라우저에 묶여 있다고 알린다 */}
+      {ready && !demo && journey.items.length > 0 && (
+        <KeepNotice
+          onExport={exportRecords}
+          onOpenCode={() => {
+            setPage("profile");
+            // '내 정보' 화면이 그려질 때까지 기다렸다가 '내 기록 지키기' 칸으로 내린다
+            let tries = 0;
+            const scroll = () => {
+              const el = document.getElementById("keep-records");
+              if (el) el.scrollIntoView({ block: "start" });
+              else if (tries++ < 20) setTimeout(scroll, 50);
+            };
+            setTimeout(scroll, 50);
+          }}
+        />
+      )}
 
       <MobileTabs
         view={view}

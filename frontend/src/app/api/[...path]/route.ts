@@ -15,6 +15,9 @@ const ALLOWED = [
   /^journey\/[\w-]{1,64}\/generate$/,
   /^journey\/[\w-]{1,64}\/items$/,
   /^journey\/[\w-]{1,64}\/items\/[\w-]{1,64}$/,
+  /^backup\/[\w-]{1,64}$/,
+  /^resume-code\/[\w-]{1,64}$/,
+  /^resume$/,
 ];
 const NO_BODY = new Set(["GET", "DELETE"]);
 

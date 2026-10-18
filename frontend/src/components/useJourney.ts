@@ -27,6 +27,8 @@ const TOAST_MS = 10_000;
     바뀐 것은 모두 기록해 둬서, 마음이 바뀌면 하나씩 또는 여러 단계를 한꺼번에 되돌릴 수 있다. */
 export function useJourney(userId: string, demo: boolean, ready: boolean) {
   const [items, setItems] = useState<JourneyItem[]>([]);
+  // 서버에서 불러왔는지: 불러오기 전 빈 목록으로 브라우저 사본을 덮어쓰지 않게 구분한다
+  const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
   // 대화에서 막 담긴 할 일 (잠깐 강조해서 보여 준다)
   const [fresh, setFresh] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
@@ -48,9 +50,13 @@ export function useJourney(userId: string, demo: boolean, ready: boolean) {
     (async () => {
       try {
         const loaded = demo ? loadDemoJourney() : await fetchJourney(userId);
-        if (alive) setItems(loaded);
+        if (alive) {
+          setItems(loaded);
+          setStatus("loaded");
+        }
       } catch {
-        // 불러오지 못해도 채팅은 쓸 수 있다
+        // 불러오지 못해도 채팅은 쓸 수 있다 (화면은 브라우저 사본으로 그린다)
+        if (alive) setStatus("failed");
       }
     })();
     return () => {
@@ -225,8 +231,21 @@ export function useJourney(userId: string, demo: boolean, ready: boolean) {
     }
   }, [deleteIds, demo, record, update, userId]);
 
+  /** 기록 파일·이어 하기 코드로 되살린 작전도로 통째로 바꾼다 (되돌리기 기록은 비운다) */
+  const replaceAll = useCallback(
+    (next: JourneyItem[]) => {
+      update(() => next);
+      alias.current = {};
+      setHistory([]);
+      setToast(null);
+    },
+    [update],
+  );
+
   return {
     items,
+    status,
+    replaceAll,
     fresh,
     generating,
     error,
