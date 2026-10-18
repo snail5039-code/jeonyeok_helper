@@ -110,15 +110,21 @@ class LawApiClient:
 
         return self._search_all("ordin", keywords, lambda root: root.get("law"), key_of)
 
-    def load_admin_rule(self, name: str) -> list[Document]:
-        """행정규칙(훈령·고시·예규)을 이름으로 찾아 조문 단위로 가져온다."""
+    def find_admin_rule(self, name: str) -> dict | None:
+        """이름이 정확히 일치하는 행정규칙 1건 (행정규칙ID, 행정규칙일련번호, 시행일자 등)"""
         data = self._get("lawSearch.do", target="admrul", query=name, display=50)
         root = next(iter(data.values()), {})
-        found = next((i for i in _as_list(root.get("admrul")) if i.get("행정규칙명") == name), None)
+        return next((i for i in _as_list(root.get("admrul")) if i.get("행정규칙명") == name), None)
+
+    def fetch_admin_rule(self, serial: str) -> list[Document]:
+        return admin_rule_json_to_documents(self._get("lawService.do", target="admrul", ID=serial))
+
+    def load_admin_rule(self, name: str) -> list[Document]:
+        """행정규칙(훈령·고시·예규)을 이름으로 찾아 조문 단위로 가져온다."""
+        found = self.find_admin_rule(name)
         if found is None:
             raise LookupError(f"행정규칙을 찾지 못했습니다: {name}")
-        body = self._get("lawService.do", target="admrul", ID=found["행정규칙일련번호"])
-        return admin_rule_json_to_documents(body)
+        return self.fetch_admin_rule(found["행정규칙일련번호"])
 
     def find_interpretations(self, target: str, keywords: list[str]) -> list[dict]:
         """법령해석례 목록. target은 expc(법제처) 또는 부처별 mpvaCgmExpc 등."""

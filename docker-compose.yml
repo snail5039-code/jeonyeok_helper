@@ -3,6 +3,7 @@
 # 법령 수집:        docker compose run --rm api jeonyeok-rag laws
 # 보훈부 자료 수집:  backend/data/raw/에 파일을 넣고 docker compose run --rm api jeonyeok-rag files
 # 평가:            docker compose run --rm api jeonyeok-eval
+# 자료 갱신(바뀐 것만): docker compose run --rm api jeonyeok-rag refresh  (refresh 서비스가 7일마다 자동으로도 한다)
 #
 # API 키는 backend/.env 에 넣는다 (backend/.env.example 참고).
 
@@ -41,6 +42,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
+
+  # 자료 자동 갱신: 7일마다 개정된 법령·조례만 다시 수집하고 검색 골든셋 점수를 DB(refresh_run)에 남긴다.
+  # 서버(api)는 10분마다 BM25 색인 지문을 확인해 바뀐 색인으로 바꿔 끼운다.
+  # 바로 한 번 돌리기: docker compose run --rm api jeonyeok-rag refresh
+  refresh:
+    image: jeonyeok_helper-api:latest
+    command: ["jeonyeok-rag", "refresh", "--loop"]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://jeonyeok:jeonyeok@db:5432/jeonyeok
+    healthcheck:
+      disable: true # 웹 서버가 아니다
+    depends_on:
+      api:
+        condition: service_healthy # api가 DB 스키마를 최신으로 올린 뒤
     restart: unless-stopped
 
   web:

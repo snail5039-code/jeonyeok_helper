@@ -433,3 +433,33 @@ def test_keyword_index_is_saved_and_reused_until_documents_change(tmp_path, monk
     sig["value"] = "v2"
     again = keyword.build_index(Session, "c", storage)  # 바뀐 조각만 다시 분석
     assert analyzed == ["예비군 훈련 보상비"] and len(again.docs) == 4
+
+
+def test_server_index_follows_changes_made_by_another_process(tmp_path, monkeypatch):
+    """자료 자동 갱신이 DB를 바꾸면, 서버의 색인은 뒤에서 지문을 확인해 새 색인으로 바꿔 끼운다."""
+    import time
+
+    from jeonyeok_helper.rag import keyword
+
+    built = []
+    sig = {"value": "v1"}
+
+    def fake_build(*_args):
+        index = keyword.KeywordIndex([("a", "x", {})], [["x"]], bm25=object())
+        index.signature = sig["value"]
+        built.append(sig["value"])
+        return index
+
+    monkeypatch.setattr(keyword, "build_index", fake_build)
+    monkeypatch.setattr(keyword, "signature", lambda *_: sig["value"])
+    lazy = keyword.LazyKeywordIndex(None, "c", check_every=0)
+    lazy.get()
+    assert built == ["v1"]
+
+    sig["value"] = "v2"  # 다른 프로세스가 자료를 바꿈
+    lazy.get()  # 검색은 기다리지 않고, 확인은 뒤에서 한다
+    for _ in range(50):
+        if built == ["v1", "v2"]:
+            break
+        time.sleep(0.02)
+    assert built == ["v1", "v2"] and lazy.get().signature == "v2"
