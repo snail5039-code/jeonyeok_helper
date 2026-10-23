@@ -220,7 +220,7 @@ cp backend/.env.example backend/.env   # 키 입력 (아래 표)
 docker compose up --build              # http://localhost:3000
 ```
 
-서버에 올리는 방법(AWS Lightsail·EC2·무료·국내 클라우드 등)과 배포 전 체크리스트는 [배포 가이드](docs/배포_가이드.md)에 있습니다. `GOOGLE_API_KEY`가 없으면 데모 모드로 열립니다. 쳐 볼 질문은 [테스트 질문 모음](docs/테스트_질문모음.md), 순서대로 따라 하는 안내는 [사용·테스트 안내](docs/사용_테스트_안내.md)에 있습니다.
+AWS에 올리는 설계(ECS Fargate·RDS pgvector·ALB·Secrets Manager·GitHub Actions 자동 배포, 비용 포함)는 [AWS 배포 설계](docs/AWS_배포.md)에, 서버 한 대에 올리는 방법과 배포 전 체크리스트는 [배포 가이드](docs/배포_가이드.md)에 있습니다. `GOOGLE_API_KEY`가 없으면 데모 모드로 열립니다. 쳐 볼 질문은 [테스트 질문 모음](docs/테스트_질문모음.md), 순서대로 따라 하는 안내는 [사용·테스트 안내](docs/사용_테스트_안내.md)에 있습니다.
 
 | 키 | 발급처 | 용도 |
 |---|---|---|
