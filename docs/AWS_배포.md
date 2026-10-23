@@ -1,175 +1,237 @@
-# AWS 배포 설계
+# AWS에 올리기 (초보자용)
 
-> 2026-10-24 정리. **실제로 서버를 만들지는 않았고**, 이 서비스를 AWS에 올린다면 어떻게 할지를 설계해 둔 문서입니다.
-> 요금은 서울 리전(ap-northeast-2) 기준 대략값입니다. 실제로 올리기 전에 [AWS 요금 계산기](https://calculator.aws/)로 다시 확인하세요.
-> 서버 한 대에 지금 구성을 그대로 올리는 가장 싼 방법(Lightsail)은 [배포 가이드 4장](배포_가이드.md#4-방법-a-aws-lightsail-추천)에 있습니다.
+> 2026-10-24 정리. **실제로 서버를 만들지는 않았고**, 처음 해 보는 사람이 그대로 따라 할 수 있게 순서를 적어 둔 문서입니다.
+> 요금은 이날 기준 대략값입니다. 결제 전에 [Lightsail 요금](https://aws.amazon.com/ko/lightsail/pricing/)에서 다시 확인하세요.
 
-## 1. 결론
+## 0. 먼저 알아 둘 것
 
-| | 1단계: 서버 한 대 | 2단계: 관리형 서비스로 나누기 |
-|---|---|---|
-| 구성 | Lightsail 4GB 한 대에 `docker compose` + Caddy(HTTPS) | ECS Fargate(api·web) + RDS PostgreSQL(pgvector) + ALB + ACM |
-| 월 비용 | 약 $24 (고정) | 약 $90~120 |
-| 장점 | 로컬과 똑같이 돌아감. 싸고 단순함 | 서버 관리(OS 패치·디스크·재시작)가 없음. DB 백업·장애 조치를 AWS가 함. 서비스별로 따로 늘릴 수 있음 |
-| 단점 | 서버가 죽으면 서비스도 멈춤. 백업·패치를 직접 함 | 비쌈. 설정할 것이 많음 |
-| 언제 | 시연, 사용자가 적을 때 | 실제 사용자가 생기고 멈추면 안 될 때 |
+**무엇을 쓰나**: AWS **Lightsail**입니다. 서버 한 대를 월 고정 요금으로 빌리는 서비스라, EC2보다 설정할 것이 훨씬 적고 요금이 예상한 대로 나옵니다.
+그 서버 안에서 지금 로컬과 **똑같이 `docker compose up`** 을 합니다. 코드는 하나도 바꾸지 않습니다.
 
-이 문서는 **2단계**를 설계합니다. 지금 `docker-compose.yml`의 서비스 4개(`db`, `api`, `refresh`, `web`)가 AWS의 어디로 가는지가 핵심입니다.
-
-## 2. 구성도
-
-```mermaid
-flowchart LR
-    user[사용자 브라우저] -->|HTTPS| r53[Route 53<br/>도메인]
-    r53 --> alb[ALB<br/>ACM 인증서]
-    subgraph VPC [VPC: 서울 리전, 가용 영역 2개]
-        alb -->|:3000| web[ECS Fargate<br/>web: Next.js]
-        web -->|/api/* 중계<br/>Service Connect| api[ECS Fargate<br/>api: FastAPI + LangGraph]
-        api --> rds[(RDS PostgreSQL 17<br/>pgvector)]
-        sched[EventBridge Scheduler<br/>주 1회] -->|RunTask| refresh[ECS Fargate 작업<br/>jeonyeok-rag refresh]
-        refresh --> rds
-    end
-    api -->|외부 API| ext[Gemini, 국가법령정보센터,<br/>공공데이터포털, 온통청년]
-    refresh --> ext
-    sm[Secrets Manager<br/>API 키·DB 비밀번호] -.주입.-> api
-    sm -.주입.-> refresh
-    ecr[ECR<br/>이미지 저장소] -.이미지.-> web
-    ecr -.이미지.-> api
-    api -.로그.-> cw[CloudWatch Logs·알람]
-    web -.로그.-> cw
+```
+내 PC (지금)                         AWS Lightsail 서버 한 대
+docker compose up   ──똑같이──▶     docker compose up
+localhost:3000                      http://서버IP  →  (도메인을 붙이면) https://내도메인
 ```
 
-## 3. compose 서비스 → AWS 대응
+**돈은 얼마나**
 
-| 지금 (`docker-compose.yml`) | AWS | 설정 | 이유 |
-|---|---|---|---|
-| `db` pgvector/pgvector:pg17 | **RDS for PostgreSQL 17**, db.t4g.small(2GB), gp3 20GB, 자동 백업 7일 | `CREATE EXTENSION vector;` (RDS가 pgvector를 지원함) | DB 크기 약 200MB, 대기 메모리 약 300MB. 백업·패치·장애 조치를 맡김 |
-| `api` FastAPI | **ECS Fargate 서비스**, 1 vCPU / 2GB, **작업 1개** | uvicorn 워커 1개(지금 Dockerfile 그대로) | 대기 중 약 855MB(형태소 분석기 Kiwi만 약 500MB). 기한 알림 루프가 서버 안에서 한 시간마다 돌아서, 작업을 2개로 늘리면 알림이 두 번 갈 수 있음 |
-| `refresh` (`--loop`, 7일마다) | **EventBridge Scheduler → ECS RunTask** (주 1회, `jeonyeok-rag refresh`) | `--loop` 없이 한 번 돌고 끝남 | 계속 켜 둘 필요가 없음. 도는 동안만 요금이 붙음 |
-| `web` Next.js | **ECS Fargate 서비스**, 0.25 vCPU / 0.5GB, 작업 1~2개 | `API_URL=http://api:8000` (ECS Service Connect 이름) | 대기 중 약 80MB. 화면과 `/api/*` 중계만 함 |
-| `ports: 3000:3000` | **ALB** + **ACM** 인증서(무료) + **Route 53** | 리스너 443 → web 대상 그룹, 80 → 443으로 넘김 | 알림(Web Push)·홈 화면 설치(PWA)는 HTTPS에서만 됨 |
-| `backend/.env` | **Secrets Manager** (또는 SSM Parameter Store) | 작업 정의의 `secrets`로 환경 변수 주입 | 키를 이미지나 Git에 넣지 않음 |
-| `docker compose logs` | **CloudWatch Logs** (awslogs 드라이버), 보관 30일 | | |
-| `volumes: state` | 필요 없음 | 대화·프로필·작전도는 이미 Postgres에 저장 | 컨테이너를 언제 바꿔도 기록이 남음 |
-
-## 4. 네트워크와 보안
-
-- **VPC**: 가용 영역 2개, 서브넷은 공개(ALB)와 비공개(ECS·RDS)로 나눔.
-- **보안 그룹**: 들어오는 연결을 바로 앞 단계에서만 받게 묶음.
-  - ALB: 443·80을 전체에서
-  - web: 3000을 ALB 보안 그룹에서만
-  - api: 8000을 web 보안 그룹에서만 (밖에서 api로 바로 못 들어옴)
-  - RDS: 5432를 api·refresh 보안 그룹에서만
-- **밖으로 나가는 연결**: api·refresh는 Gemini·공공 API를 불러야 합니다. 비공개 서브넷이면 NAT 게이트웨이가 필요합니다(월 약 $45 + 데이터).
-  - 비용을 줄이려면 ECS 작업을 공개 서브넷에 두고 공인 IP를 받되, 보안 그룹으로 들어오는 연결을 막는 방법도 있습니다. 비공개 서브넷보다 덜 안전하지만, 작은 서비스에서 자주 쓰는 타협입니다.
-  - ECR·Secrets Manager·CloudWatch는 VPC 엔드포인트를 두면 NAT를 거치지 않습니다.
-- **IAM**
-  - 작업 실행 역할: ECR에서 이미지 받기, Secrets Manager 읽기, 로그 쓰기
-  - 작업 역할: 앱이 AWS를 부르지 않으므로 거의 비워 둠
-- **SSE 스트리밍**: 답변이 한 글자씩 SSE로 옵니다. 긴 답은 45초를 넘길 수 있어 **ALB 유휴 제한 시간을 60초(기본) → 120초**로 늘립니다.
-
-## 5. 비밀값 (Secrets Manager)
-
-| 이름 | 들어가는 값 |
+| 항목 | 비용 |
 |---|---|
-| `jeonyeok/api-keys` | `GOOGLE_API_KEY`, `LAW_API_OC`, `DATA_GO_KR_SERVICE_KEY`, `YOUTHCENTER_API_KEY` |
-| `jeonyeok/push` | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`(`https://내도메인`) |
-| `jeonyeok/admin` | `ADMIN_TOKEN` (운영용으로 새로 생성) |
-| `jeonyeok/db` | RDS 만들 때 "Secrets Manager에서 관리" 선택 → 비밀번호 자동 생성·교체 |
+| Lightsail 4GB 서버 | 월 약 **$24** (약 3만 4천 원). 시간 단위로 계산 → 하루 켜 두면 약 $0.8 |
+| 고정 IP | 서버에 붙어 있으면 무료 |
+| 도메인 (선택) | 연 1~2만 원. 없어도 IP 주소로 열림 |
+| Gemini API | 질문 수만큼. 지금 쓰는 키 그대로 |
 
-`DATABASE_URL`은 작업 정의에서 RDS 주소와 위 비밀번호로 조합합니다. 일반 설정(`CHAT_RATE_LIMIT_PER_MINUTE`, `GEMINI_MODEL` 등)은 비밀값이 아니므로 `environment`에 둡니다.
+- **왜 4GB인가**: 백엔드가 혼자 약 855MB를 씁니다(한국어 형태소 분석기 Kiwi만 약 500MB). DB와 화면까지 합치면 1.2GB쯤이고, 서버에서 이미지를 빌드할 때 더 씁니다. 2GB($12)도 되지만 멈출 수 있어 초보자에게는 4GB를 권합니다.
+- **포트폴리오용으로 아끼는 법**: 면접·시연 때만 켜 두고, 끝나면 **스냅샷을 찍고 서버를 삭제**합니다. 다시 필요할 때 스냅샷으로 5분 만에 살립니다(9장). 일주일만 켜면 $6 안팎입니다.
+- **주의**: Lightsail은 서버를 **"중지"해도 요금이 나갑니다.** 요금을 멈추려면 **삭제**해야 합니다.
+- 새 계정에는 무료 크레딧이나 몇 달 무료 플랜이 붙는 경우가 있습니다. 가입할 때 안내를 확인하세요(조건이 자주 바뀜).
 
-## 6. 순서
+**전체 순서** (처음이면 1~2시간)
 
-1. **이미지 저장소**: ECR 저장소 `jeonyeok/api`, `jeonyeok/web` 만들기. 수명 주기 규칙으로 최근 10개만 남김.
-2. **네트워크**: VPC(가용 영역 2개, 공개·비공개 서브넷) + 4장의 보안 그룹.
-3. **DB**: RDS PostgreSQL 17 만들기(비공개 서브넷, 공개 접근 끔, 자동 백업 7일, 비밀번호는 Secrets Manager 관리).
-4. **데이터 옮기기**: 자료를 서버에서 다시 모으면 시간과 임베딩 비용이 들어서, 로컬 DB를 덤프해 옮깁니다(약 200MB).
-   ```bash
-   # 로컬
-   docker exec jeonyeok_helper-db-1 pg_dump -U jeonyeok -Fc jeonyeok > jeonyeok.dump
-   # RDS는 비공개라, 같은 VPC의 임시 EC2(또는 SSM 포트 포워딩)를 거쳐 복원
-   psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
-   pg_restore -d "$DATABASE_URL" --no-owner --clean --if-exists jeonyeok.dump
-   ```
-   테스트용 사용자 기록은 비우고 검색 자료만 남깁니다([배포 가이드 2장](배포_가이드.md#데이터-옮기기)).
-5. **비밀값**: 5장의 표대로 Secrets Manager에 저장.
-6. **인증서·도메인**: Route 53에 도메인 → ACM에서 인증서 발급(DNS 검증).
-7. **ECS 클러스터**: Fargate 클러스터 + Service Connect 이름 공간(`jeonyeok`).
-8. **작업 정의 3개**: `api`, `web`, `refresh`(api 이미지에 명령만 `["jeonyeok-rag", "refresh"]`). api 작업 정의의 핵심 부분은 아래와 같습니다.
-   ```json
-   {
-     "family": "jeonyeok-api",
-     "requiresCompatibilities": ["FARGATE"],
-     "cpu": "1024",
-     "memory": "2048",
-     "networkMode": "awsvpc",
-     "containerDefinitions": [{
-       "name": "api",
-       "image": "<계정>.dkr.ecr.ap-northeast-2.amazonaws.com/jeonyeok/api:<커밋>",
-       "portMappings": [{ "containerPort": 8000, "name": "api" }],
-       "secrets": [
-         { "name": "GOOGLE_API_KEY", "valueFrom": "arn:aws:secretsmanager:...:jeonyeok/api-keys:GOOGLE_API_KEY::" }
-       ],
-       "environment": [{ "name": "CHAT_RATE_LIMIT_PER_MINUTE", "value": "20" }],
-       "healthCheck": {
-         "command": ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"],
-         "startPeriod": 60
-       },
-       "logConfiguration": {
-         "logDriver": "awslogs",
-         "options": { "awslogs-group": "/ecs/jeonyeok-api", "awslogs-region": "ap-northeast-2", "awslogs-stream-prefix": "api" }
-       }
-     }]
-   }
-   ```
-   DB 스키마는 api가 켜질 때 Alembic이 최신까지 올리므로 따로 마이그레이션 작업이 필요 없습니다.
-9. **서비스**: `api`(작업 1개, Service Connect로 `api:8000` 공개) → `web`(ALB 대상 그룹에 연결, 상태 확인 `/`).
-10. **ALB**: 443 리스너 → web, 80 → 443 넘김, 유휴 제한 시간 120초.
-11. **자료 갱신 예약**: EventBridge Scheduler에서 `rate(7 days)`로 `refresh` 작업 실행.
-12. **확인**: `https://도메인/api/health`, 그리고 [배포 가이드 6장](배포_가이드.md#6-배포-후-실테스트-체크리스트) 체크리스트.
+1. AWS 가입 → 2. 서버 만들기 → 3. 고정 IP·방화벽 → 4. 서버 접속 → 5. Docker 설치 → 6. 코드·키 넣기 → 7. 검색 자료 옮기기 → 8. 켜기 → (선택) 도메인·HTTPS
 
-## 7. 자동 배포 (GitHub Actions)
+## 1. AWS 가입
 
-지금 `ci.yml`은 테스트·린트만 합니다. 배포를 붙이면 `main`에 합쳐질 때 다음이 돌게 합니다.
+1. [aws.amazon.com](https://aws.amazon.com/ko/)에서 계정 만들기. 카드 등록이 필요합니다(확인용 소액 결제 후 취소됨).
+2. **꼭 해 둘 것: 요금 알림.** 콘솔 위 검색창에 `Budgets` → 예산 만들기 → 월 $30 → 80% 넘으면 메일. 실수로 비싼 걸 켜도 바로 알 수 있습니다.
+3. 루트 계정에 **MFA(2단계 인증)** 를 켭니다(계정 이름 클릭 → 보안 자격 증명).
 
-```
-테스트 통과 → 이미지 빌드(태그 = 커밋 해시) → ECR에 올리기 → 작업 정의 새 버전 → ECS 서비스 롤링 배포
+## 2. 서버 만들기
+
+1. 콘솔 검색창에 `Lightsail` → **Create instance**.
+2. 고를 것:
+   - 위치: **Seoul (ap-northeast-2)**
+   - 플랫폼: **Linux/Unix**
+   - 블루프린트: **OS Only → Ubuntu 24.04 LTS**
+   - 플랜: **$24 (4GB 메모리, 2 vCPU, 80GB SSD)**
+   - 이름: `jeonyeok`
+3. **Create instance**. 1~2분 뒤 상태가 Running이 됩니다.
+
+## 3. 고정 IP와 방화벽
+
+서버를 다시 켜면 IP가 바뀌므로 고정 IP를 붙입니다.
+
+1. 인스턴스 클릭 → **Networking** 탭 → **Attach static IP** → 이름 아무거나 → 만들기. 이 IP를 적어 두세요(아래에서 `서버IP`).
+2. 같은 탭의 **IPv4 Firewall**:
+   - 이미 있는 것: SSH(22), HTTP(80)
+   - **HTTPS(443) 추가** (도메인을 붙일 때 필요)
+   - SSH(22)는 가능하면 "Restrict to IP address"로 내 IP만 허용
+   - **5432(DB)·8000(api)·3000은 열지 않습니다.** 밖에서 DB에 바로 들어올 수 있게 되기 때문입니다.
+
+## 4. 서버 접속
+
+가장 쉬운 방법: 인스턴스 화면의 **Connect using SSH** 버튼. 브라우저에 검은 터미널 창이 열립니다. 아래 명령은 전부 여기에 붙여 넣습니다.
+
+> 내 PC의 파일을 서버로 보낼 때(7장)는 PC의 터미널에서 접속해야 합니다.
+> Lightsail 첫 화면 → 계정 → **SSH keys** → 서울 리전 기본 키 다운로드(`LightsailDefaultKey-ap-northeast-2.pem`).
+> ```bash
+> ssh -i LightsailDefaultKey-ap-northeast-2.pem ubuntu@서버IP
+> ```
+
+## 5. Docker 설치 (서버에서, 한 번만)
+
+```bash
+sudo apt update && sudo apt -y upgrade
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
 ```
 
-- AWS 키를 GitHub에 저장하지 않고 **OIDC**로 역할을 빌립니다(`aws-actions/configure-aws-credentials`). 역할 권한은 ECR 올리기와 해당 ECS 서비스 갱신만 줍니다.
-- 롤링 배포 중 새 작업의 상태 확인이 실패하면 ECS가 이전 버전으로 되돌립니다(배포 서킷 브레이커).
-- 되돌리기는 이전 작업 정의 버전으로 서비스를 바꾸면 됩니다. 다만 DB 마이그레이션이 들어간 변경은 앞으로만 적용되므로, 큰 변경 전에는 RDS 스냅샷을 먼저 찍습니다.
+창을 닫고 다시 접속한 뒤 확인합니다.
 
-## 8. 운영
+```bash
+docker compose version     # 버전이 나오면 성공
+```
 
-| 항목 | 방법 |
+혹시 메모리가 모자랄 때를 대비해 스왑(디스크를 메모리처럼 쓰기) 4GB를 켜 둡니다.
+
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+
+## 6. 코드와 키 넣기
+
+```bash
+git clone https://github.com/snail5039-code/jeonyeok_helper.git
+cd jeonyeok_helper
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+
+`nano` 편집기가 열리면 로컬 `backend/.env`와 같은 값을 넣습니다.
+
+| 키 | 값 |
 |---|---|
-| 백업 | RDS 자동 백업 7일 + 큰 변경 전 수동 스냅샷 |
-| 알람 | CloudWatch 알람: api CPU·메모리 80% 이상, ALB 5xx 증가, 대상 그룹 비정상 → SNS 메일 |
-| 로그 | CloudWatch Logs 보관 30일. 단계별 소요 시간은 지금처럼 `/admin` 화면에서 봄 |
-| 비용 | AWS Budgets 월 한도 알림. Gemini 사용료는 Google AI Studio에서 따로 한도를 걺 |
-| 늘리기 | web은 작업 수를 늘리면 됨. api를 늘리려면 기한 알림 루프를 별도 예약 작업으로 빼고, 질문 답 저장(지금 서버 메모리)을 ElastiCache 등 공용 저장소로 옮겨야 함 |
+| `GOOGLE_API_KEY`, `LAW_API_OC`, `DATA_GO_KR_SERVICE_KEY`, `YOUTHCENTER_API_KEY` | 로컬과 같은 값 |
+| `ADMIN_TOKEN` | 새로 만든 긴 값 (`openssl rand -base64 24` 결과를 붙여 넣기) |
+| `VAPID_*` | 로컬 값. `VAPID_SUBJECT`는 도메인이 생기면 `https://내도메인`으로 |
 
-## 9. 비용 (대략, 월)
+저장은 `Ctrl+O` → `Enter`, 나가기는 `Ctrl+X`. **이 파일은 Git에 올리지 않습니다.**
 
-| 항목 | 사양 | 대략 |
+## 7. 검색 자료 옮기기
+
+서버에서 법령·자료를 처음부터 다시 모으면 몇 시간과 임베딩 비용이 듭니다. **로컬 DB를 파일로 떠서 그대로 옮기는 것**이 빠릅니다(약 200MB).
+
+**내 PC에서** (로컬 Docker가 켜진 상태, 레포 폴더에서)
+
+```bash
+docker exec jeonyeok_helper-db-1 pg_dump -U jeonyeok -Fc jeonyeok > jeonyeok.dump
+scp -i LightsailDefaultKey-ap-northeast-2.pem jeonyeok.dump ubuntu@서버IP:~/
+```
+
+> PowerShell에서는 `>`가 파일을 망가뜨릴 수 있어서, 첫 줄은 **Git Bash**에서 실행하세요.
+
+**서버에서**
+
+```bash
+cd ~/jeonyeok_helper
+docker compose up -d db
+docker compose exec -T db pg_restore -U jeonyeok -d jeonyeok --clean --if-exists < ~/jeonyeok.dump
+```
+
+경고가 몇 줄 나와도 마지막에 멈추지 않았다면 괜찮습니다.
+
+## 8. 켜기
+
+```bash
+docker compose up -d --build      # 처음엔 이미지 빌드로 5~10분
+docker compose ps                 # db, api, web이 healthy인지
+curl -s localhost:8000/health     # {"status":"ok", ...}
+```
+
+지금 compose는 화면을 3000번 포트로 띄우므로, 서버 안에서 80번으로 넘겨 주는 설정을 하나 추가합니다(아래 "도메인·HTTPS"를 할 거면 건너뛰고 그쪽으로).
+
+```bash
+cat > docker-compose.override.yml <<'EOF'
+services:
+  web:
+    ports: !override
+      - "80:3000"
+  db:
+    ports: !reset []
+EOF
+docker compose up -d
+```
+
+브라우저에서 **`http://서버IP`** 가 열리면 끝입니다. 질문을 하나 해 보세요.
+
+- `db`의 `ports`를 비운 이유: 서버 밖으로 DB 포트를 내보내지 않기 위해서입니다(방화벽으로도 막았지만 한 번 더).
+- 휴대폰 알림·홈 화면 설치는 **HTTPS에서만** 됩니다. 이것까지 보여 주려면 아래 도메인을 붙이세요.
+
+## (선택) 도메인·HTTPS
+
+1. 도메인을 삽니다(가비아·Cloudflare·Route 53 등, 연 1~2만 원).
+2. 도메인 관리 화면에서 **A 레코드: `내도메인` → `서버IP`** 를 추가합니다. 반영까지 몇 분~몇 시간.
+3. 서버에서 Caddy(인증서를 자동으로 받아 주는 웹 서버)를 앞에 붙입니다.
+
+```bash
+cd ~/jeonyeok_helper
+cat > Caddyfile <<'EOF'
+내도메인.com {
+    reverse_proxy web:3000
+}
+EOF
+cat > docker-compose.override.yml <<'EOF'
+services:
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - web
+    restart: unless-stopped
+  web:
+    ports: !reset []
+  db:
+    ports: !reset []
+volumes:
+  caddy_data:
+EOF
+docker compose up -d
+```
+
+4. `https://내도메인`에 자물쇠가 보이면 성공입니다. `backend/.env`의 `VAPID_SUBJECT`를 `https://내도메인`으로 바꾸고 `docker compose up -d api`.
+
+## 9. 끄기·다시 켜기 (돈 아끼기)
+
+| 하고 싶은 것 | 방법 |
+|---|---|
+| 코드 바꾼 걸 반영 | `cd ~/jeonyeok_helper && git pull && docker compose up -d --build` |
+| 로그 보기 | `docker compose logs -f --tail=100 api` |
+| **요금 멈추기** | 인스턴스 → **Snapshots** 탭 → 스냅샷 만들기 → 끝나면 인스턴스 **Delete**. 고정 IP도 **Networking → 삭제**(붙어 있지 않은 고정 IP는 요금이 붙음) |
+| 다시 살리기 | Snapshots → 스냅샷의 메뉴 → **Create new instance** → 고정 IP 다시 붙이기. 도메인을 쓰면 A 레코드도 새 IP로 |
+
+- 스냅샷 보관료는 GB당 월 $0.05 정도라, 80GB 디스크라도 실제 쓴 만큼만 계산돼 월 $1 안팎입니다.
+- 서버를 재부팅해도 `restart: unless-stopped` 덕분에 서비스가 자동으로 다시 뜹니다.
+
+## 10. 막힐 때
+
+| 증상 | 확인 |
+|---|---|
+| `http://서버IP`가 안 열림 | Lightsail 방화벽에 HTTP(80)가 있는지, `docker compose ps`에서 web이 Up인지 |
+| 빌드 중 멈추거나 `Killed` | 메모리 부족. 5장의 스왑을 켰는지 `free -h`로 확인 |
+| 답변이 "데모 모드" | `backend/.env`의 `GOOGLE_API_KEY`를 확인하고 `docker compose up -d api` |
+| 질문하면 근거를 못 찾음 | 7장 복원이 됐는지: `docker compose exec db psql -U jeonyeok -c "select count(*) from langchain_pg_embedding;"` (1만 개 안팎이면 정상) |
+| HTTPS 인증서가 안 붙음 | 도메인 A 레코드가 서버IP인지(`nslookup 내도메인`), 방화벽에 443이 있는지, `docker compose logs caddy` |
+
+---
+
+## 참고: 크게 키운다면 (지금은 필요 없음)
+
+사용자가 많아지고 서버가 멈추면 안 되는 단계가 되면, 서버 한 대 대신 AWS 관리형 서비스로 나눕니다. **월 약 $90~120**으로 Lightsail의 4~5배라 지금은 하지 않습니다.
+
+| 지금 compose | 키울 때 AWS | 이유 |
 |---|---|---|
-| Fargate api | 1 vCPU / 2GB, 24시간 | $40 안팎 |
-| Fargate web | 0.25 vCPU / 0.5GB, 24시간 | $10 안팎 |
-| Fargate refresh | 주 1회, 한 번에 수십 분 | $1 미만 |
-| RDS | db.t4g.small, gp3 20GB, 단일 AZ | $30 안팎 |
-| ALB | 1개, 적은 트래픽 | $20 안팎 |
-| 그 밖 | ECR, CloudWatch, Secrets Manager, Route 53 | $5 안팎 |
-| **합계** | NAT 게이트웨이 제외 | **약 $90~120** |
+| `db` | RDS PostgreSQL 17 (pgvector) | 백업·장애 조치를 AWS가 함 |
+| `api`, `web` | ECS Fargate (+ ECR 이미지 저장소) | 서버 관리(OS 패치·재시작)가 없음 |
+| `refresh` (7일마다) | EventBridge Scheduler가 주 1회 실행 | 계속 켜 둘 필요가 없음 |
+| 3000번 포트 | ALB + ACM 인증서 + Route 53 | HTTPS, 여러 대로 나눠 받기 |
+| `backend/.env` | Secrets Manager | 키를 서버 파일에 두지 않음 |
 
-- NAT 게이트웨이를 쓰면 월 약 $45가 더 붙습니다(4장 참고).
-- 1단계(Lightsail 4GB, 월 약 $24)보다 4~5배 비쌉니다. 그래서 사용자가 생기기 전에는 1단계로 충분하다고 판단했습니다.
-- Gemini API 사용료는 별도이며 질문 수에 비례합니다(질문 하나에 모델 호출 5~8번).
-
-## 10. 설계에서 정한 것
-
-- **api는 작업 1개로 고정**: 기한 알림 루프와 같은 질문 답 저장이 서버 안에 있어서, 여러 개로 늘리면 알림이 겹치고 저장된 답이 서버마다 달라집니다. 늘릴 때 무엇을 빼야 하는지는 8장에 적었습니다.
-- **refresh는 상시 서비스가 아니라 예약 작업**: compose에서는 `--loop`로 계속 켜 두지만, AWS에서는 도는 동안만 요금이 붙는 RunTask가 맞습니다.
-- **DB만 관리형으로**: 컨테이너는 다시 띄우면 그만이지만, DB는 잃으면 복구가 어렵습니다. 비용을 줄여야 한다면 RDS를 빼지 말고 다른 곳을 줄입니다.
-- **검색 자료는 덤프로 옮김**: 10,143 조각을 다시 임베딩하면 시간과 비용이 드니, 로컬에서 검증한 DB를 그대로 옮깁니다. 이후 개정분은 refresh가 바뀐 것만 다시 모읍니다.
+이때 주의할 점: api는 **1대로 고정**해야 합니다. 기한 알림 루프와 같은 질문 답 저장이 서버 안에 있어서, 2대로 늘리면 알림이 두 번 가고 저장된 답이 서버마다 달라집니다. 늘리려면 이 둘을 먼저 밖으로 빼야 합니다.
