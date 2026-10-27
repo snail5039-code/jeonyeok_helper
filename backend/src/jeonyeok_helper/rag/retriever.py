@@ -145,7 +145,9 @@ class RegulationRetriever:
         use_hyde: bool = True,
         use_rerank: bool = True,
         use_keywords: bool = True,
-        candidates_per_query: int = 12,
+        # 처음 보는 문항 45개로 12/20/30을 비교: 30개일 때 정답을 찾는 비율이 87~89% → 93~96%
+        # (재정렬 입력이 두 배가 되어 질문당 약 $0.001, 0.2초 늘어남)
+        candidates_per_query: int = 30,
         keyword_candidates: int = 8,
         keyword_weight: float = KEYWORD_WEIGHT,
         hyde_chain: Runnable | None = None,
