@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>사람 채점</title>
+<style>
+  :root { --bg: #fbfaf6; --fg: #1f2416; --line: #c9d2c0; --soft: #eef1e8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16190f; --fg: #e8ecdf; --line: #3b4434; --soft: #21261a; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, sans-serif;
+         max-width: 860px; margin: 0 auto; padding: 16px; }
+  section { border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 16px; margin: 16px 0; }
+  h2 { font-size: 16px; margin: 4px 0 8px; }
+  pre { white-space: pre-wrap; background: var(--soft); padding: 10px; border-radius: 8px;
+        font-family: inherit; }
+  details pre { max-height: 360px; overflow: auto; font-size: 13px; }
+  .rate { display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0; }
+  .memo { width: 100%; box-sizing: border-box; padding: 6px; margin-top: 6px; }
+  header { position: sticky; top: 0; background: var(--bg); padding: 8px 0;
+           border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: center; }
+</style>
+</head>
+<body>
+<header><b>사람 채점</b><span id="done"></span><button id="save">결과 저장 (JSON)</button></header>
+<p>
+  기준: <b>근거대로 맞나</b> = 답의 사실(혜택·금액·기한·대상)이 근거 원문에 있고 틀린 말이 없나.
+  <b>질문에 답했나</b> = 물은 것에 실제로 답했나. 0 틀림 · 1 일부 · 2 맞음.
+  진행 상황은 이 브라우저에 저장됩니다.
+</p>
+__ITEMS__
+<script>
+  const SOURCE = "__SOURCE__";
+  const KEY = "human-eval-" + SOURCE;
+  const inputs = () => [...document.querySelectorAll("input")];
+  const sections = () => [...document.querySelectorAll("section")];
+
+  function state() {
+    const s = {};
+    inputs().forEach((el) => {
+      if (el.type === "radio" ? el.checked : el.value) s[el.name] = el.value;
+    });
+    return s;
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY) || "{}");
+      inputs().forEach((el) => {
+        if (el.type === "radio") el.checked = s[el.name] === el.value;
+        else if (s[el.name]) el.value = s[el.name];
+      });
+    } catch {}
+  }
+  function progress() {
+    const s = state();
+    const done = sections().filter(
+      (x) => s[x.dataset.id + "-grounded"] && s[x.dataset.id + "-answered"],
+    ).length;
+    document.getElementById("done").textContent = done + " / " + sections().length;
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
+  }
+  document.addEventListener("change", progress);
+  document.addEventListener("input", progress);
+  document.getElementById("save").onclick = () => {
+    const s = state();
+    const labels = {};
+    sections().forEach((x) => {
+      const id = x.dataset.id;
+      labels[id] = {
+        grounded: s[id + "-grounded"] ?? null,
+        answered: s[id + "-answered"] ?? null,
+        memo: s[id + "-memo"] || "",
+      };
+    });
+    const blob = new Blob([JSON.stringify({ source: SOURCE, labels }, null, 2)], {
+      type: "application/json",
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = SOURCE + "-labels.json";
+    a.click();
+  };
+  load();
+  progress();
+</script>
+</body>
+</html>

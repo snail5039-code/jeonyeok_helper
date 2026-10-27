@@ -31,3 +31,6 @@ backend/data/eval/results/
 Thumbs.db
 .claude/*
 !.claude/skills/
+
+# 사람 채점 화면 (평가 결과로 다시 만들 수 있음, 채점 결과 labels.json과 비교 보고서는 올림)
+backend/data/eval/human/*-sheet.html

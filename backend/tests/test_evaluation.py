@@ -127,10 +127,14 @@ def test_run_eval_end_to_end_with_fake_agent(tmp_path):
     summary = summarize(results)
     assert summary["overall"]["perfect"] == 1
     assert summary["by_category"]["conscript"]["cases"] == 2
+    # 문항마다 단계별 사용량이 붙고, 요약에 평균이 나온다 (가짜 모델이라 토큰은 0일 수 있음)
+    assert all(isinstance(r.usage, dict) for r in results)
+    assert {"avg_cost", "avg_input", "by_step"} <= summary["usage"].keys()
 
     report = save(results, summary, out_dir=tmp_path)
     text = report.read_text(encoding="utf-8")
     assert "의무복무 병사" in text and "`c99`" in text
+    assert "토큰·비용" in text
     assert report.with_suffix(".json").exists()
 
 
@@ -188,3 +192,55 @@ def test_answer_none_fails_when_forbidden_words_appear_even_in_a_question_back()
     leaked = grade(case, answer="990101-1234567 확인했어요", asked=True, sources=[], profile={})
     clean = grade(case, answer="[주민등록번호 가림]", asked=True, sources=[], profile={})
     assert not leaked[0].passed and clean[0].passed
+
+
+# ---------- 단계별 모델 교체 실험 ----------
+
+
+def test_sample_cases_keeps_every_category_and_is_repeatable():
+    from jeonyeok_helper.evaluation import sample_cases
+
+    cases = [{"id": f"{cat}{i}", "category": cat} for cat in "abc" for i in range(20)]
+    picked = sample_cases(cases, 12)
+    assert len(picked) == 12 and {c["category"] for c in picked} == {"a", "b", "c"}
+    assert picked == sample_cases(cases, 12)
+
+
+def test_agreement_counts_same_routing_profile_and_ask_back():
+    from jeonyeok_helper.evaluation import agreement
+
+    def row(i, tools, profile, asked=False, score=1.0):
+        return {"id": i, "question": i, "asked": asked, "tools": tools, "profile": profile,
+                "score": score}  # fmt: skip
+
+    base = [row("a", ["search_regulations"], {"service_type": "conscript"}),
+            row("b", ["search_benefits"], {})]  # fmt: skip
+    other = [row("a", ["search_regulations"], {"service_type": "conscript", "region": None}),
+             row("b", ["search_regulations"], {}, score=0.5)]  # fmt: skip
+    ag = agreement(base, other)
+    assert ag["cases"] == 2
+    assert ag["routing"] == 0.5 and ag["profile"] == 1.0 and ag["asked"] == 1.0
+    assert {d["what"] for d in ag["diffs"]} == {"라우팅", "점수"}
+
+
+def test_build_components_rejects_unknown_step():
+    import pytest
+
+    from jeonyeok_helper.agents.runtime import build_components
+
+    with pytest.raises(ValueError, match="모르는 단계"):
+        build_components(object(), [], step_llms={"answer": object()})
+
+
+def test_retrieval_grading_does_not_count_branch_articles():
+    from jeonyeok_helper.retrieval_eval import GOLDEN_FILE, cites, load_golden
+
+    assert cites("예비군법 제10조(직장 보장)", "예비군법 제10조")
+    assert cites("예비군법 제10조", "예비군법 제10조")
+    assert not cites("예비군법 제10조의2(학생 예비군)", "예비군법 제10조")
+    assert cites("예비군법 제10조의2(학생 예비군)", "예비군법 제10조의2")
+    assert cites("국방부 전직지원 안내서 12쪽", "전직지원 안내서")  # 조문이 아니면 그대로
+
+    # 처음 보는 문항 파일도 같은 형식
+    holdout = load_golden(GOLDEN_FILE.with_name("retrieval_holdout.yaml"))
+    assert len({c["id"] for c in holdout}) == len(holdout) >= 20

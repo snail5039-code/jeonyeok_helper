@@ -43,29 +43,46 @@ from jeonyeok_helper.agents.workers import make_react_worker
 log = logging.getLogger(__name__)
 
 
+# 단계별로 모델을 바꿔 끼울 수 있는 이름 (평가에서 일부 단계만 더 싼 모델로 바꿔 볼 때)
+STEPS = ("profile", "router", "workers", "verifier", "coach", "guide")
+
+
 def build_components(
-    llm: BaseChatModel, tools: list[BaseTool], fast_llm: BaseChatModel | None = None
+    llm: BaseChatModel,
+    tools: list[BaseTool],
+    fast_llm: BaseChatModel | None = None,
+    step_llms: dict[str, BaseChatModel] | None = None,
 ) -> Components:
     """llm은 답변 작성에, fast_llm은 판단 단계와 워커에 쓴다.
 
     워커는 도구를 고르고 결과를 옮기는 일이라 깊은 추론이 필요 없고, 답변은 워커 요약이 아니라
     도구 원문(evidence)을 근거로 쓰기 때문에 빠른 설정으로도 품질이 유지된다.
+    step_llms에 STEPS 이름을 주면 그 단계만 다른 모델을 쓴다.
     """
     fast = fast_llm or llm
+    unknown = set(step_llms or {}) - set(STEPS)
+    if unknown:
+        raise ValueError(f"모르는 단계: {sorted(unknown)} (가능: {', '.join(STEPS)})")
+
+    def pick(step: str) -> BaseChatModel:
+        return (step_llms or {}).get(step, fast)
+
     by_name = {t.name: t for t in tools}
     workers = {}
     for worker, names in WORKER_TOOLS.items():
         worker_tools = [by_name[n] for n in names if n in by_name]
         if worker_tools:
-            workers[worker] = make_react_worker(fast, worker_tools, WORKER_PROMPTS[worker])
+            workers[worker] = make_react_worker(
+                pick("workers"), worker_tools, WORKER_PROMPTS[worker]
+            )
     return Components(
-        profile_extractor=PROFILE_PROMPT | fast.with_structured_output(Profile),
-        router=ROUTER_PROMPT | fast.with_structured_output(Route),
+        profile_extractor=PROFILE_PROMPT | pick("profile").with_structured_output(Profile),
+        router=ROUTER_PROMPT | pick("router").with_structured_output(Route),
         workers=workers,
         responder=RESPOND_PROMPT | llm | StrOutputParser(),
-        verifier=VERIFY_PROMPT | fast.with_structured_output(Verification),
-        coach=make_coach(fast),
-        guide=make_guide(fast),
+        verifier=VERIFY_PROMPT | pick("verifier").with_structured_output(Verification),
+        coach=make_coach(pick("coach")),
+        guide=make_guide(pick("guide")),
     )
 
 
@@ -135,6 +152,7 @@ async def open_agent(
     fast_llm: BaseChatModel | None = None,
     state_db: Path | None | object = _DEFAULT,
     services=None,
+    step_llms: dict[str, BaseChatModel] | None = None,
 ) -> AsyncIterator[CompiledStateGraph]:
     """state_db를 생략하면 Postgres(DATABASE_URL)에 저장하고, None을 주면 메모리(평가·테스트용).
     설정의 state_db(예전 SQLite 파일)가 남아 있으면 프로필을 Postgres로 한 번 옮긴다.
@@ -161,7 +179,7 @@ async def open_agent(
     ):
         tools = await load_mcp_tools(session)
         yield build_graph(
-            build_components(llm, tools, fast_llm),
+            build_components(llm, tools, fast_llm, step_llms),
             checkpointer=checkpointer,
             store=store,
             max_worker_calls=settings.max_worker_calls,

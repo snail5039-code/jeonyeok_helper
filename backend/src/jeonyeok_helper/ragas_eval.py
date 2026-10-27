@@ -168,8 +168,11 @@ def score_file(path: Path, judge_model: str | None = None, ids: list[str] | None
     scores = asyncio.run(score_all(cases, judge))
     scores.sort(key=lambda s: s["id"])
     # 이름에 점이 있어(gemini-2.5-flash) with_suffix를 쓰면 이름이 잘린다
-    out_json = path.with_name(f"{path.stem}-ragas.json")
-    report = path.with_name(f"{path.stem}-ragas.md")
+    # 답변 모델이 아닌 채점 모델로 다시 채점하면 앞 결과를 덮어쓰지 않게 이름에 채점 모델을 붙인다
+    answer_model = payload.get("summary", {}).get("model")
+    tag = "ragas" if judge == answer_model or not answer_model else f"ragas-by-{judge}"
+    out_json = path.with_name(f"{path.stem}-{tag}.json")
+    report = path.with_name(f"{path.stem}-{tag}.md")
     by_id = {c["id"]: c for c in cases}
     out_json.write_text(
         json.dumps(

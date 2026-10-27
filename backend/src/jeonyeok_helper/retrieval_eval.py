@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -61,12 +62,23 @@ def load_golden(path: Path = GOLDEN_FILE) -> list[dict]:
     return load_yaml(path, "cases")
 
 
+def cites(citation: str, expected: str) -> bool:
+    """출처 표기에 정답 표기가 들어 있나. 조문 번호로 끝나면 가지 조문은 다른 조문으로 본다.
+
+    '예비군법 제10조'는 '예비군법 제10조(직장 보장)'에는 맞지만 '예비군법 제10조의2'에는 맞지 않는다
+    (예전에는 글자가 들어 있기만 하면 맞는 것으로 봐서, 가지 조문만 찾아와도 정답이 됐다).
+    """
+    if re.search(r"제\d+조$", expected):
+        return re.search(re.escape(expected) + r"(?!의)", citation) is not None
+    return expected in citation
+
+
 def grade_retrieval(case: dict, citations: list[str]) -> tuple[list[bool], int | None, list[str]]:
     """(묶음별 찾음, 첫 근거 순위, 걸린 금지 출처)."""
     groups = case["expect"]
 
     def matches(cite: str, group: list[str]) -> bool:
-        return any(alt in cite for alt in group)
+        return any(cites(cite, alt) for alt in group)
 
     found = [any(matches(c, g) for c in citations) for g in groups]
     first = next(
@@ -150,7 +162,7 @@ def to_markdown(runs: dict[str, tuple[list[RetrievalResult], dict]], k: int, at:
     return "\n".join(lines) + "\n"
 
 
-def save_retrieval(runs: dict, k: int, out_dir: Path = RESULTS_DIR) -> Path:
+def save_retrieval(runs: dict, k: int, out_dir: Path = RESULTS_DIR, tag: str = "retrieval") -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     at = datetime.now().strftime("%Y%m%d-%H%M%S")
     payload = {
@@ -160,20 +172,23 @@ def save_retrieval(runs: dict, k: int, out_dir: Path = RESULTS_DIR) -> Path:
         }
         for key, (rs, s) in runs.items()
     }
-    (out_dir / f"{at}-retrieval.json").write_text(
+    (out_dir / f"{at}-{tag}.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    report = out_dir / f"{at}-retrieval.md"
+    report = out_dir / f"{at}-{tag}.md"
     report.write_text(to_markdown(runs, k, at), encoding="utf-8")
     return report
 
 
-def main_retrieval(ablation: bool, ids: list[str] | None, k: int) -> int:
+def main_retrieval(
+    ablation: bool, ids: list[str] | None, k: int, golden: Path | None = None
+) -> int:
+    """golden을 주면 그 문항 파일로 잰다 (개발 중에 보지 않은 문항으로 과적합 확인)."""
     from jeonyeok_helper.llm import get_fast_chat_model
     from jeonyeok_helper.rag.retriever import RegulationRetriever
     from jeonyeok_helper.rag.store import RegulationStore
 
-    cases = load_golden()
+    cases = load_golden(golden) if golden else load_golden()
     if ids:
         cases = [c for c in cases if c["id"] in ids]
     store, llm = RegulationStore(), get_fast_chat_model()
@@ -190,5 +205,6 @@ def main_retrieval(ablation: bool, ids: list[str] | None, k: int) -> int:
             f"{name}: Hit@{k} {o['hit']:.0%}, Recall@{k} {o['recall']:.0%}, "
             f"MRR {o['mrr']:.2f}, {o['avg_seconds']}초, 오류 {o['errors']}"
         )
-    print(f"보고서: {save_retrieval(runs, k)}")
+    tag = f"retrieval-{golden.stem}" if golden else "retrieval"
+    print(f"보고서: {save_retrieval(runs, k, tag=tag)}")
     return 0
