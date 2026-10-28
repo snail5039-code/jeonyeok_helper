@@ -244,3 +244,7 @@ def test_retrieval_grading_does_not_count_branch_articles():
     # 처음 보는 문항 파일도 같은 형식
     holdout = load_golden(GOLDEN_FILE.with_name("retrieval_holdout.yaml"))
     assert len({c["id"] for c in holdout}) == len(holdout) >= 20
+
+    holdout3 = load_golden(GOLDEN_FILE.with_name("retrieval_holdout3.yaml"))
+    assert len({c["id"] for c in holdout3}) == len(holdout3) == 30
+    assert all(isinstance(e, str) for c in holdout3 for g in c["expect"] for e in g)

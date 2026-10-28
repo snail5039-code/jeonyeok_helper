@@ -173,7 +173,7 @@ def test_keyword_results_are_fused_with_vector_results():
             return [doc("K"), doc("A")]
 
     store = HybridStore({"공무상요양비": [doc("A"), doc("B")]})
-    retriever = RegulationRetriever(store)
+    retriever = RegulationRetriever(store, keyword_weight=1.0)
 
     result = retriever.retrieve("공무상요양비", k=5)
 
