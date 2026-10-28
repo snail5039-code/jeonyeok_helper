@@ -232,7 +232,7 @@ questions:
   - id: t10
     category: tools
     question: 병장으로 전역하고 복학하는데 한국장학재단 장학금이나 학자금 받을 수 있나요?
-    sources_any: [한국장학재단]
+    sources_any: [국가장학금, 학자금]
     answer_any: [장학, 학자금]
     should_ask: false
   - id: t11
@@ -941,7 +941,7 @@ questions:
     category: hard
     question: 병장인데 군인연금 받으려면 어떻게 해요?
     # 함정: 병사는 군인연금 대상이 아니다
-    answer_any: [대상이 아니, 간부, 직업군인, 받을 수 없, 해당하지 않]
+    answer_any: [대상이 아니, 간부, 직업군인, 받을 수 없, 받으실 수 없, 받지 못, 해당하지 않]
     should_ask: false
   - id: h21
     category: hard
