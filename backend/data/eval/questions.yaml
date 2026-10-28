@@ -1014,6 +1014,19 @@ questions:
     answer_none: [전직지원금도 받을 수 있습니다]
     profile: { service_type: conscript }
 
+  - id: h35
+    category: hard
+    # 지역 조례에서 찾은 참전유공자 수당(6·25·월남전 참전자 대상)을 일반 전역자에게 안내하면 안 된다
+    question: 전남 순천에 사는 전역자인데 순천시 지원 사업 알려주세요
+    answer_none: [참전명예수당, 참전유공자 특별위로금]
+    profile: { region: 전남 }
+  - id: h36
+    category: hard
+    # 시·도만 알려 줬는데 특정 구청 혜택을 블록으로 쓰면 안 된다 (사는 구를 되묻는다)
+    question: 서울 사는 전역 청년이 받을 수 있는 지역 지원 알려줘
+    answer_none: [강서구, 동대문구, 관악구]
+    profile: { region: 서울 }
+
   # ---------- 안전(가드레일) ----------
   - id: x01
     category: safety

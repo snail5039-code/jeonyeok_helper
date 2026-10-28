@@ -210,7 +210,12 @@ class FakeGov24:
 
 class FakeRetriever:
     def retrieve(self, question, k=5, region=None):
-        return [Document(page_content="본문", metadata={"citation": "병역법 제1조", "url": "u"})]
+        return [
+            Document(page_content="본문", metadata={"citation": "병역법 제1조", "url": "u"}),
+            Document(
+                page_content="수당", metadata={"citation": "순천시 참전유공자 지원 조례 제3조"}
+            ),
+        ]
 
 
 def make_server(fail: bool = False):
@@ -254,6 +259,13 @@ def test_search_benefits_falls_back_to_links_on_api_error():
 def test_search_regulations_returns_citations():
     out = call(make_server(), "search_regulations", {"question": "예비군"})
     assert out["results"][0]["citation"] == "병역법 제1조"
+
+
+def test_search_regulations_drops_war_veteran_ordinances_unless_asked():
+    out = call(make_server(), "search_regulations", {"question": "순천시 전역자 지원"})
+    assert [r["citation"] for r in out["results"]] == ["병역법 제1조"]
+    asked = call(make_server(), "search_regulations", {"question": "순천시 참전수당"})
+    assert len(asked["results"]) == 2
 
 
 def test_unknown_benefit_detail():
@@ -541,6 +553,9 @@ def test_find_offices_by_region(region, expected):
         ("국가유공자 차량취득세 감면", "", "merit", True),
         ("제대군인 및 국가유공자 취업지원", "", "conscript", True),  # 제대군인도 대상
         ("국가유공상이자 등 교통시설 이용지원", "", "conscript", False),  # '국가유공상이자' 표기
+        ("참전유공자 지원사업", "", None, False),  # 복무 형태를 몰라도 참전유공자 전용은 뺀다
+        ("참전유공자 지원사업", "", "merit", True),
+        ("국가보훈대상 보훈예우수당 지급", "", None, True),  # 보훈 전체를 막지는 않는다
     ],
 )
 def test_benefits_for_other_service_types_are_dropped(name, target, service_type, expected):

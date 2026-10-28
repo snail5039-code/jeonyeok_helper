@@ -130,10 +130,17 @@ _MERIT_ONLY = re.compile(
 )
 
 
+# 6·25·월남전 참전유공자 전용 사업(수당은 보통 65~80세 이상). 복무 형태를 몰라도 최근 전역자에게는
+# 해당하지 않는다 ('전남 순천 전역자' 질문에 순천시 참전명예수당을 안내했다).
+_WAR_VETERAN_ONLY = re.compile(r"참전")
+
+
 def fits_service_type(benefit: Any, service_type: str | None) -> bool:
-    """대상이 사용자 복무 형태와 다른 혜택이면 False. 모르면 모두 통과."""
-    if service_type is None or service_type == "merit":
+    """대상이 사용자 복무 형태와 다른 혜택이면 False. 모르면 대부분 통과."""
+    if service_type == "merit":
         return True
+    if service_type is None:
+        return not (_WAR_VETERAN_ONLY.search(benefit.name) and "제대군인" not in benefit.name)
     if service_type in ("conscript", "short_term_officer") and _LONG_TERM_ONLY.search(
         f"{benefit.name} {benefit.target}"
     ):
@@ -187,6 +194,9 @@ def create_server(services: Services | None = None) -> FastMCP:
             docs = svc.retriever.retrieve(question, k=k, region=region)
         except RuntimeError as e:  # API 키 누락 등
             return {"results": [], "error": str(e)}
+        if "참전" not in question:
+            # 지역 조례 검색은 참전유공자 지원 조례처럼 최근 전역자와 무관한 조례도 가져온다
+            docs = [d for d in docs if "참전" not in d.metadata.get("citation", "")]
         return {
             "results": [
                 {
