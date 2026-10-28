@@ -593,6 +593,16 @@ def test_verify_applies_only_the_edited_parts():
     assert apply_edits(draft, edits) == "크레딧은 6개월 인정 [1].\n\n신청은 공단에서 [1]."
 
 
+def test_verify_edits_tolerate_spacing_and_markdown_changes():
+    from jeonyeok_helper.agents.graph import apply_edits
+    from jeonyeok_helper.agents.state import TextEdit
+
+    draft = "크레딧은 6개월 인정 [1].\n\n* **월 100만 원을\n  지급합니다** [2]\n\n신청은 공단에서."
+    # 검증이 글머리 기호·굵게·줄바꿈을 다르게 옮겨 와도 그 문장을 찾아 지운다
+    edits = [TextEdit(find="월 100만 원을 지급합니다 [2]", replace="")]
+    assert "100만" not in apply_edits(draft, edits)
+
+
 def test_verify_never_returns_an_empty_answer():
     from jeonyeok_helper.agents.state import TextEdit, Verification
 

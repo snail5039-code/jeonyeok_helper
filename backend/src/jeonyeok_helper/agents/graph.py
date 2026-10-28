@@ -54,13 +54,29 @@ log = logging.getLogger(__name__)
 PROFILE_NAMESPACE = ("profiles",)
 
 
+def _locate(text: str, find: str) -> re.Match | None:
+    """초안에서 find 위치를 찾는다. 모델이 문장을 옮기며 공백·줄바꿈·굵게(**)·글머리 기호를
+    바꾸는 일이 잦아서, 그런 차이는 무시하고 찾는다."""
+    cleaned = re.sub(r"\*\*|^[\s\-*•]+", "", find).strip()
+    words = cleaned.split()
+    if not words:
+        return None
+    # 단어 사이는 공백·줄바꿈·글머리 기호·굵게 표시가 끼어 있어도 맞춘다
+    gap = r"[\s\-*•]*(?:\*\*)?\s*"
+    return re.search(gap.join(re.escape(w) for w in words), text)
+
+
 def apply_edits(draft: str, edits) -> str:
-    """검증이 알려 준 부분만 바꾼다. 초안에 없는 문장은 건너뛴다(모델이 살짝 다르게 옮긴 경우)."""
+    """검증이 알려 준 부분만 바꾼다. 초안에서 못 찾는 문장은 건너뛴다."""
     text = draft
     for e in edits:
-        if e.find and e.find in text:
+        if not e.find:
+            continue
+        if e.find in text:
             text = text.replace(e.find, e.replace, 1)
-        elif e.find:
+        elif m := _locate(text, e.find):
+            text = text[: m.start()] + e.replace + text[m.end() :]
+        else:
             log.warning("검증 수정 위치를 초안에서 찾지 못함: %s", e.find[:60])
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
